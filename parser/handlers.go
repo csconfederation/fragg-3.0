@@ -26,6 +26,9 @@ func (d *DemoParser) registerHandlers() {
 		d.state.Round = make(map[uint64]*model.RoundStats)
 		d.state.RoundHasKill = false
 		d.state.RecentKills = make(map[uint64]recentKill)
+		d.state.RecentTeamDeaths = make(map[uint64]float64)
+		d.state.RoundDecided = false
+		d.state.RoundDecidedAt = 0
 	})
 
 	// Track bomb plants
@@ -54,15 +57,22 @@ func (d *DemoParser) registerHandlers() {
 		d.logger.LogBombDefuse(d.state.RoundNumber, defuser.Name)
 	})
 
-	// Track flash assists
+	// Track flash assists and team flashes
 	d.parser.RegisterEventHandler(func(e events.PlayerFlashed) {
 		if d.state.IsKnifeRound || !d.state.MatchStarted {
 			return
 		}
 
-		if e.Attacker != nil && e.Player != nil && e.Attacker.Team != e.Player.Team {
+		if e.Attacker != nil && e.Player != nil {
 			roundStats := d.state.ensureRound(e.Attacker)
-			roundStats.FlashAssists++
+			if e.Attacker.Team != e.Player.Team {
+				// Enemy flash - count as flash assist
+				roundStats.FlashAssists++
+			} else if e.Attacker.SteamID64 != e.Player.SteamID64 {
+				// Team flash (not self-flash)
+				roundStats.TeamFlashCount++
+				roundStats.TeamFlashDuration += float64(e.FlashDuration().Seconds())
+			}
 		}
 	})
 
@@ -128,10 +138,28 @@ func (d *DemoParser) registerHandlers() {
 		currentTick := d.parser.CurrentFrame()
 		const tradeWindow = 64 * 5 // ~5 seconds at 64 tick (CS2)
 
-		// Track victim death
+		// Calculate current time relative to round start
+		currentTime := float64(currentTick) / 64.0
+		timeInRound := currentTime - d.state.RoundStartTime
+
+		// Track victim death with timing
 		if v != nil {
 			victim := d.state.ensurePlayer(v)
 			victim.Deaths++
+			victimRound := d.state.ensureRound(v)
+			victimRound.DeathTime = timeInRound
+
+			// Track death for trade speed calculation
+			d.state.RecentTeamDeaths[v.SteamID64] = timeInRound
+
+			// Track if victim had AWP and lost it
+			for _, weapon := range v.Weapons() {
+				if weapon.Type == common.EqAWP {
+					victimRound.HadAWP = true
+					victimRound.LostAWP = true
+					break
+				}
+			}
 		}
 
 		// Check if this kill is a trade (attacker killed someone who recently killed a teammate)
@@ -186,6 +214,15 @@ func (d *DemoParser) registerHandlers() {
 		// Log the death
 		d.logger.LogDeath(d.state.RoundNumber, v.Name, a.Name, victimEquip, attackerEquip, deathPenalty)
 
+		// Track kill timing
+		round.KillTimes = append(round.KillTimes, timeInRound)
+
+		// Check if this is an exit frag (round already decided)
+		if d.state.RoundDecided {
+			round.IsExitFrag = true
+			round.ExitFrags++
+		}
+
 		round.Kills++
 		round.GotKill = true
 		round.EconImpact += killValue
@@ -194,11 +231,23 @@ func (d *DemoParser) registerHandlers() {
 		attacker.RoundImpact += killValue
 		attacker.EconImpact += killValue
 
-		// Track AWP kills
-		if e.Weapon != nil && e.Weapon.Type == common.EqAWP {
-			round.AWPKills++
-			attacker.AWPKills++
-			d.logger.LogKill(d.state.RoundNumber, a.Name, v.Name, attackerEquip, victimEquip, killValue)
+		// Track weapon-specific kills
+		if e.Weapon != nil {
+			switch e.Weapon.Type {
+			case common.EqAWP:
+				round.AWPKills++
+				round.AWPKill = true
+				attacker.AWPKills++
+			case common.EqKnife:
+				round.KnifeKill = true
+			}
+
+			// Check for pistol vs rifle kills
+			isPistol := e.Weapon.Type >= common.EqP2000 && e.Weapon.Type <= common.EqRevolver
+			victimHadRifle := victimEquip > 3500 // Rough threshold for rifle loadout
+			if isPistol && victimHadRifle {
+				round.PistolVsRifleKill = true
+			}
 		}
 
 		// Track death penalty for victim
@@ -219,10 +268,14 @@ func (d *DemoParser) registerHandlers() {
 			victimRound.OpeningDeath = true
 		}
 
-		// Track trade kills
+		// Track trade kills with speed
 		if recent, ok := d.state.RecentKills[v.SteamID64]; ok {
 			if recent.VictimTeam == a.Team && currentTick-recent.Tick <= tradeWindow {
 				round.TradeKill = true
+				// Calculate trade speed
+				if deathTime, exists := d.state.RecentTeamDeaths[recent.VictimID]; exists {
+					round.TradeSpeed = timeInRound - deathTime
+				}
 			}
 		}
 
@@ -262,6 +315,54 @@ func (d *DemoParser) registerHandlers() {
 		if e.Attacker.Team != e.Player.Team {
 			ps := d.state.ensurePlayer(e.Attacker)
 			ps.Damage += int(e.HealthDamageTaken)
+
+			// Track utility damage
+			roundStats := d.state.ensureRound(e.Attacker)
+			if e.Weapon != nil {
+				switch e.Weapon.Type {
+				case common.EqHE, common.EqMolotov, common.EqIncendiary:
+					roundStats.UtilityDamage += int(e.HealthDamageTaken)
+				}
+			}
+		}
+	})
+
+	// Track bomb explosion (round decided for T)
+	d.parser.RegisterEventHandler(func(e events.BombExplode) {
+		if d.state.IsKnifeRound || !d.state.MatchStarted {
+			return
+		}
+		currentTime := float64(d.parser.CurrentFrame()) / 64.0
+		timeInRound := currentTime - d.state.RoundStartTime
+		d.state.RoundDecided = true
+		d.state.RoundDecidedAt = timeInRound
+	})
+
+	// Track round decided when all players on one team are dead
+	d.parser.RegisterEventHandler(func(e events.Kill) {
+		if d.state.IsKnifeRound || !d.state.MatchStarted || d.state.RoundDecided {
+			return
+		}
+
+		gs := d.parser.GameState()
+		tAlive := 0
+		ctAlive := 0
+		for _, p := range gs.Participants().Playing() {
+			if p.IsAlive() {
+				if p.Team == common.TeamTerrorists {
+					tAlive++
+				} else if p.Team == common.TeamCounterTerrorists {
+					ctAlive++
+				}
+			}
+		}
+
+		// Round is decided if one team is eliminated
+		if tAlive == 0 || ctAlive == 0 {
+			currentTime := float64(d.parser.CurrentFrame()) / 64.0
+			timeInRound := currentTime - d.state.RoundStartTime
+			d.state.RoundDecided = true
+			d.state.RoundDecidedAt = timeInRound
 		}
 	})
 
@@ -356,6 +457,23 @@ func (d *DemoParser) registerHandlers() {
 		currentTime := float64(d.parser.CurrentFrame()) / 64.0                     // Convert ticks to seconds
 		timeRemaining := math.Max(0.0, 115.0-(currentTime-d.state.RoundStartTime)) // 115s round time
 
+		// Calculate score context
+		teamScore := d.state.TeamScore
+		enemyScore := d.state.EnemyScore
+		scoreDiff := teamScore - enemyScore
+		isMatchPoint := teamScore == 12 || enemyScore == 12 || (d.state.RoundNumber > 30 && (teamScore >= 15 || enemyScore >= 15))
+		isCloseGame := math.Abs(float64(scoreDiff)) <= 3
+
+		// Calculate round importance multiplier
+		roundImportance := 1.0
+		if isMatchPoint {
+			roundImportance = 1.3
+		} else if isCloseGame {
+			roundImportance = 1.15
+		} else if math.Abs(float64(scoreDiff)) >= 8 {
+			roundImportance = 0.85 // Blowout games matter less
+		}
+
 		roundContext := &model.RoundContext{
 			RoundNumber:     d.state.RoundNumber,
 			TotalPlayers:    10,    // Standard 5v5
@@ -365,6 +483,14 @@ func (d *DemoParser) registerHandlers() {
 			TimeRemaining:   timeRemaining,
 			IsOvertimeRound: d.state.RoundNumber > 30,
 			MapSide:         d.state.CurrentSide,
+			TeamScore:       teamScore,
+			EnemyScore:      enemyScore,
+			ScoreDiff:       scoreDiff,
+			IsMatchPoint:    isMatchPoint,
+			IsCloseGame:     isCloseGame,
+			RoundImportance: roundImportance,
+			RoundDecided:    d.state.RoundDecided,
+			RoundDecidedAt:  d.state.RoundDecidedAt,
 		}
 
 		// Check for bomb events in this round
@@ -424,7 +550,7 @@ func (d *DemoParser) registerHandlers() {
 			player.RoundSwing += swing
 		}
 
-		// Track KAST for ALL players who participated this round (not just alive ones)
+		// Track KAST and aggregate new stats for ALL players who participated this round
 		for steamID, roundStats := range d.state.Round {
 			player := d.state.Players[steamID]
 			if player == nil {
@@ -434,10 +560,58 @@ func (d *DemoParser) registerHandlers() {
 			if roundStats.GotKill || roundStats.GotAssist || roundStats.Survived || roundStats.Traded {
 				player.KAST++
 			}
+
+			// Aggregate new stats for export
+			player.UtilityDamage += roundStats.UtilityDamage
+			player.TeamFlashCount += roundStats.TeamFlashCount
+			player.TeamFlashDuration += roundStats.TeamFlashDuration
+			player.ExitFrags += roundStats.ExitFrags
+
+			if roundStats.LostAWP {
+				player.AWPDeaths++
+				if !roundStats.AWPKill {
+					player.AWPDeathsNoKill++
+				}
+			}
+
+			if roundStats.KnifeKill {
+				player.KnifeKills++
+			}
+
+			if roundStats.PistolVsRifleKill {
+				player.PistolVsRifleKills++
+			}
+
+			if roundStats.TradeKill {
+				player.TradeKills++
+				if roundStats.TradeSpeed > 0 && roundStats.TradeSpeed < 2.0 {
+					player.FastTrades++
+				}
+			}
+
+			if roundStats.DeathTime > 0 && roundStats.DeathTime < 30.0 {
+				player.EarlyDeaths++
+			}
 		}
 
 		for _, p := range d.state.Players {
 			p.RoundsPlayed++
+		}
+
+		// Update score tracking
+		if winnerTeam == common.TeamTerrorists {
+			// Assuming we track from T perspective initially
+			if d.state.CurrentSide == "T" {
+				d.state.TeamScore++
+			} else {
+				d.state.EnemyScore++
+			}
+		} else if winnerTeam == common.TeamCounterTerrorists {
+			if d.state.CurrentSide == "CT" {
+				d.state.TeamScore++
+			} else {
+				d.state.EnemyScore++
+			}
 		}
 
 		// Log round end

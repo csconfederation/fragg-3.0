@@ -35,6 +35,22 @@ type RoundStats struct {
 	FlashAssists   int  // Number of flash assists this round
 	TradeKill      bool // Got a trade kill
 	TradeDeath     bool // Death was traded by teammate
+
+	// New Round Swing factors
+	UtilityDamage     int       // Damage dealt via grenades (HE, molotov, incendiary)
+	SmokeDamage       int       // Damage dealt through smoke
+	DeathTime         float64   // Time of death relative to round start (seconds)
+	KillTimes         []float64 // Times of each kill relative to round start
+	TradeSpeed        float64   // Time between teammate death and trade kill (seconds)
+	IsExitFrag        bool      // Kill happened after round was decided
+	ExitFrags         int       // Number of exit frags this round
+	TeamFlashCount    int       // Number of times flashed teammates
+	TeamFlashDuration float64   // Total duration of team flashes
+	AWPKill           bool      // Got a kill with AWP this round
+	KnifeKill         bool      // Got a knife kill this round
+	PistolVsRifleKill bool      // Got a pistol kill vs rifle
+	HadAWP            bool      // Player had AWP this round
+	LostAWP           bool      // Died with AWP (lost the weapon)
 }
 
 // RoundContext provides situational information for round swing calculation
@@ -47,4 +63,16 @@ type RoundContext struct {
 	TimeRemaining   float64 // Time left when round ended
 	IsOvertimeRound bool    // Is this an overtime round
 	MapSide         string  // "T" or "CT"
+
+	// Score context for round importance
+	TeamScore       int     // Current team score before this round
+	EnemyScore      int     // Current enemy score before this round
+	ScoreDiff       int     // Team score - Enemy score (positive = winning)
+	IsMatchPoint    bool    // Either team is at match point
+	IsCloseGame     bool    // Score difference <= 3
+	RoundImportance float64 // Multiplier based on score context (1.0 = normal)
+
+	// Round outcome context
+	RoundDecided   bool    // Round outcome is already determined
+	RoundDecidedAt float64 // Time when round was decided
 }

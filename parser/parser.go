@@ -62,10 +62,15 @@ func (d *DemoParser) Parse() {
 	// Compute final stats for all players
 	for _, p := range d.state.Players {
 		if p.RoundsPlayed > 0 {
+			rounds := float64(p.RoundsPlayed)
+			// Calculate per-round stats
+			p.ADR = float64(p.Damage) / rounds
+			p.KPR = float64(p.Kills) / rounds
+			p.DPR = float64(p.Deaths) / rounds
 			// Convert KAST count to percentage
-			p.KAST = p.KAST / float64(p.RoundsPlayed)
+			p.KAST = p.KAST / rounds
 			// Convert Survival count to percentage
-			p.Survival = p.Survival / float64(p.RoundsPlayed)
+			p.Survival = p.Survival / rounds
 		}
 		p.FinalRating = rating.ComputeFinalRating(p)
 

@@ -19,6 +19,15 @@ type MatchState struct {
 	// Round context tracking
 	RoundStartTime float64 // Round start time in seconds
 	CurrentSide    string  // "T" or "CT" for current perspective
+
+	// Score tracking
+	TeamScore      int     // Score for the team we're tracking (first T team)
+	EnemyScore     int     // Score for the opposing team
+	RoundDecided   bool    // Round outcome is already determined
+	RoundDecidedAt float64 // Time when round was decided (seconds from round start)
+
+	// Track recent teammate deaths for trade speed calculation
+	RecentTeamDeaths map[uint64]float64 // SteamID -> death time (seconds from round start)
 }
 
 type recentKill struct {
@@ -29,9 +38,10 @@ type recentKill struct {
 
 func NewMatchState() *MatchState {
 	return &MatchState{
-		Players:     make(map[uint64]*model.PlayerStats),
-		Round:       make(map[uint64]*model.RoundStats),
-		RecentKills: make(map[uint64]recentKill),
+		Players:          make(map[uint64]*model.PlayerStats),
+		Round:            make(map[uint64]*model.RoundStats),
+		RecentKills:      make(map[uint64]recentKill),
+		RecentTeamDeaths: make(map[uint64]float64),
 	}
 }
 

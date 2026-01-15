@@ -277,6 +277,15 @@ func (d *DemoParser) registerHandlers() {
 		attacker.RoundImpact += killValue
 		attacker.EconImpact += killValue
 
+		// Track kills on lower-equipped opponents (EcoKillValue < 1.0 means victim had less equipment)
+		if killValue < 1.0 {
+			attacker.LowBuyKills++
+		}
+		// Track kills on significantly lower-equipped opponents (at least disadvantaged, not just slight)
+		if killValue <= 0.85 {
+			attacker.DisadvantagedBuyKills++
+		}
+
 		// Track weapon-specific kills
 		if e.Weapon != nil {
 			switch e.Weapon.Type {

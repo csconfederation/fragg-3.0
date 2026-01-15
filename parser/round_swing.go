@@ -289,7 +289,7 @@ func calculateEconomyModifier(roundStats *model.RoundStats, playerEquip, teamEqu
 
 // === NEW CALCULATION FUNCTIONS ===
 
-// calculateUtilityImpact calculates swing bonus for utility damage (HE, molotov, incendiary)
+// calculateUtilityImpact calculates swing bonus for utility damage and flash impact
 func calculateUtilityImpact(roundStats *model.RoundStats) float64 {
 	bonus := 0.0
 
@@ -298,6 +298,18 @@ func calculateUtilityImpact(roundStats *model.RoundStats) float64 {
 		// Scale utility damage: 100 damage = 0.03 swing
 		utilityContrib := float64(roundStats.UtilityDamage) / 100.0 * 0.03
 		bonus += math.Min(utilityContrib, 0.06) // Cap at 0.06
+	}
+
+	// Enemy flash duration contribution - rewards effective flashes
+	if roundStats.EnemyFlashDuration > 0 {
+		// Scale: 3 seconds of enemy flash = 0.02 swing
+		flashContrib := roundStats.EnemyFlashDuration / 3.0 * 0.02
+		bonus += math.Min(flashContrib, 0.04) // Cap at 0.04
+	}
+
+	// Flash assist contribution
+	if roundStats.FlashAssists > 0 {
+		bonus += float64(roundStats.FlashAssists) * 0.015 // 0.015 per flash assist
 	}
 
 	return bonus

@@ -87,12 +87,14 @@ type PlayerStats struct {
 	TeamFlashDuration  float64 // Total duration of team flashes
 
 	// Misc stats
-	ExitFrags          int // Total exit frags
-	AWPDeaths          int // Times died with AWP
-	AWPDeathsNoKill    int // Times died with AWP without getting AWP kill
-	KnifeKills         int // Total knife kills
-	PistolVsRifleKills int // Total pistol kills vs rifle players
-	EarlyDeaths        int // Deaths within first 30 seconds
+	ExitFrags             int // Total exit frags
+	AWPDeaths             int // Times died with AWP
+	AWPDeathsNoKill       int // Times died with AWP without getting AWP kill
+	KnifeKills            int // Total knife kills
+	PistolVsRifleKills    int // Total pistol kills vs rifle players
+	EarlyDeaths           int // Deaths within first 30 seconds
+	LowBuyKills           int // Kills on lower-equipped opponents (EcoKillValue < 1.0)
+	DisadvantagedBuyKills int // Kills on significantly lower-equipped opponents (EcoKillValue <= 0.85)
 
 	// Pistol round stats
 	PistolRoundsPlayed    int

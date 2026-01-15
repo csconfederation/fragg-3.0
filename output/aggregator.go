@@ -105,14 +105,18 @@ type AggregatedStats struct {
 	totalTeamFlashDur  float64
 
 	// Misc stats
-	ExitFrags          int `json:"exit_frags"`
-	AWPDeaths          int `json:"awp_deaths"`
-	AWPDeathsNoKill    int `json:"awp_deaths_no_kill"`
-	KnifeKills         int `json:"knife_kills"`
-	PistolVsRifleKills int `json:"pistol_vs_rifle_kills"`
-	TradeKills         int `json:"trade_kills"`
-	FastTrades         int `json:"fast_trades"`
-	EarlyDeaths        int `json:"early_deaths"`
+	ExitFrags                int     `json:"exit_frags"`
+	AWPDeaths                int     `json:"awp_deaths"`
+	AWPDeathsNoKill          int     `json:"awp_deaths_no_kill"`
+	KnifeKills               int     `json:"knife_kills"`
+	PistolVsRifleKills       int     `json:"pistol_vs_rifle_kills"`
+	TradeKills               int     `json:"trade_kills"`
+	FastTrades               int     `json:"fast_trades"`
+	EarlyDeaths              int     `json:"early_deaths"`
+	LowBuyKills              int     `json:"low_buy_kills"`
+	LowBuyKillsPct           float64 `json:"low_buy_kills_pct"`
+	DisadvantagedBuyKills    int     `json:"disadvantaged_buy_kills"`
+	DisadvantagedBuyKillsPct float64 `json:"disadvantaged_buy_kills_pct"`
 
 	// Pistol round stats
 	PistolRoundsPlayed    int     `json:"pistol_rounds_played"`
@@ -306,6 +310,8 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.TradeKills += p.TradeKills
 		agg.FastTrades += p.FastTrades
 		agg.EarlyDeaths += p.EarlyDeaths
+		agg.LowBuyKills += p.LowBuyKills
+		agg.DisadvantagedBuyKills += p.DisadvantagedBuyKills
 
 		// Pistol round stats
 		agg.PistolRoundsPlayed += p.PistolRoundsPlayed
@@ -453,6 +459,8 @@ func (a *Aggregator) Finalize() {
 			agg.AssistedKillsPct = float64(agg.AssistedKills) / float64(agg.Kills)
 			agg.DamagePerKill = float64(agg.Damage) / float64(agg.Kills)
 			agg.AWPKillsPct = float64(agg.AWPKills) / float64(agg.Kills)
+			agg.LowBuyKillsPct = float64(agg.LowBuyKills) / float64(agg.Kills)
+			agg.DisadvantagedBuyKillsPct = float64(agg.DisadvantagedBuyKills) / float64(agg.Kills)
 		}
 
 		// Stats that depend on OpeningAttempts

@@ -82,6 +82,6 @@ const (
 
 // === Rating Clamp Values ===
 const (
-	MinRating = 0.30 // Minimum possible rating
-	MaxRating = 2.50 // Maximum possible rating
+	MinRating = 0.20 // Minimum possible rating (HLTV goes to ~0.25)
+	MaxRating = 3.00 // Maximum possible rating (allow exceptional performances)
 )

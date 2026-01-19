@@ -82,12 +82,16 @@ func (d *DemoParser) Parse() {
 			// Formula: (KillRating + 0.7*SurvivalRating + RoundsWithMultiKillRating) / 2.7
 			// Where each component is normalized against average values
 			avgKPR := 0.679 // Average kills per round
-			avgSPR := 0.317 // Average survival rate
-			avgRMK := 0.073 // Average rounds with multi-kill rate
+			avgSPR := 0.317 // Average (Survived - Deaths) / Rounds
+			avgRMK := 1.277 // Average RMK points per round (weighted multi-kills)
 
 			killRating := p.KPR / avgKPR
-			survivalRating := p.Survival / avgSPR
-			rmkRating := float64(p.RoundsWithMultiKill) / rounds / avgRMK
+			// SurvivalRating: (Rounds Survived - Deaths) / Rounds, normalized
+			survived := p.Survival * rounds // p.Survival is already survival rate, convert back to count
+			survivalRating := ((survived - float64(p.Deaths)) / rounds) / avgSPR
+			// RMK: weighted multi-kill points (1K=1, 2K=4, 3K=9, 4K=16, 5K=25)
+			rmkPoints := float64(p.MultiKillsRaw[1]*1 + p.MultiKillsRaw[2]*4 + p.MultiKillsRaw[3]*9 + p.MultiKillsRaw[4]*16 + p.MultiKillsRaw[5]*25)
+			rmkRating := (rmkPoints / rounds) / avgRMK
 
 			p.HLTVRating = (killRating + 0.7*survivalRating + rmkRating) / 2.7
 
@@ -95,13 +99,13 @@ func (d *DemoParser) Parse() {
 			if p.PistolRoundsPlayed > 0 {
 				pistolRounds := float64(p.PistolRoundsPlayed)
 				pistolKPR := float64(p.PistolRoundKills) / pistolRounds
-				pistolSurvival := float64(p.PistolRoundSurvivals) / pistolRounds
-				pistolRMK := float64(p.PistolRoundMultiKills) / pistolRounds
+				// SurvivalRating: (Survived - Deaths) / Rounds
+				pistolSurvivalRating := ((float64(p.PistolRoundSurvivals) - float64(p.PistolRoundDeaths)) / pistolRounds) / avgSPR
+				// RMK: approximate using multi-kill rounds * 4 (average weight for 2K)
+				pistolRMKPoints := float64(p.PistolRoundMultiKills) * 4.0
+				pistolRMKRating := (pistolRMKPoints / pistolRounds) / avgRMK
 
 				pistolKillRating := pistolKPR / avgKPR
-				pistolSurvivalRating := pistolSurvival / avgSPR
-				pistolRMKRating := pistolRMK / avgRMK
-
 				p.PistolRoundRating = (pistolKillRating + 0.7*pistolSurvivalRating + pistolRMKRating) / 2.7
 			}
 
@@ -109,13 +113,13 @@ func (d *DemoParser) Parse() {
 			if p.TRoundsPlayed > 0 {
 				tRounds := float64(p.TRoundsPlayed)
 				tKPR := float64(p.TKills) / tRounds
-				tSurvival := float64(p.TSurvivals) / tRounds
-				tRMK := float64(p.TRoundsWithMultiKill) / tRounds
+				// SurvivalRating: (Survived - Deaths) / Rounds
+				tSurvivalRating := ((float64(p.TSurvivals) - float64(p.TDeaths)) / tRounds) / avgSPR
+				// RMK: weighted multi-kill points
+				tRMKPoints := float64(p.TMultiKills[1]*1 + p.TMultiKills[2]*4 + p.TMultiKills[3]*9 + p.TMultiKills[4]*16 + p.TMultiKills[5]*25)
+				tRMKRating := (tRMKPoints / tRounds) / avgRMK
 
 				tKillRating := tKPR / avgKPR
-				tSurvivalRating := tSurvival / avgSPR
-				tRMKRating := tRMK / avgRMK
-
 				p.TRating = (tKillRating + 0.7*tSurvivalRating + tRMKRating) / 2.7
 			}
 
@@ -123,13 +127,13 @@ func (d *DemoParser) Parse() {
 			if p.CTRoundsPlayed > 0 {
 				ctRounds := float64(p.CTRoundsPlayed)
 				ctKPR := float64(p.CTKills) / ctRounds
-				ctSurvival := float64(p.CTSurvivals) / ctRounds
-				ctRMK := float64(p.CTRoundsWithMultiKill) / ctRounds
+				// SurvivalRating: (Survived - Deaths) / Rounds
+				ctSurvivalRating := ((float64(p.CTSurvivals) - float64(p.CTDeaths)) / ctRounds) / avgSPR
+				// RMK: weighted multi-kill points
+				ctRMKPoints := float64(p.CTMultiKills[1]*1 + p.CTMultiKills[2]*4 + p.CTMultiKills[3]*9 + p.CTMultiKills[4]*16 + p.CTMultiKills[5]*25)
+				ctRMKRating := (ctRMKPoints / ctRounds) / avgRMK
 
 				ctKillRating := ctKPR / avgKPR
-				ctSurvivalRating := ctSurvival / avgSPR
-				ctRMKRating := ctRMK / avgRMK
-
 				p.CTRating = (ctKillRating + 0.7*ctSurvivalRating + ctRMKRating) / 2.7
 			}
 

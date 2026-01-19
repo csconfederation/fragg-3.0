@@ -192,12 +192,42 @@ func runCumulativeModeMultiTier(cfg *config.Config, tiers []string, generateHeat
 	// Finalize and export aggregated stats across all tiers
 	aggregator.Finalize()
 
-	outputPath := "match_rating.json"
-	if err := output.ExportAggregated(aggregator.GetResults(), outputPath); err != nil {
-		log.Fatalf("Failed to export aggregated stats: %v", err)
-	}
+	results := aggregator.GetResults()
 
-	log.Printf("\nAggregated stats for %d players across %d tiers saved to: %s", len(aggregator.GetResults()), len(tiers), outputPath)
+	// Upload to Google Sheets if configured, otherwise write to JSON file
+	if cfg.UploadToSheet && cfg.StatsSheetURL != "" {
+		log.Printf("Uploading stats to Google Sheets...")
+
+		// Load service account credentials
+		credentialsPath := "csc-extended-stats-c5e08c92e535.json"
+		credentials, err := os.ReadFile(credentialsPath)
+		if err != nil {
+			log.Fatalf("Failed to read service account credentials from %s: %v", credentialsPath, err)
+		}
+
+		sheetName := cfg.StatsSheetName
+		if sheetName == "" {
+			sheetName = "ratings"
+		}
+
+		sheetsClient, err := output.NewSheetsClient(credentials, cfg.StatsSheetURL, sheetName)
+		if err != nil {
+			log.Fatalf("Failed to create Google Sheets client: %v", err)
+		}
+
+		if err := sheetsClient.UploadAggregatedStats(results); err != nil {
+			log.Fatalf("Failed to upload stats to Google Sheets: %v", err)
+		}
+
+		log.Printf("\nAggregated stats for %d players across %d tiers uploaded to Google Sheets", len(results), len(tiers))
+	} else {
+		outputPath := "match_rating.json"
+		if err := output.ExportAggregated(results, outputPath); err != nil {
+			log.Fatalf("Failed to export aggregated stats: %v", err)
+		}
+
+		log.Printf("\nAggregated stats for %d players across %d tiers saved to: %s", len(results), len(tiers), outputPath)
+	}
 
 	if generateHeatmaps {
 		log.Printf("Generating heatmaps...")

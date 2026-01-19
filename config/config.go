@@ -33,6 +33,11 @@ type Config struct {
 
 	// Output directory for generated heatmaps
 	HeatmapPath string `json:"heatmap_path"`
+
+	// Google Sheets integration
+	StatsSheetURL  string `json:"stats_sheet_url"`
+	StatsSheetName string `json:"stats_sheet_name"`
+	UploadToSheet  bool   `json:"upload_to_sheet"`
 }
 
 // DefaultConfig returns a config with sensible defaults

@@ -1,11 +1,14 @@
 {
   "cumulative": true,
-  "tier": "recruit,prospect,contender",
+  "tier": "recruit,prospect,contender,challenger,elite,premier",
   "base_url": "https://cscdemos.nyc3.digitaloceanspaces.com/",
   "prefix": "s19/Combines/",
   "output_dir": "D:\\demos",
   "demo_path": "",
   "enable_logging": true,
   "enable_csdm": false,
-  "heatmap_path": "D:\\heatmaps"
+  "heatmap_path": "D:\\heatmaps",
+  "stats_sheet_url": "https://docs.google.com/spreadsheets/d/1lcZ80NLIG2vLQvS7G3zL8tPcc6_iV24PG_V-ZmZNWHo/edit?gid=289298243#gid=289298243",
+  "stats_sheet_name": "ratings",
+  "upload_to_sheet": true
 }

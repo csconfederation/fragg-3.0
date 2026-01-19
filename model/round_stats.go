@@ -37,6 +37,8 @@ type RoundStats struct {
 	FlashAssists   int  // Number of flash assists this round
 	TradeKill      bool // Got a trade kill
 	TradeDeath     bool // Death was traded by teammate
+	FailedTrades   int  // Number of times player failed to trade a nearby teammate
+	TradeDenials   int  // Number of kills where player survived the trade window (wasn't traded)
 
 	// Support stats
 	SavedByTeammate bool // Was saved by a teammate this round

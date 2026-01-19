@@ -33,6 +33,7 @@ func (d *DemoParser) registerHandlers() {
 		d.state.RoundHasKill = false
 		d.state.RecentKills = make(map[uint64]recentKill)
 		d.state.RecentTeamDeaths = make(map[uint64]float64)
+		d.state.PendingTrades = make(map[uint64][]pendingTrade)
 		d.state.RoundDecided = false
 		d.state.RoundDecidedAt = 0
 	})
@@ -169,6 +170,11 @@ func (d *DemoParser) registerHandlers() {
 			return
 		}
 
+		// Skip team kills - they shouldn't count as kills
+		if a != nil && v != nil && a.Team == v.Team {
+			return
+		}
+
 		currentTick := d.parser.CurrentFrame()
 		const tradeWindow = 64 * 5 // ~5 seconds at 64 tick (CS2)
 
@@ -192,6 +198,35 @@ func (d *DemoParser) registerHandlers() {
 					victimRound.HadAWP = true
 					victimRound.LostAWP = true
 					break
+				}
+			}
+
+			// Track potential trades - find alive teammates near the victim who could trade
+			if a != nil {
+				gs := d.parser.GameState()
+				victimPos := v.Position()
+				for _, teammate := range gs.Participants().Playing() {
+					// Must be same team as victim, alive, and not the victim
+					if teammate.Team == v.Team && teammate.IsAlive() && teammate.SteamID64 != v.SteamID64 {
+						teammatePos := teammate.Position()
+						// Calculate distance (2D distance is more relevant for trading)
+						dx := victimPos.X - teammatePos.X
+						dy := victimPos.Y - teammatePos.Y
+						distance := math.Sqrt(dx*dx + dy*dy)
+
+						// If teammate is within ~1200 units (reasonable trade distance), they could have traded
+						if distance < 1200.0 {
+							pt := pendingTrade{
+								KillerID:           a.SteamID64,
+								KillerTeam:         a.Team,
+								TeammateID:         teammate.SteamID64,
+								DeathTick:          currentTick,
+								TeammatePos:        [3]float64{teammatePos.X, teammatePos.Y, teammatePos.Z},
+								PotentialTraderPos: [3]float64{teammatePos.X, teammatePos.Y, teammatePos.Z},
+							}
+							d.state.PendingTrades[a.SteamID64] = append(d.state.PendingTrades[a.SteamID64], pt)
+						}
+					}
 				}
 			}
 		}
@@ -229,6 +264,41 @@ func (d *DemoParser) registerHandlers() {
 					// Log the trade
 					d.logger.LogTrade(d.state.RoundNumber, a.Name, tradedPlayerName, v.Name)
 				}
+			}
+
+			// Clear pending trades for this victim (they got traded, so nearby teammates succeeded)
+			// The attacker who just died had pending trades - clear them since they were traded
+			delete(d.state.PendingTrades, v.SteamID64)
+		}
+
+		// Check for expired pending trades (trade window passed without trading)
+		// This happens when a killer survives longer than the trade window
+		for killerID, pendingList := range d.state.PendingTrades {
+			var remainingPending []pendingTrade
+			expiredCount := 0
+			for _, pt := range pendingList {
+				// If trade window has expired (5 seconds = 320 ticks at 64 tick)
+				if currentTick-pt.DeathTick > tradeWindow {
+					// Failed trade - nearby teammate didn't trade in time
+					if roundStats, exists := d.state.Round[pt.TeammateID]; exists {
+						roundStats.FailedTrades++
+					}
+					expiredCount++
+				} else {
+					// Still within trade window, keep tracking
+					remainingPending = append(remainingPending, pt)
+				}
+			}
+			// Reward the killer for surviving the trade window (trade denial)
+			if expiredCount > 0 {
+				if killerRound, exists := d.state.Round[killerID]; exists {
+					killerRound.TradeDenials++
+				}
+			}
+			if len(remainingPending) > 0 {
+				d.state.PendingTrades[killerID] = remainingPending
+			} else {
+				delete(d.state.PendingTrades, killerID)
 			}
 		}
 
@@ -447,6 +517,24 @@ func (d *DemoParser) registerHandlers() {
 		gs := d.parser.GameState()
 		winnerTeam := e.Winner
 
+		// Process any remaining pending trades at round end
+		// These are trades where the trade window expired but no more kills happened to trigger the check
+		currentTick := d.parser.CurrentFrame()
+		const tradeWindow = 64 * 5 // ~5 seconds at 64 tick
+
+		for _, pendingList := range d.state.PendingTrades {
+			for _, pt := range pendingList {
+				// If trade window has expired, it's a failed trade
+				if currentTick-pt.DeathTick > tradeWindow {
+					if roundStats, exists := d.state.Round[pt.TeammateID]; exists {
+						roundStats.FailedTrades++
+					}
+				}
+				// If still within trade window at round end and killer survived, also failed
+				// (round ended before they could trade)
+			}
+		}
+
 		// Track multi-kills per round
 		for steamID, roundStats := range d.state.Round {
 			player := d.state.Players[steamID]
@@ -456,7 +544,7 @@ func (d *DemoParser) registerHandlers() {
 
 			// Multi-kills tracking
 			if roundStats.Kills >= 2 && roundStats.Kills <= 5 {
-				player.MultiKills[roundStats.Kills]++
+				player.MultiKillsRaw[roundStats.Kills]++
 				d.logger.LogMultiKill(d.state.RoundNumber, player.Name, roundStats.Kills)
 			}
 

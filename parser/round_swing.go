@@ -7,13 +7,32 @@ import (
 
 // CalculateAdvancedRoundSwing computes context-aware round swing based on player actions and situational factors
 func CalculateAdvancedRoundSwing(roundStats *model.RoundStats, context *model.RoundContext, playerEquipValue float64, teamEquipValue float64) float64 {
-	baseSwing := 0.0
+	// === Participation-Weighted Team Bonus ===
+	// Team bonus is small, scaled by involvement (0..1)
+	// Heavy participants get most of it; uninvolved players get near-zero
+	const baseWin = 0.04
+	const baseLoss = -0.04
 
-	// === Base Round Outcome ===
+	// Calculate involvement: kills + assists*0.5 + min(1, damage/150) + plant + defuse + survived*0.5
+	involvement := float64(roundStats.Kills)
+	involvement += float64(roundStats.Assists) * 0.5
+	involvement += math.Min(1.0, float64(roundStats.Damage)/150.0)
+	if roundStats.PlantedBomb {
+		involvement += 1.0
+	}
+	if roundStats.DefusedBomb {
+		involvement += 1.0
+	}
+	if roundStats.Survived {
+		involvement += 0.5
+	}
+	involvement = math.Max(0.0, math.Min(involvement/4.0, 1.0)) // Clamp to 0..1
+
+	var baseSwing float64
 	if roundStats.TeamWon {
-		baseSwing = 0.05 // Base positive swing for winners
+		baseSwing = baseWin * involvement
 	} else {
-		baseSwing = -0.08 // Base negative swing for losers
+		baseSwing = baseLoss * involvement
 	}
 
 	// === Performance Contribution ===
@@ -49,12 +68,15 @@ func CalculateAdvancedRoundSwing(roundStats *model.RoundStats, context *model.Ro
 	// === NEW: Team Flash Penalty ===
 	teamFlashPenalty := calculateTeamFlashPenalty(roundStats)
 
+	// === NEW: Failed Trade Penalty ===
+	failedTradePenalty := calculateFailedTradePenalty(roundStats)
+
 	// === NEW: Weapon-Based Adjustments ===
 	weaponBonus := calculateWeaponBonus(roundStats)
 
 	// Combine all factors
 	totalSwing := baseSwing + performanceBonus + situationalBonus + impactBonus + multiKillBonus + clutchModifier +
-		utilityBonus + tradeSpeedBonus - exitFragPenalty - deathTimingPenalty - teamFlashPenalty + weaponBonus
+		utilityBonus + tradeSpeedBonus - exitFragPenalty - deathTimingPenalty - teamFlashPenalty - failedTradePenalty + weaponBonus
 
 	// Apply economy modifier as multiplier
 	totalSwing *= economyModifier
@@ -101,6 +123,13 @@ func calculatePerformanceContribution(roundStats *model.RoundStats) float64 {
 			contribution += 0.04 // Larger bonus for surviving a lost round (save)
 			roundStats.SavedWeapons = true
 		}
+	} else {
+		// Death penalty - dying costs the team
+		if roundStats.TradeDeath {
+			contribution -= 0.04 // Traded death - reduced penalty (team recovered)
+		} else {
+			contribution -= 0.08 // Untraded death - significant penalty (team lost numbers)
+		}
 	}
 
 	return contribution
@@ -118,8 +147,13 @@ func calculateSituationalBonus(roundStats *model.RoundStats, context *model.Roun
 		}
 	}
 
+	// Untraded opening death is much worse than traded opening death
 	if roundStats.OpeningDeath {
-		bonus -= 0.04 // Penalty for opening death
+		if roundStats.TradeDeath {
+			bonus -= 0.04 // Opening death but traded - moderate penalty (team recovered but lost tempo)
+		} else {
+			bonus -= 0.15 // Untraded opening death - severe penalty (team lost numbers with no trade)
+		}
 	}
 
 	// Entry fragging bonus
@@ -134,6 +168,11 @@ func calculateSituationalBonus(roundStats *model.RoundStats, context *model.Roun
 
 	if roundStats.TradeDeath {
 		bonus += 0.015 // Small bonus if death was traded (team play)
+	}
+
+	// Trade denial bonus - survived the trade window after getting a kill
+	if roundStats.TradeDenials > 0 {
+		bonus += float64(roundStats.TradeDenials) * 0.04 // Reward for not being traded
 	}
 
 	// Round type modifiers
@@ -182,7 +221,7 @@ func calculateImpactActions(roundStats *model.RoundStats, context *model.RoundCo
 	}
 
 	if roundStats.AntiEcoKill {
-		bonus -= 0.06 // Penalty for dying to eco
+		bonus -= 0.10 // Penalty for dying to eco (embarrassing death)
 	}
 
 	return bonus
@@ -353,15 +392,15 @@ func calculateDeathTimingPenalty(roundStats *model.RoundStats) float64 {
 		return 0.0
 	}
 
-	// Early deaths (first 30 seconds) are more punishing
+	// Early deaths are very punishing - you leave your team in a disadvantage
 	// Deaths after bomb plant are less punishing
 	switch {
 	case roundStats.DeathTime < 15.0:
-		return 0.03 // Very early death - strong penalty
+		return 0.08 // Very early death - severe penalty (dying before anything happens)
 	case roundStats.DeathTime < 30.0:
-		return 0.02 // Early death - moderate penalty
+		return 0.05 // Early death - strong penalty
 	case roundStats.DeathTime < 60.0:
-		return 0.01 // Mid-round death - small penalty
+		return 0.02 // Mid-round death - moderate penalty
 	default:
 		return 0.0 // Late death - no additional penalty
 	}
@@ -374,10 +413,22 @@ func calculateTeamFlashPenalty(roundStats *model.RoundStats) float64 {
 	}
 
 	// Penalty based on number of team flashes and duration
-	countPenalty := float64(roundStats.TeamFlashCount) * 0.005
-	durationPenalty := roundStats.TeamFlashDuration * 0.002 // Per second of team flash
+	// Team flashing is a significant mistake that can cost rounds
+	countPenalty := float64(roundStats.TeamFlashCount) * 0.02
+	durationPenalty := roundStats.TeamFlashDuration * 0.008 // Per second of team flash
 
-	return math.Min(countPenalty+durationPenalty, 0.04) // Cap at 0.04
+	return math.Min(countPenalty+durationPenalty, 0.10) // Cap at 0.10
+}
+
+// calculateFailedTradePenalty calculates penalty for failing to trade nearby teammates
+func calculateFailedTradePenalty(roundStats *model.RoundStats) float64 {
+	if roundStats.FailedTrades == 0 {
+		return 0.0
+	}
+
+	// Failing to trade a nearby teammate is a significant mistake
+	// You were in position to help but didn't get the refrag
+	return float64(roundStats.FailedTrades) * 0.08 // 0.08 penalty per failed trade
 }
 
 // calculateWeaponBonus calculates bonus/penalty for weapon-specific achievements

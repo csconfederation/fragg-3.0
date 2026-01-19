@@ -30,6 +30,18 @@ type MatchState struct {
 
 	// Track recent teammate deaths for trade speed calculation
 	RecentTeamDeaths map[uint64]float64 // SteamID -> death time (seconds from round start)
+
+	// Track pending trades: killer SteamID -> list of nearby teammates who could trade
+	PendingTrades map[uint64][]pendingTrade
+}
+
+type pendingTrade struct {
+	KillerID           uint64      // Enemy who got the kill
+	KillerTeam         common.Team // Team of the killer
+	TeammateID         uint64      // Teammate who could have traded
+	DeathTick          int         // Tick when teammate died
+	TeammatePos        [3]float64  // Position of dead teammate
+	PotentialTraderPos [3]float64  // Position of potential trader at time of death
 }
 
 type recentKill struct {
@@ -44,6 +56,7 @@ func NewMatchState() *MatchState {
 		Round:            make(map[uint64]*model.RoundStats),
 		RecentKills:      make(map[uint64]recentKill),
 		RecentTeamDeaths: make(map[uint64]float64),
+		PendingTrades:    make(map[uint64][]pendingTrade),
 	}
 }
 

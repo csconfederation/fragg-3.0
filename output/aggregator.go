@@ -259,11 +259,11 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.AWPOpeningKills += p.AWPOpeningKills
 
 		// Multi-kills
-		agg.MultiKills.OneK += p.MultiKills[1]
-		agg.MultiKills.TwoK += p.MultiKills[2]
-		agg.MultiKills.ThreeK += p.MultiKills[3]
-		agg.MultiKills.FourK += p.MultiKills[4]
-		agg.MultiKills.FiveK += p.MultiKills[5]
+		agg.MultiKills.OneK += p.MultiKillsRaw[1]
+		agg.MultiKills.TwoK += p.MultiKillsRaw[2]
+		agg.MultiKills.ThreeK += p.MultiKillsRaw[3]
+		agg.MultiKills.FourK += p.MultiKillsRaw[4]
+		agg.MultiKills.FiveK += p.MultiKillsRaw[5]
 
 		// Eco values
 		agg.EcoKillValue += p.EcoKillValue
@@ -381,8 +381,8 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 func (a *Aggregator) Finalize() {
 	// HLTV Rating 1.0 average values
 	avgKPR := 0.679
-	avgSPR := 0.317
-	avgRMK := 0.073
+	avgSPR := 0.317 // Average (Survived - Deaths) / Rounds
+	avgRMK := 1.277 // Average RMK points per round (weighted multi-kills)
 
 	for _, agg := range a.Players {
 		if agg.RoundsPlayed > 0 {
@@ -407,8 +407,12 @@ func (a *Aggregator) Finalize() {
 
 			// Calculate HLTV Rating 1.0 from aggregated stats
 			killRating := agg.KPR / avgKPR
-			survivalRating := agg.Survival / avgSPR
-			rmkRating := float64(agg.RoundsWithMultiKill) / rounds / avgRMK
+			// SurvivalRating: (Survived - Deaths) / Rounds, normalized
+			survived := agg.Survival * rounds // agg.Survival is already survival rate, convert back to count
+			survivalRating := ((survived - float64(agg.Deaths)) / rounds) / avgSPR
+			// RMK: weighted multi-kill points (1K=1, 2K=4, 3K=9, 4K=16, 5K=25)
+			rmkPoints := float64(agg.MultiKills.OneK*1 + agg.MultiKills.TwoK*4 + agg.MultiKills.ThreeK*9 + agg.MultiKills.FourK*16 + agg.MultiKills.FiveK*25)
+			rmkRating := (rmkPoints / rounds) / avgRMK
 			agg.HLTVRating = (killRating + 0.7*survivalRating + rmkRating) / 2.7
 
 			// Calculate all per-round and percentage stats
@@ -485,13 +489,13 @@ func (a *Aggregator) Finalize() {
 		if agg.PistolRoundsPlayed > 0 {
 			pistolRounds := float64(agg.PistolRoundsPlayed)
 			pistolKPR := float64(agg.PistolRoundKills) / pistolRounds
-			pistolSurvival := float64(agg.PistolRoundSurvivals) / pistolRounds
-			pistolRMK := float64(agg.PistolRoundMultiKills) / pistolRounds
+			// SurvivalRating: (Survived - Deaths) / Rounds
+			pistolSurvivalRating := ((float64(agg.PistolRoundSurvivals) - float64(agg.PistolRoundDeaths)) / pistolRounds) / avgSPR
+			// RMK: approximate using multi-kill rounds * 4 (average weight for 2K)
+			pistolRMKPoints := float64(agg.PistolRoundMultiKills) * 4.0
+			pistolRMKRating := (pistolRMKPoints / pistolRounds) / avgRMK
 
 			pistolKillRating := pistolKPR / avgKPR
-			pistolSurvivalRating := pistolSurvival / avgSPR
-			pistolRMKRating := pistolRMK / avgRMK
-
 			agg.PistolRoundRating = (pistolKillRating + 0.7*pistolSurvivalRating + pistolRMKRating) / 2.7
 		}
 
@@ -499,13 +503,13 @@ func (a *Aggregator) Finalize() {
 		if agg.TRoundsPlayed > 0 {
 			tRounds := float64(agg.TRoundsPlayed)
 			tKPR := float64(agg.TKills) / tRounds
-			tSurvival := float64(agg.TSurvivals) / tRounds
-			tRMK := float64(agg.TRoundsWithMultiKill) / tRounds
+			// SurvivalRating: (Survived - Deaths) / Rounds
+			tSurvivalRating := ((float64(agg.TSurvivals) - float64(agg.TDeaths)) / tRounds) / avgSPR
+			// RMK: weighted multi-kill points
+			tRMKPoints := float64(agg.tMultiKills[1]*1 + agg.tMultiKills[2]*4 + agg.tMultiKills[3]*9 + agg.tMultiKills[4]*16 + agg.tMultiKills[5]*25)
+			tRMKRating := (tRMKPoints / tRounds) / avgRMK
 
 			tKillRating := tKPR / avgKPR
-			tSurvivalRating := tSurvival / avgSPR
-			tRMKRating := tRMK / avgRMK
-
 			agg.TRating = (tKillRating + 0.7*tSurvivalRating + tRMKRating) / 2.7
 
 			// Calculate T-side Eco Rating
@@ -518,13 +522,13 @@ func (a *Aggregator) Finalize() {
 		if agg.CTRoundsPlayed > 0 {
 			ctRounds := float64(agg.CTRoundsPlayed)
 			ctKPR := float64(agg.CTKills) / ctRounds
-			ctSurvival := float64(agg.CTSurvivals) / ctRounds
-			ctRMK := float64(agg.CTRoundsWithMultiKill) / ctRounds
+			// SurvivalRating: (Survived - Deaths) / Rounds
+			ctSurvivalRating := ((float64(agg.CTSurvivals) - float64(agg.CTDeaths)) / ctRounds) / avgSPR
+			// RMK: weighted multi-kill points
+			ctRMKPoints := float64(agg.ctMultiKills[1]*1 + agg.ctMultiKills[2]*4 + agg.ctMultiKills[3]*9 + agg.ctMultiKills[4]*16 + agg.ctMultiKills[5]*25)
+			ctRMKRating := (ctRMKPoints / ctRounds) / avgRMK
 
 			ctKillRating := ctKPR / avgKPR
-			ctSurvivalRating := ctSurvival / avgSPR
-			ctRMKRating := ctRMK / avgRMK
-
 			agg.CTRating = (ctKillRating + 0.7*ctSurvivalRating + ctRMKRating) / 2.7
 
 			// Calculate CT-side Eco Rating

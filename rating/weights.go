@@ -229,3 +229,26 @@ const (
 	LateRoundTimeThreshold = 30.0 // Time threshold for late bomb plant (seconds)
 	ClutchDefuseThreshold  = 10.0 // Time threshold for clutch defuse (seconds)
 )
+
+// Round structure constants - CS2 MR12 format.
+const (
+	FirstHalfPistolRound  = 1  // First pistol round of the match
+	SecondHalfPistolRound = 13 // Second half pistol round (MR12)
+	RoundsPerHalf         = 12 // Rounds per half in regulation
+	RegulationRounds      = 24 // Total regulation rounds (MR12)
+	OvertimeLength        = 6  // Rounds per overtime (MR3)
+	TickRate              = 64 // Server tick rate for time calculations
+)
+
+// IsPistolRound determines if a round number is a pistol round.
+// Handles regulation and overtime pistol rounds for MR12 format.
+func IsPistolRound(roundNumber int) bool {
+	if roundNumber == FirstHalfPistolRound || roundNumber == SecondHalfPistolRound {
+		return true
+	}
+	// Overtime pistol rounds: 25, 31, 37, etc.
+	if roundNumber > RegulationRounds && (roundNumber-RegulationRounds-1)%OvertimeLength == 0 {
+		return true
+	}
+	return false
+}

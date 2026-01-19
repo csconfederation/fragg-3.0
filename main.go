@@ -264,7 +264,9 @@ func parseSingleDemo(demoPath string, enableLogging bool, exporter export.Export
 	defer demo.Close()
 
 	p := parser.NewDemoParserWithLogging(demo, enableLogging)
-	p.Parse()
+	if err := p.Parse(); err != nil {
+		log.Fatalf("Failed to parse demo: %v", err)
+	}
 
 	if err := exporter.Export(p.GetPlayers()); err != nil {
 		log.Fatalf("Failed to export stats: %v", err)
@@ -283,7 +285,9 @@ func parseDemoWithLogs(demoPath string, enableLogging bool) (map[uint64]*model.P
 	defer demo.Close()
 
 	p := parser.NewDemoParserWithLogging(demo, enableLogging)
-	p.Parse()
+	if err := p.Parse(); err != nil {
+		return nil, "", "", fmt.Errorf("failed to parse demo: %w", err)
+	}
 
 	return p.GetPlayers(), p.GetMapName(), p.GetLogs(), nil
 }

@@ -268,14 +268,6 @@ func getDeathType(ratio float64) string {
 	}
 }
 
-// max returns the larger of two integers.
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // Disable turns off logging.
 func (l *Logger) Disable() {
 	l.enabled = false

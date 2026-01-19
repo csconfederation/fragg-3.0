@@ -18,53 +18,29 @@ import (
 // MatchState holds all state information during demo parsing.
 // It tracks players, current round stats, and various flags for game state.
 type MatchState struct {
-	Players          map[uint64]*model.PlayerStats
-	Round            map[uint64]*model.RoundStats
-	RoundHasKill     bool
-	MatchStarted     bool
-	IsKnifeRound     bool
-	IsPistolRound    bool
-	RoundNumber      int
-	MapName          string
-	RecentKills      map[uint64]recentKill
-	RoundStartTime   float64
-	CurrentSide      string
-	TeamScore        int
-	EnemyScore       int
-	RoundDecided     bool
-	RoundDecidedAt   float64
-	RecentTeamDeaths map[uint64]float64
-	PendingTrades    map[uint64][]pendingTrade
-}
-
-// pendingTrade tracks a potential trade opportunity after a kill.
-// If the killer is killed within the trade window by a nearby teammate,
-// the original death is marked as traded.
-type pendingTrade struct {
-	KillerID           uint64      // Steam ID of the player who got the kill
-	KillerTeam         common.Team // Team of the killer
-	TeammateID         uint64      // Steam ID of the nearby teammate who could trade
-	DeathTick          int         // Tick when the original death occurred
-	TeammatePos        [3]float64  // Position of the teammate at death time
-	PotentialTraderPos [3]float64  // Position of the potential trader
-}
-
-// recentKill tracks a recent kill for trade detection.
-// Used to determine if a subsequent kill is a trade.
-type recentKill struct {
-	VictimID   uint64      // Steam ID of the victim
-	VictimTeam common.Team // Team of the victim
-	Tick       int         // Tick when the kill occurred
+	Players        map[uint64]*model.PlayerStats
+	Round          map[uint64]*model.RoundStats
+	TradeDetector  *TradeDetector
+	RoundHasKill   bool
+	MatchStarted   bool
+	IsKnifeRound   bool
+	IsPistolRound  bool
+	RoundNumber    int
+	MapName        string
+	RoundStartTime float64
+	CurrentSide    string
+	TeamScore      int
+	EnemyScore     int
+	RoundDecided   bool
+	RoundDecidedAt float64
 }
 
 // NewMatchState creates a new MatchState with initialized maps.
 func NewMatchState() *MatchState {
 	return &MatchState{
-		Players:          make(map[uint64]*model.PlayerStats),
-		Round:            make(map[uint64]*model.RoundStats),
-		RecentKills:      make(map[uint64]recentKill),
-		RecentTeamDeaths: make(map[uint64]float64),
-		PendingTrades:    make(map[uint64][]pendingTrade),
+		Players:       make(map[uint64]*model.PlayerStats),
+		Round:         make(map[uint64]*model.RoundStats),
+		TradeDetector: NewTradeDetector(),
 	}
 }
 

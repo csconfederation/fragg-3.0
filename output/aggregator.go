@@ -334,12 +334,17 @@ func (a *Aggregator) Finalize() {
 			agg.Survival = agg.Survival / rounds
 			agg.KAST = agg.KAST / rounds
 			agg.EconImpact = agg.EconImpact / rounds
-			killRating := agg.KPR / rating.HLTVBaselineKPR
-			survived := agg.Survival * rounds
-			survivalRating := ((survived - float64(agg.Deaths)) / rounds) / rating.HLTVBaselineSPR
-			rmkPoints := float64(agg.MultiKills.OneK*1 + agg.MultiKills.TwoK*4 + agg.MultiKills.ThreeK*9 + agg.MultiKills.FourK*16 + agg.MultiKills.FiveK*25)
-			rmkRating := (rmkPoints / rounds) / rating.HLTVBaselineRMK
-			agg.HLTVRating = (killRating + rating.HLTVSurvivalWeight*survivalRating + rmkRating) / rating.HLTVRatingDivisor
+
+			// Calculate HLTV rating using centralized function
+			survivals := int(agg.Survival * rounds)
+			multiKillsArr := [6]int{0, agg.MultiKills.OneK, agg.MultiKills.TwoK, agg.MultiKills.ThreeK, agg.MultiKills.FourK, agg.MultiKills.FiveK}
+			agg.HLTVRating = rating.ComputeHLTVRating(rating.HLTVInput{
+				RoundsPlayed: agg.RoundsPlayed,
+				Kills:        agg.Kills,
+				Deaths:       agg.Deaths,
+				Survivals:    survivals,
+				MultiKills:   multiKillsArr,
+			})
 			agg.RoundsWithKillPct = float64(agg.RoundsWithKill) / rounds
 			agg.RoundsWithMultiKillPct = float64(agg.RoundsWithMultiKill) / rounds
 			agg.SavedByTeammatePerRound = float64(agg.SavedByTeammate) / rounds
@@ -392,38 +397,26 @@ func (a *Aggregator) Finalize() {
 		if agg.Clutch1v1Attempts > 0 {
 			agg.Clutch1v1WinPct = float64(agg.Clutch1v1Wins) / float64(agg.Clutch1v1Attempts)
 		}
+		// Pistol round rating using centralized function
 		if agg.PistolRoundsPlayed > 0 {
-			pistolRounds := float64(agg.PistolRoundsPlayed)
-			pistolKPR := float64(agg.PistolRoundKills) / pistolRounds
-			pistolSurvivalRating := ((float64(agg.PistolRoundSurvivals) - float64(agg.PistolRoundDeaths)) / pistolRounds) / rating.HLTVBaselineSPR
-			pistolRMKPoints := float64(agg.PistolRoundMultiKills) * 4.0
-			pistolRMKRating := (pistolRMKPoints / pistolRounds) / rating.HLTVBaselineRMK
-
-			pistolKillRating := pistolKPR / rating.HLTVBaselineKPR
-			agg.PistolRoundRating = (pistolKillRating + rating.HLTVSurvivalWeight*pistolSurvivalRating + pistolRMKRating) / rating.HLTVRatingDivisor
+			agg.PistolRoundRating = rating.ComputePistolRoundRating(
+				agg.PistolRoundsPlayed, agg.PistolRoundKills, agg.PistolRoundDeaths,
+				agg.PistolRoundSurvivals, agg.PistolRoundMultiKills)
 		}
-		if agg.TRoundsPlayed > 0 {
-			tRounds := float64(agg.TRoundsPlayed)
-			tKPR := float64(agg.TKills) / tRounds
-			tSurvivalRating := ((float64(agg.TSurvivals) - float64(agg.TDeaths)) / tRounds) / rating.HLTVBaselineSPR
-			tRMKPoints := float64(agg.tMultiKills[1]*1 + agg.tMultiKills[2]*4 + agg.tMultiKills[3]*9 + agg.tMultiKills[4]*16 + agg.tMultiKills[5]*25)
-			tRMKRating := (tRMKPoints / tRounds) / rating.HLTVBaselineRMK
 
-			tKillRating := tKPR / rating.HLTVBaselineKPR
-			agg.TRating = (tKillRating + rating.HLTVSurvivalWeight*tSurvivalRating + tRMKRating) / rating.HLTVRatingDivisor
+		// T-side ratings using centralized functions
+		if agg.TRoundsPlayed > 0 {
+			agg.TRating = rating.ComputeSideHLTVRating(
+				agg.TRoundsPlayed, agg.TKills, agg.TDeaths, agg.TSurvivals, agg.tMultiKills)
 			agg.TEcoRating = rating.ComputeSideRating(
 				agg.TRoundsPlayed, agg.TKills, agg.TDeaths, agg.TDamage, agg.TEcoKillValue,
 				agg.TRoundSwing, agg.TKAST, agg.tMultiKills, agg.TClutchRounds, agg.TClutchWins)
 		}
-		if agg.CTRoundsPlayed > 0 {
-			ctRounds := float64(agg.CTRoundsPlayed)
-			ctKPR := float64(agg.CTKills) / ctRounds
-			ctSurvivalRating := ((float64(agg.CTSurvivals) - float64(agg.CTDeaths)) / ctRounds) / rating.HLTVBaselineSPR
-			ctRMKPoints := float64(agg.ctMultiKills[1]*1 + agg.ctMultiKills[2]*4 + agg.ctMultiKills[3]*9 + agg.ctMultiKills[4]*16 + agg.ctMultiKills[5]*25)
-			ctRMKRating := (ctRMKPoints / ctRounds) / rating.HLTVBaselineRMK
 
-			ctKillRating := ctKPR / rating.HLTVBaselineKPR
-			agg.CTRating = (ctKillRating + rating.HLTVSurvivalWeight*ctSurvivalRating + ctRMKRating) / rating.HLTVRatingDivisor
+		// CT-side ratings using centralized functions
+		if agg.CTRoundsPlayed > 0 {
+			agg.CTRating = rating.ComputeSideHLTVRating(
+				agg.CTRoundsPlayed, agg.CTKills, agg.CTDeaths, agg.CTSurvivals, agg.ctMultiKills)
 			agg.CTEcoRating = rating.ComputeSideRating(
 				agg.CTRoundsPlayed, agg.CTKills, agg.CTDeaths, agg.CTDamage, agg.CTEcoKillValue,
 				agg.CTRoundSwing, agg.CTKAST, agg.ctMultiKills, agg.CTClutchRounds, agg.CTClutchWins)

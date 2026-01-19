@@ -395,7 +395,6 @@ func getAggregatedHeader() []string {
 		"Mirage Rating", "Mirage Games",
 		"Nuke Rating", "Nuke Games",
 		"Overpass Rating", "Overpass Games",
-		"Vertigo Rating", "Vertigo Games",
 	}
 }
 
@@ -560,8 +559,6 @@ func getAggregatedRow(p *output.AggregatedStats) []string {
 		getMapGames(p, "de_nuke"),
 		getMapRating(p, "de_overpass"),
 		getMapGames(p, "de_overpass"),
-		getMapRating(p, "de_vertigo"),
-		getMapGames(p, "de_vertigo"),
 	}
 }
 

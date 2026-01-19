@@ -9,9 +9,11 @@
 package parser
 
 import (
+	"fmt"
+	"io"
+
 	"eco-rating/model"
 	"eco-rating/rating"
-	"io"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
 )
@@ -68,8 +70,17 @@ func (d *DemoParser) ClearPlayerFilter() {
 // Parse processes the entire demo file and computes all player statistics.
 // After parsing, it calculates derived metrics (ADR, KPR, ratings, etc.)
 // and the final eco-rating for each player.
-func (d *DemoParser) Parse() {
-	_ = d.parser.ParseToEnd()
+// Returns an error if parsing fails.
+func (d *DemoParser) Parse() error {
+	if err := d.parser.ParseToEnd(); err != nil {
+		return fmt.Errorf("failed to parse demo: %w", err)
+	}
+	d.computeDerivedStats()
+	return nil
+}
+
+// computeDerivedStats calculates all derived metrics for each player after parsing.
+func (d *DemoParser) computeDerivedStats() {
 
 	for _, p := range d.state.Players {
 		if p.RoundsPlayed > 0 {
@@ -80,49 +91,34 @@ func (d *DemoParser) Parse() {
 			p.KAST = p.KAST / rounds
 			p.Survival = p.Survival / rounds
 
-			if p.RoundsPlayed > 0 {
-				p.AWPKillsPerRound = float64(p.AWPKills) / rounds
-			}
+			p.AWPKillsPerRound = float64(p.AWPKills) / rounds
 
-			killRating := p.KPR / rating.HLTVBaselineKPR
-			survived := p.Survival * rounds
-			survivalRating := ((survived - float64(p.Deaths)) / rounds) / rating.HLTVBaselineSPR
-			rmkPoints := float64(p.MultiKillsRaw[1]*1 + p.MultiKillsRaw[2]*4 + p.MultiKillsRaw[3]*9 + p.MultiKillsRaw[4]*16 + p.MultiKillsRaw[5]*25)
-			rmkRating := (rmkPoints / rounds) / rating.HLTVBaselineRMK
+			// Calculate HLTV rating using centralized function
+			survivals := int(p.Survival * rounds)
+			p.HLTVRating = rating.ComputeHLTVRating(rating.HLTVInput{
+				RoundsPlayed: p.RoundsPlayed,
+				Kills:        p.Kills,
+				Deaths:       p.Deaths,
+				Survivals:    survivals,
+				MultiKills:   p.MultiKillsRaw,
+			})
 
-			p.HLTVRating = (killRating + rating.HLTVSurvivalWeight*survivalRating + rmkRating) / rating.HLTVRatingDivisor
-
+			// Pistol round rating
 			if p.PistolRoundsPlayed > 0 {
-				pistolRounds := float64(p.PistolRoundsPlayed)
-				pistolKPR := float64(p.PistolRoundKills) / pistolRounds
-				pistolSurvivalRating := ((float64(p.PistolRoundSurvivals) - float64(p.PistolRoundDeaths)) / pistolRounds) / rating.HLTVBaselineSPR
-				pistolRMKPoints := float64(p.PistolRoundMultiKills) * 4.0
-				pistolRMKRating := (pistolRMKPoints / pistolRounds) / rating.HLTVBaselineRMK
-
-				pistolKillRating := pistolKPR / rating.HLTVBaselineKPR
-				p.PistolRoundRating = (pistolKillRating + rating.HLTVSurvivalWeight*pistolSurvivalRating + pistolRMKRating) / rating.HLTVRatingDivisor
+				p.PistolRoundRating = rating.ComputePistolRoundRating(
+					p.PistolRoundsPlayed, p.PistolRoundKills, p.PistolRoundDeaths,
+					p.PistolRoundSurvivals, p.PistolRoundMultiKills)
 			}
 
+			// Side-specific HLTV ratings
 			if p.TRoundsPlayed > 0 {
-				tRounds := float64(p.TRoundsPlayed)
-				tKPR := float64(p.TKills) / tRounds
-				tSurvivalRating := ((float64(p.TSurvivals) - float64(p.TDeaths)) / tRounds) / rating.HLTVBaselineSPR
-				tRMKPoints := float64(p.TMultiKills[1]*1 + p.TMultiKills[2]*4 + p.TMultiKills[3]*9 + p.TMultiKills[4]*16 + p.TMultiKills[5]*25)
-				tRMKRating := (tRMKPoints / tRounds) / rating.HLTVBaselineRMK
-
-				tKillRating := tKPR / rating.HLTVBaselineKPR
-				p.TRating = (tKillRating + rating.HLTVSurvivalWeight*tSurvivalRating + tRMKRating) / rating.HLTVRatingDivisor
+				p.TRating = rating.ComputeSideHLTVRating(
+					p.TRoundsPlayed, p.TKills, p.TDeaths, p.TSurvivals, p.TMultiKills)
 			}
 
 			if p.CTRoundsPlayed > 0 {
-				ctRounds := float64(p.CTRoundsPlayed)
-				ctKPR := float64(p.CTKills) / ctRounds
-				ctSurvivalRating := ((float64(p.CTSurvivals) - float64(p.CTDeaths)) / ctRounds) / rating.HLTVBaselineSPR
-				ctRMKPoints := float64(p.CTMultiKills[1]*1 + p.CTMultiKills[2]*4 + p.CTMultiKills[3]*9 + p.CTMultiKills[4]*16 + p.CTMultiKills[5]*25)
-				ctRMKRating := (ctRMKPoints / ctRounds) / rating.HLTVBaselineRMK
-
-				ctKillRating := ctKPR / rating.HLTVBaselineKPR
-				p.CTRating = (ctKillRating + rating.HLTVSurvivalWeight*ctSurvivalRating + ctRMKRating) / rating.HLTVRatingDivisor
+				p.CTRating = rating.ComputeSideHLTVRating(
+					p.CTRoundsPlayed, p.CTKills, p.CTDeaths, p.CTSurvivals, p.CTMultiKills)
 			}
 
 			p.TimeAlivePerRound = p.TotalTimeAlive / rounds

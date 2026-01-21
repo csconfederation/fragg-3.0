@@ -123,6 +123,7 @@ type PlayerStats struct {
 	TRoundsWithMultiKill       int     `json:"t_rounds_with_multi_kill"`
 	TEcoKillValue              float64 `json:"t_eco_kill_value"`
 	TRoundSwing                float64 `json:"t_round_swing"`
+	TProbabilitySwing          float64 `json:"t_probability_swing"`
 	TKAST                      float64 `json:"t_kast"`
 	TMultiKills                [6]int  `json:"-"`
 	TClutchRounds              int     `json:"t_clutch_rounds"`
@@ -137,6 +138,7 @@ type PlayerStats struct {
 	CTRoundsWithMultiKill      int     `json:"ct_rounds_with_multi_kill"`
 	CTEcoKillValue             float64 `json:"ct_eco_kill_value"`
 	CTRoundSwing               float64 `json:"ct_round_swing"`
+	CTProbabilitySwing         float64 `json:"ct_probability_swing"`
 	CTKAST                     float64 `json:"ct_kast"`
 	CTMultiKills               [6]int  `json:"-"`
 	CTClutchRounds             int     `json:"ct_clutch_rounds"`

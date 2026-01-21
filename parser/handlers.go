@@ -783,6 +783,13 @@ func (d *DemoParser) handleRoundEnd(e events.RoundEnd) {
 
 		// Add probability-based swing to player stats
 		player.ProbabilitySwing += roundStats.ProbabilitySwing
+
+		// Track side-specific probability swing
+		if roundStats.PlayerSide == "T" {
+			player.TProbabilitySwing += roundStats.ProbabilitySwing
+		} else if roundStats.PlayerSide == "CT" {
+			player.CTProbabilitySwing += roundStats.ProbabilitySwing
+		}
 	}
 
 	// Use SideStatsUpdater for cleaner stats updates

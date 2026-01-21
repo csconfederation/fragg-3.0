@@ -67,36 +67,25 @@ func sumMulti(m [6]int) int {
 }
 
 // ComputeSideRating calculates a rating for a specific side (T or CT).
-// Uses the same formula as ComputeFinalRating but with side-specific stats.
-// This allows comparison of player performance on different sides.
+// Pure probability-based rating matching ComputeFinalRating:
+// - ProbabilitySwing: Core metric measuring win probability impact
+// - ADR: Rewards chip damage that didn't result in kills
+// - KAST: Rewards round involvement
+//
+// Kills/deaths are captured entirely through swing to avoid double-counting.
 func ComputeSideRating(rounds int, kills int, deaths int, damage int, ecoKillValue float64,
-	roundSwing float64, kast float64, multiKills [6]int, clutchRounds int, clutchWins int) float64 {
+	probabilitySwing float64, kast float64, multiKills [6]int, clutchRounds int, clutchWins int) float64 {
 
 	roundsF := float64(rounds)
 	if roundsF == 0 {
 		return 0
 	}
 
-	kpr := float64(kills) / roundsF
-	dpr := float64(deaths) / roundsF
 	adr := float64(damage) / roundsF
 	kastPct := kast / roundsF
-	avgSwing := roundSwing / roundsF
+	probSwingPerRound := probabilitySwing / roundsF
 
-	var kprContrib float64
-	if kpr >= BaselineKPR {
-		kprContrib = (kpr - BaselineKPR) * KPRContribAbove
-	} else {
-		kprContrib = (kpr - BaselineKPR) * KPRContribBelow
-	}
-
-	var dprContrib float64
-	if dpr <= BaselineDPR {
-		dprContrib = (BaselineDPR - dpr) * DPRContribBelow
-	} else {
-		dprContrib = (BaselineDPR - dpr) * DPRContribAbove
-	}
-
+	// ADR contribution - rewards consistent damage output
 	var adrContrib float64
 	if adr >= BaselineADR {
 		adrContrib = (adr - BaselineADR) * ADRContribAbove
@@ -104,6 +93,7 @@ func ComputeSideRating(rounds int, kills int, deaths int, damage int, ecoKillVal
 		adrContrib = (adr - BaselineADR) * ADRContribBelow
 	}
 
+	// KAST contribution - rewards round involvement
 	var kastContrib float64
 	if kastPct >= BaselineKAST {
 		kastContrib = (kastPct - BaselineKAST) * KASTContribAbove
@@ -111,17 +101,10 @@ func ComputeSideRating(rounds int, kills int, deaths int, damage int, ecoKillVal
 		kastContrib = (kastPct - BaselineKAST) * KASTContribBelow
 	}
 
-	var swingContrib float64
-	if avgSwing >= 0 {
-		swingContrib = avgSwing * SwingContribPositive
-	} else {
-		swingContrib = avgSwing * SwingContribNegative
-	}
+	// Probability-based swing contribution (core metric)
+	probSwingContrib := probSwingPerRound * ProbSwingContribMultiplier
 
-	multiKillBonus := float64(sumMulti(multiKills)) / roundsF
-	multiContrib := multiKillBonus * MultiKillContrib
-
-	rating := RatingBaseline + kprContrib + dprContrib + adrContrib + kastContrib + swingContrib + multiContrib
+	rating := RatingBaseline + adrContrib + kastContrib + probSwingContrib
 
 	return math.Max(MinRating, math.Min(MaxRating, rating))
 }

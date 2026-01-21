@@ -2,7 +2,7 @@
   "cumulative": true,
   "tier": "recruit,prospect,contender,challenger,elite,premier",
   "base_url": "https://cscdemos.nyc3.digitaloceanspaces.com/",
-  "prefixes": ["s19/Combines/"],
+  "prefixes": ["s17/Combines/"],
   "demo_path": "",
   "demo_dir": "D:\\demos",
   "enable_logging": true

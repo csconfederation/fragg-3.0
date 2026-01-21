@@ -63,6 +63,8 @@ type AggregatedStats struct {
 	EcoKillValue               float64        `json:"eco_kill_value"`
 	EcoDeathValue              float64        `json:"eco_death_value"`
 	RoundSwing                 float64        `json:"round_swing"`
+	ProbabilitySwing           float64        `json:"probability_swing"`
+	ProbabilitySwingPerRound   float64        `json:"probability_swing_per_round"`
 	ClutchRounds               int            `json:"clutch_rounds"`
 	ClutchWins                 int            `json:"clutch_wins"`
 	SavedByTeammate            int            `json:"saved_by_teammate"`
@@ -233,6 +235,7 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.EcoKillValue += p.EcoKillValue
 		agg.EcoDeathValue += p.EcoDeathValue
 		agg.RoundSwing += p.RoundSwing
+		agg.ProbabilitySwing += p.ProbabilitySwing
 		agg.ClutchRounds += p.ClutchRounds
 		agg.ClutchWins += p.ClutchWins
 		agg.SavedByTeammate += p.SavedByTeammate
@@ -338,6 +341,7 @@ func (a *Aggregator) Finalize() {
 			agg.Survival = agg.Survival / rounds
 			agg.KAST = agg.KAST / rounds
 			agg.EconImpact = agg.EconImpact / rounds
+			agg.ProbabilitySwingPerRound = agg.ProbabilitySwing / rounds
 
 			// Calculate HLTV rating using centralized function
 			survivals := int(agg.Survival * rounds)

@@ -44,6 +44,11 @@ type PlayerStats struct {
 	ADR                 float64 `json:"adr"`
 	KPR                 float64 `json:"kpr"`
 	DPR                 float64 `json:"dpr"`
+	Headshots           int     `json:"headshots"`
+	HeadshotPct         float64 `json:"headshot_pct"`
+	TotalTimeToKill     float64 `json:"-"`
+	KillsWithTTK        int     `json:"-"`
+	AvgTimeToKill       float64 `json:"avg_time_to_kill"`
 	PerfectKills        int     `json:"perfect_kills"`
 	TradeDenials        int     `json:"trade_denials"`
 	TradedDeaths        int     `json:"traded_deaths"`

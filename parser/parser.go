@@ -179,6 +179,11 @@ func (d *DemoParser) computeDerivedStats() {
 			p.AWPKillsPct = float64(p.AWPKills) / float64(p.Kills)
 			p.LowBuyKillsPct = float64(p.LowBuyKills) / float64(p.Kills)
 			p.DisadvantagedBuyKillsPct = float64(p.DisadvantagedBuyKills) / float64(p.Kills)
+			p.HeadshotPct = float64(p.Headshots) / float64(p.Kills)
+		}
+
+		if p.KillsWithTTK > 0 {
+			p.AvgTimeToKill = p.TotalTimeToKill / float64(p.KillsWithTTK)
 		}
 
 		if p.OpeningAttempts > 0 {

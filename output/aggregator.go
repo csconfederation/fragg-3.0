@@ -26,21 +26,26 @@ type MultiKillStats struct {
 // Raw counts are accumulated during AddGame, and derived metrics (rates, percentages)
 // are calculated during Finalize. The struct also tracks per-map performance.
 type AggregatedStats struct {
-	SteamID      string  `json:"steam_id"`
-	Name         string  `json:"name"`
-	Tier         string  `json:"tier"`
-	GamesCount   int     `json:"games_count"`
-	RoundsPlayed int     `json:"rounds_played"`
-	RoundsWon    int     `json:"rounds_won"`
-	RoundsLost   int     `json:"rounds_lost"`
-	Kills        int     `json:"kills"`
-	Assists      int     `json:"assists"`
-	Deaths       int     `json:"deaths"`
-	Damage       int     `json:"damage"`
-	OpeningKills int     `json:"opening_kills"`
-	ADR          float64 `json:"adr"`
-	KPR          float64 `json:"kpr"`
-	DPR          float64 `json:"dpr"`
+	SteamID         string  `json:"steam_id"`
+	Name            string  `json:"name"`
+	Tier            string  `json:"tier"`
+	GamesCount      int     `json:"games_count"`
+	RoundsPlayed    int     `json:"rounds_played"`
+	RoundsWon       int     `json:"rounds_won"`
+	RoundsLost      int     `json:"rounds_lost"`
+	Kills           int     `json:"kills"`
+	Assists         int     `json:"assists"`
+	Deaths          int     `json:"deaths"`
+	Damage          int     `json:"damage"`
+	OpeningKills    int     `json:"opening_kills"`
+	ADR             float64 `json:"adr"`
+	KPR             float64 `json:"kpr"`
+	DPR             float64 `json:"dpr"`
+	Headshots       int     `json:"headshots"`
+	HeadshotPct     float64 `json:"headshot_pct"`
+	TotalTimeToKill float64 `json:"-"`
+	KillsWithTTK    int     `json:"-"`
+	AvgTimeToKill   float64 `json:"avg_time_to_kill"`
 
 	PerfectKills        int     `json:"perfect_kills"`
 	TradeDenials        int     `json:"trade_denials"`
@@ -216,6 +221,9 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.Deaths += p.Deaths
 		agg.Damage += p.Damage
 		agg.OpeningKills += p.OpeningKills
+		agg.Headshots += p.Headshots
+		agg.TotalTimeToKill += p.TotalTimeToKill
+		agg.KillsWithTTK += p.KillsWithTTK
 		agg.PerfectKills += p.PerfectKills
 		agg.TradeDenials += p.TradeDenials
 		agg.TradedDeaths += p.TradedDeaths
@@ -395,6 +403,10 @@ func (a *Aggregator) Finalize() {
 			agg.AWPKillsPct = float64(agg.AWPKills) / float64(agg.Kills)
 			agg.LowBuyKillsPct = float64(agg.LowBuyKills) / float64(agg.Kills)
 			agg.DisadvantagedBuyKillsPct = float64(agg.DisadvantagedBuyKills) / float64(agg.Kills)
+			agg.HeadshotPct = float64(agg.Headshots) / float64(agg.Kills)
+		}
+		if agg.KillsWithTTK > 0 {
+			agg.AvgTimeToKill = agg.TotalTimeToKill / float64(agg.KillsWithTTK)
 		}
 		if agg.OpeningAttempts > 0 {
 			agg.OpeningSuccessPct = float64(agg.OpeningSuccesses) / float64(agg.OpeningAttempts)

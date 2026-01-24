@@ -4,11 +4,23 @@ import (
 	"eco-rating/rating/swing"
 )
 
+const (
+	// EngagementTimeout is the time in seconds after which an engagement is considered ended.
+	// If no damage is dealt for this duration, the next damage starts a new engagement.
+	EngagementTimeout = 5.0
+)
+
 // DamageTracker tracks damage dealt to each player during a round.
 // Used to attribute kill credit to damage contributors.
 type DamageTracker struct {
 	// damageDealt maps victim SteamID -> attacker SteamID -> damage
 	damageDealt map[uint64]map[uint64]int
+
+	// firstDamageTime maps victim SteamID -> attacker SteamID -> time of first damage in current engagement
+	firstDamageTime map[uint64]map[uint64]float64
+
+	// lastDamageTime maps victim SteamID -> attacker SteamID -> time of last damage (for timeout)
+	lastDamageTime map[uint64]map[uint64]float64
 
 	// flashedPlayers maps victim SteamID -> list of flash assists
 	flashedPlayers map[uint64][]FlashInfo
@@ -23,23 +35,45 @@ type FlashInfo struct {
 // NewDamageTracker creates a new damage tracker.
 func NewDamageTracker() *DamageTracker {
 	return &DamageTracker{
-		damageDealt:    make(map[uint64]map[uint64]int),
-		flashedPlayers: make(map[uint64][]FlashInfo),
+		damageDealt:     make(map[uint64]map[uint64]int),
+		firstDamageTime: make(map[uint64]map[uint64]float64),
+		lastDamageTime:  make(map[uint64]map[uint64]float64),
+		flashedPlayers:  make(map[uint64][]FlashInfo),
 	}
 }
 
 // Reset clears all tracking data for a new round.
 func (dt *DamageTracker) Reset() {
 	dt.damageDealt = make(map[uint64]map[uint64]int)
+	dt.firstDamageTime = make(map[uint64]map[uint64]float64)
+	dt.lastDamageTime = make(map[uint64]map[uint64]float64)
 	dt.flashedPlayers = make(map[uint64][]FlashInfo)
 }
 
 // RecordDamage records damage dealt from attacker to victim.
-func (dt *DamageTracker) RecordDamage(attackerID, victimID uint64, damage int) {
+func (dt *DamageTracker) RecordDamage(attackerID, victimID uint64, damage int, timeInRound float64) {
 	if dt.damageDealt[victimID] == nil {
 		dt.damageDealt[victimID] = make(map[uint64]int)
 	}
 	dt.damageDealt[victimID][attackerID] += damage
+
+	// Initialize maps if needed
+	if dt.firstDamageTime[victimID] == nil {
+		dt.firstDamageTime[victimID] = make(map[uint64]float64)
+	}
+	if dt.lastDamageTime[victimID] == nil {
+		dt.lastDamageTime[victimID] = make(map[uint64]float64)
+	}
+
+	// Check if this is a new engagement (first damage or timeout exceeded)
+	lastTime, exists := dt.lastDamageTime[victimID][attackerID]
+	if !exists || (timeInRound-lastTime) > EngagementTimeout {
+		// New engagement - reset first damage time
+		dt.firstDamageTime[victimID][attackerID] = timeInRound
+	}
+
+	// Always update last damage time
+	dt.lastDamageTime[victimID][attackerID] = timeInRound
 }
 
 // RecordFlash records that an attacker flashed a victim.
@@ -109,5 +143,18 @@ func (dt *DamageTracker) GetFlashAssists(victimID uint64) []swing.FlashAssist {
 // Called after processing a kill to prevent double-counting.
 func (dt *DamageTracker) ClearVictimData(victimID uint64) {
 	delete(dt.damageDealt, victimID)
+	delete(dt.firstDamageTime, victimID)
+	delete(dt.lastDamageTime, victimID)
 	delete(dt.flashedPlayers, victimID)
+}
+
+// GetTimeToKill returns the time between first damage and kill time.
+// Returns -1 if no prior damage was recorded (e.g., one-shot kill).
+func (dt *DamageTracker) GetTimeToKill(killerID, victimID uint64, killTime float64) float64 {
+	if times, ok := dt.firstDamageTime[victimID]; ok {
+		if firstTime, exists := times[killerID]; exists {
+			return killTime - firstTime
+		}
+	}
+	return -1
 }

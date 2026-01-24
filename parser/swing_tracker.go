@@ -60,11 +60,11 @@ func (st *SwingTracker) SetEconomyFromValues(tAvgEquip, ctAvgEquip float64) {
 }
 
 // RecordDamage records damage dealt for attribution tracking.
-func (st *SwingTracker) RecordDamage(attackerID, victimID uint64, damage int) {
+func (st *SwingTracker) RecordDamage(attackerID, victimID uint64, damage int, timeInRound float64) {
 	if !st.enabled {
 		return
 	}
-	st.damageTracker.RecordDamage(attackerID, victimID, damage)
+	st.damageTracker.RecordDamage(attackerID, victimID, damage, timeInRound)
 }
 
 // RecordFlash records a flash for attribution tracking.
@@ -214,6 +214,11 @@ func (st *SwingTracker) GetRoundEvents() []swing.RoundEvent {
 // GetDamageTracker returns the damage tracker for direct access if needed.
 func (st *SwingTracker) GetDamageTracker() *DamageTracker {
 	return st.damageTracker
+}
+
+// GetTimeToKill returns the time between first damage and kill for a specific kill.
+func (st *SwingTracker) GetTimeToKill(killerID, victimID uint64, killTime float64) float64 {
+	return st.damageTracker.GetTimeToKill(killerID, victimID, killTime)
 }
 
 // GetCalculator returns the swing calculator.

@@ -138,15 +138,21 @@ func (d *DemoParser) handleBombDefused(e events.BombDefused) {
 	roundStats := d.state.ensureRound(e.Player)
 	roundStats.DefusedBomb = true
 
+	// Calculate time in round
+	currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
+	timeInRound := currentTime - d.state.RoundStartTime
+
 	// Track bomb defuse swing
 	if d.state.SwingTracker != nil {
-		currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-		timeInRound := currentTime - d.state.RoundStartTime
 		defuseSwing := d.state.SwingTracker.RecordBombDefuse(e.Player.SteamID64, timeInRound)
 		roundStats.ProbabilitySwing += defuseSwing
 	}
 
 	d.logger.LogBombDefuse(d.state.RoundNumber, defuser.Name)
+
+	// Mark round as decided - kills after defuse are exit frags
+	d.state.RoundDecided = true
+	d.state.RoundDecidedAt = timeInRound
 }
 
 // handleBombExplode marks the round as decided when the bomb explodes.
@@ -460,6 +466,18 @@ func (d *DemoParser) processKillerStats(ctx *killContext) {
 	attacker.EcoKillValue += ctx.killValue
 	attacker.RoundImpact += ctx.killValue
 	attacker.EconImpact += ctx.killValue
+	if ctx.event.IsHeadshot {
+		attacker.Headshots++
+	}
+
+	// Calculate proper TTK (time from first damage to kill)
+	if d.state.SwingTracker != nil {
+		ttk := d.state.SwingTracker.GetTimeToKill(ctx.attacker.SteamID64, ctx.victim.SteamID64, ctx.timeInRound)
+		if ttk >= 0 {
+			attacker.TotalTimeToKill += ttk
+			attacker.KillsWithTTK++
+		}
+	}
 
 	if ctx.killValue < 1.0 {
 		attacker.LowBuyKills++
@@ -591,6 +609,7 @@ func (d *DemoParser) processAssist(ctx *killContext) {
 	assister.Assists++
 	assistRound := d.state.ensureRound(ctx.event.Assister)
 	assistRound.GotAssist = true
+	assistRound.Assists++
 }
 
 // registerDamageHandler sets up the damage event handler.
@@ -624,9 +643,11 @@ func (d *DemoParser) handlePlayerHurt(e events.PlayerHurt) {
 			}
 		}
 
-		// Track damage for swing attribution
+		// Track damage for swing attribution and TTK calculation
 		if d.state.SwingTracker != nil {
-			d.state.SwingTracker.RecordDamage(e.Attacker.SteamID64, e.Player.SteamID64, int(e.HealthDamageTaken))
+			currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
+			timeInRound := currentTime - d.state.RoundStartTime
+			d.state.SwingTracker.RecordDamage(e.Attacker.SteamID64, e.Player.SteamID64, int(e.HealthDamageTaken), timeInRound)
 		}
 	}
 }
@@ -735,7 +756,7 @@ func (d *DemoParser) processMultiKills() {
 			continue
 		}
 
-		if roundStats.Kills >= 2 && roundStats.Kills <= 5 {
+		if roundStats.Kills >= 1 && roundStats.Kills <= 5 {
 			player.MultiKillsRaw[roundStats.Kills]++
 			d.logger.LogMultiKill(d.state.RoundNumber, player.Name, roundStats.Kills)
 		}

@@ -71,7 +71,6 @@ type PlayerStats struct {
 	EconImpact                 float64 `json:"econ_impact"`
 	EcoKillValue               float64 `json:"eco_kill_value"`
 	EcoDeathValue              float64 `json:"eco_death_value"`
-	RoundSwing                 float64 `json:"round_swing"`
 	ClutchRounds               int     `json:"clutch_rounds"`
 	ClutchWins                 int     `json:"clutch_wins"`
 	SavedByTeammate            int     `json:"saved_by_teammate"`
@@ -127,7 +126,6 @@ type PlayerStats struct {
 	TSurvivals                 int     `json:"t_survivals"`
 	TRoundsWithMultiKill       int     `json:"t_rounds_with_multi_kill"`
 	TEcoKillValue              float64 `json:"t_eco_kill_value"`
-	TRoundSwing                float64 `json:"t_round_swing"`
 	TProbabilitySwing          float64 `json:"t_probability_swing"`
 	TKAST                      float64 `json:"t_kast"`
 	TMultiKills                [6]int  `json:"-"`
@@ -142,7 +140,6 @@ type PlayerStats struct {
 	CTSurvivals                int     `json:"ct_survivals"`
 	CTRoundsWithMultiKill      int     `json:"ct_rounds_with_multi_kill"`
 	CTEcoKillValue             float64 `json:"ct_eco_kill_value"`
-	CTRoundSwing               float64 `json:"ct_round_swing"`
 	CTProbabilitySwing         float64 `json:"ct_probability_swing"`
 	CTKAST                     float64 `json:"ct_kast"`
 	CTMultiKills               [6]int  `json:"-"`

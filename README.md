@@ -9,8 +9,7 @@ A CS2 demo parser that calculates advanced player performance ratings based on p
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Adding New Stats](#adding-new-stats)
-- [Updating Weights](#updating-weights)
-- [Rating Formula](#rating-formula)
+- [Rating System](#rating-system)
 - [Key Concepts](#key-concepts)
 
 ---
@@ -184,143 +183,45 @@ Edit `export/file.go`:
 
 ---
 
-## Updating Weights
+## Rating System
 
-All weights and constants are centralized in `rating/weights.go`. This makes tuning the rating formula straightforward.
+The final rating uses a **probability-based system** that measures how much each player's actions affected their team's win probability.
 
-### Weight Categories
+### Final Rating Formula
 
-#### 1. Rating Formula Weights
-
-These control how stats contribute to the final rating:
-
-```go
-// rating/weights.go
-
-// ADR contribution (per point above/below baseline)
-ADRContribAbove = 0.005  // Bonus per ADR point above 77
-ADRContribBelow = 0.004  // Penalty per ADR point below 77
-
-// KAST contribution
-KASTContribAbove = 0.20  // Bonus per % above 72%
-KASTContribBelow = 0.25  // Penalty per % below 72%
-
-// Probability swing multiplier (core metric)
-ProbSwingContribMultiplier = 2.5  // How much swing affects rating
-```
-
-**To adjust**: Change these values to shift importance between stats.
-
-#### 2. Economic Kill/Death Values
-
-These control how equipment advantage affects kill value:
-
-```go
-// Kills against better-equipped opponents worth more
-EcoKillPistolVsRifle = 1.80  // Pistol kills rifle = 1.8x value
-EcoKillEcoVsForce    = 1.50  // Eco kills force = 1.5x value
-EcoKillEqual         = 1.00  // Equal equipment = 1.0x
-
-// Deaths to worse-equipped opponents penalized more  
-EcoDeathToPistol     = 1.60  // Rifle dies to pistol = 1.6x penalty
-EcoDeathEqual        = 1.00  // Equal equipment = 1.0x
-```
-
-**To adjust**: Modify multipliers in `EcoKillValue()` and `EcoDeathPenalty()` in `rating/economy.go`.
-
-#### 3. Round Swing Weights
-
-These control per-round impact scoring:
-
-```go
-// Performance contribution
-KillContribPerKill    = 0.04   // Base swing per kill
-KillContribMultiBonus = 0.02   // Extra per kill after first
-DamageContribMax      = 0.08   // Max damage contribution
-SurvivalContribWin    = 0.02   // Surviving a won round
-SurvivalContribLoss   = 0.04   // Surviving a lost round (save)
-
-// Situational bonuses
-OpeningKillBonus      = 0.06   // First kill of round
-EntryFragBonus        = 0.04   // Entry fragging
-TradeKillBonus        = 0.02   // Trading a teammate
-BombPlantBonus        = 0.08   // Planting bomb
-BombDefuseBonus       = 0.10   // Defusing bomb
-
-// Multi-kill bonuses
-MultiKill2KBonus = 0.03  // Double kill
-MultiKill3KBonus = 0.08  // Triple kill
-MultiKill4KBonus = 0.15  // Quad kill
-MultiKill5KBonus = 0.25  // Ace
-
-// Penalties
-DeathPenaltyUntraded  = 0.08   // Dying without trade
-EarlyDeathPenalty     = 0.08   // Dying in first 15s
-```
-
-**To adjust**: Change values in `rating/weights.go`, then the `RoundSwingCalculator` in `parser/round_swing.go` uses them.
-
-#### 4. HLTV Rating Constants
-
-Standard HLTV 2.0 formula constants (usually don't change):
-
-```go
-HLTVBaselineKPR    = 0.679  // Average KPR in pro matches
-HLTVBaselineSPR    = 0.317  // Average survival rate
-HLTVBaselineRMK    = 1.277  // Average multi-kill points
-HLTVSurvivalWeight = 0.7    // Survival component weight
-HLTVRatingDivisor  = 2.7    // Final divisor
-```
-
-### How to Tune Weights
-
-1. **Identify the behavior to change**
-   - Rating too high for fraggers? Reduce `KillContribPerKill`
-   - Opening kills undervalued? Increase `OpeningKillBonus`
-   - Deaths not penalized enough? Increase `DeathPenaltyUntraded`
-
-2. **Make small changes** (5-10% at a time)
-
-3. **Test on sample demos**
-   ```bash
-   eco-rating -demo=test.dem -output=test.csv
-   ```
-
-4. **Compare before/after** ratings for known good/bad performances
-
----
-
-## Rating Formula
-
-The final rating is computed in `rating/rating.go`:
+The eco-rating is computed in `rating/rating.go`:
 
 ```go
 rating = 1.0                          // Baseline
        + adrContrib                   // ADR above/below 77
        + kastContrib                  // KAST above/below 72%
-       + probSwingContrib             // Probability swing (core)
+       + probSwingContrib             // Probability swing (core metric)
+```
+
+### Key Constants (rating/weights.go)
+
+```go
+ProbSwingContribMultiplier = 2.5  // How much probability swing affects rating
+ADRContribAbove = 0.005           // Bonus per ADR point above 77
+ADRContribBelow = 0.004           // Penalty per ADR point below 77
+KASTContribAbove = 0.20           // Bonus per KAST % above 72%
+KASTContribBelow = 0.25           // Penalty per KAST % below 72%
 ```
 
 ### Probability Swing (Core Metric)
 
-This measures how much a player's actions affected their team's win probability:
+The probability engine (`rating/probability/`) calculates win probability based on:
+- Players alive on each team
+- Equipment values
+- Bomb status
+- Time remaining
 
-1. **Before each action**: Calculate team's win probability (e.g., 45%)
-2. **After action**: Calculate new win probability (e.g., 55%)
-3. **Swing**: The delta (+10% in this case)
+Each action (kill, death, bomb plant/defuse) creates a swing:
+1. **Before action**: Calculate win probability (e.g., 45%)
+2. **After action**: Calculate new probability (e.g., 55%)
+3. **Swing**: The delta (+10%)
 
-Actions that affect swing:
-- Kills (biggest impact)
-- Deaths (negative swing)
-- Bomb plants
-- Bomb defuses
-
-Swing is adjusted for:
-- **Economy**: Hard kills (pistol vs rifle) worth more
-- **Trade status**: Trade kills worth less (expected)
-- **Timing**: Exit frags worth less
-
----
+This is accumulated per player and becomes the primary rating driver.
 
 ## Key Concepts
 
@@ -329,9 +230,6 @@ Swing is adjusted for:
 
 ### Trade
 A kill that avenges a teammate's death within 5 seconds.
-
-### Round Swing
-Per-round impact score combining kills, damage, utility, and survival.
 
 ### Probability Swing  
 Win probability delta from player actions. A kill that moves win probability from 30% to 50% = +20% swing.
@@ -351,7 +249,7 @@ Kill value adjusted for equipment advantage. Killing a rifle player with a pisto
 | `parser/parser.go` | Calculate derived metrics |
 | `output/aggregator.go` | Accumulate stats across games |
 | `export/file.go` | Add to CSV export |
-| `rating/weights.go` | **All weights and constants** |
+| `rating/weights.go` | Constants (mostly legacy round swing) |
 | `rating/rating.go` | Final rating formula |
 | `rating/economy.go` | Economic kill/death values |
 

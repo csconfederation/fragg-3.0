@@ -67,7 +67,6 @@ type AggregatedStats struct {
 	EconImpact                 float64        `json:"econ_impact"`
 	EcoKillValue               float64        `json:"eco_kill_value"`
 	EcoDeathValue              float64        `json:"eco_death_value"`
-	RoundSwing                 float64        `json:"round_swing"`
 	ProbabilitySwing           float64        `json:"probability_swing"`
 	ProbabilitySwingPerRound   float64        `json:"probability_swing_per_round"`
 	ClutchRounds               int            `json:"clutch_rounds"`
@@ -124,7 +123,6 @@ type AggregatedStats struct {
 	TSurvivals                 int     `json:"t_survivals"`
 	TRoundsWithMultiKill       int     `json:"t_rounds_with_multi_kill"`
 	TEcoKillValue              float64 `json:"t_eco_kill_value"`
-	TRoundSwing                float64 `json:"t_round_swing"`
 	TProbabilitySwing          float64 `json:"t_probability_swing"`
 	TKAST                      float64 `json:"t_kast"`
 	TClutchRounds              int     `json:"t_clutch_rounds"`
@@ -139,7 +137,6 @@ type AggregatedStats struct {
 	CTSurvivals                int     `json:"ct_survivals"`
 	CTRoundsWithMultiKill      int     `json:"ct_rounds_with_multi_kill"`
 	CTEcoKillValue             float64 `json:"ct_eco_kill_value"`
-	CTRoundSwing               float64 `json:"ct_round_swing"`
 	CTProbabilitySwing         float64 `json:"ct_probability_swing"`
 	CTKAST                     float64 `json:"ct_kast"`
 	CTClutchRounds             int     `json:"ct_clutch_rounds"`
@@ -242,7 +239,6 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.MultiKills.FiveK += p.MultiKillsRaw[5]
 		agg.EcoKillValue += p.EcoKillValue
 		agg.EcoDeathValue += p.EcoDeathValue
-		agg.RoundSwing += p.RoundSwing
 		agg.ProbabilitySwing += p.ProbabilitySwing
 		agg.ClutchRounds += p.ClutchRounds
 		agg.ClutchWins += p.ClutchWins
@@ -292,7 +288,6 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.TSurvivals += p.TSurvivals
 		agg.TRoundsWithMultiKill += p.TRoundsWithMultiKill
 		agg.TEcoKillValue += p.TEcoKillValue
-		agg.TRoundSwing += p.TRoundSwing
 		agg.TProbabilitySwing += p.TProbabilitySwing
 		agg.TKAST += p.TKAST
 		agg.TClutchRounds += p.TClutchRounds
@@ -308,7 +303,6 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.CTSurvivals += p.CTSurvivals
 		agg.CTRoundsWithMultiKill += p.CTRoundsWithMultiKill
 		agg.CTEcoKillValue += p.CTEcoKillValue
-		agg.CTRoundSwing += p.CTRoundSwing
 		agg.CTProbabilitySwing += p.CTProbabilitySwing
 		agg.CTKAST += p.CTKAST
 		agg.CTClutchRounds += p.CTClutchRounds

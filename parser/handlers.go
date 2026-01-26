@@ -705,7 +705,7 @@ func (d *DemoParser) handleRoundEnd(e events.RoundEnd) {
 	d.processMultiKills()
 	d.processSurvivalStats(ctx)
 	d.processClutchDetection(ctx)
-	d.processRoundSwings(ctx)
+	d.processProbabilitySwings(ctx)
 	d.updateSideStats()
 	d.incrementRoundsPlayed()
 	d.updateTeamScores(ctx.winnerTeam)
@@ -854,8 +854,8 @@ func (d *DemoParser) recordClutchAttempt(ps *model.PlayerStats, round *model.Rou
 	}
 }
 
-// processRoundSwings calculates and applies round swing values.
-func (d *DemoParser) processRoundSwings(ctx *roundEndContext) {
+// processProbabilitySwings accumulates probability swing values per player.
+func (d *DemoParser) processProbabilitySwings(ctx *roundEndContext) {
 	for steamID, roundStats := range d.state.Round {
 		player := d.state.Players[steamID]
 		if player == nil {
@@ -863,17 +863,6 @@ func (d *DemoParser) processRoundSwings(ctx *roundEndContext) {
 		}
 
 		roundStats.MultiKillRound = roundStats.Kills
-
-		playerEquipValue, teamEquipValue := d.getEquipmentValues(ctx.gs, steamID)
-
-		swing := CalculateAdvancedRoundSwing(roundStats, ctx.roundContext, playerEquipValue, teamEquipValue)
-		player.RoundSwing += swing
-
-		if roundStats.PlayerSide == "T" {
-			player.TRoundSwing += swing
-		} else if roundStats.PlayerSide == "CT" {
-			player.CTRoundSwing += swing
-		}
 
 		player.ProbabilitySwing += roundStats.ProbabilitySwing
 
@@ -883,32 +872,6 @@ func (d *DemoParser) processRoundSwings(ctx *roundEndContext) {
 			player.CTProbabilitySwing += roundStats.ProbabilitySwing
 		}
 	}
-}
-
-// getEquipmentValues returns player and team equipment values.
-func (d *DemoParser) getEquipmentValues(gs demoinfocs.GameState, steamID uint64) (playerEquip, teamEquip float64) {
-	for _, p := range gs.Participants().Playing() {
-		if p.SteamID64 == steamID {
-			playerEquip = float64(p.EquipmentValueCurrent())
-
-			teamTotal := 0
-			for _, teammate := range gs.Participants().Playing() {
-				if teammate.Team == p.Team {
-					teamTotal += teammate.EquipmentValueCurrent()
-				}
-			}
-			teamEquip = float64(teamTotal)
-			break
-		}
-	}
-
-	if playerEquip == 0 {
-		playerEquip = 3000.0
-	}
-	if teamEquip == 0 {
-		teamEquip = 15000.0
-	}
-	return playerEquip, teamEquip
 }
 
 // updateSideStats applies side-specific statistics using SideStatsUpdater.
@@ -957,4 +920,27 @@ func (d *DemoParser) recordRoundEndProbability(ctx *roundEndContext) {
 
 	tAlive, ctAlive := d.state.CountAlivePlayers(ctx.gs.Participants().Playing())
 	d.collector.RecordRoundEnd(tAlive, ctAlive, d.state.BombPlanted, ctx.winnerTeam, d.state.MapName)
+}
+
+// determineRoundType categorizes a round as pistol, eco, force, or full buy
+// based on the round number. Uses MR12 format constants.
+func determineRoundType(roundNumber int) string {
+	if rating.IsPistolRound(roundNumber) {
+		return "pistol"
+	}
+
+	// Eco rounds: typically rounds 2-3 after pistol (first half) and 14-15 (second half)
+	isFirstHalfEco := roundNumber >= 2 && roundNumber <= 3
+	isSecondHalfEco := roundNumber >= rating.SecondHalfPistolRound+1 && roundNumber <= rating.SecondHalfPistolRound+2
+
+	if isFirstHalfEco || isSecondHalfEco {
+		return "eco"
+	}
+
+	// Force buy rounds (simplified heuristic)
+	if roundNumber%3 == 0 {
+		return "force"
+	}
+
+	return "full"
 }

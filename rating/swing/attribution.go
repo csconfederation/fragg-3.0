@@ -52,22 +52,34 @@ func (a *Attributor) AttributeKillCredit(
 	kill *KillEvent,
 	delta float64,
 ) {
-	// Calculate killer's credit
+	// Calculate killer's credit and determine shareable pool for helpers
 	killerCredit := a.calculateKillerCredit(kill)
-
-	// Apply trade kill penalty
 	if kill.IsTradeKill {
 		killerCredit *= (1.0 - TradeKillPenalty)
 	}
 
-	// Award killer
-	playerSwing[kill.KillerID] += delta * killerCredit
+	if killerCredit < 0 {
+		killerCredit = 0
+	}
+	if killerCredit > 1 {
+		killerCredit = 1
+	}
 
-	// Award damage contributors (excluding killer)
-	a.attributeDamageContributors(playerSwing, kill, delta)
+	shareable := delta * (1.0 - killerCredit)
+	remainingShareable := shareable
 
-	// Award flash assists
-	a.attributeFlashAssists(playerSwing, kill, delta)
+	allocated := a.attributeDamageContributors(playerSwing, kill, delta, &remainingShareable)
+	allocated += a.attributeFlashAssists(playerSwing, kill, delta, &remainingShareable)
+
+	if allocated > shareable {
+		allocated = shareable
+	}
+
+	killerShare := delta - allocated
+	if killerShare < 0 {
+		killerShare = 0
+	}
+	playerSwing[kill.KillerID] += killerShare
 }
 
 // calculateKillerCredit computes the killer's share of credit.
@@ -88,9 +100,12 @@ func (a *Attributor) attributeDamageContributors(
 	playerSwing map[uint64]float64,
 	kill *KillEvent,
 	delta float64,
-) {
+	shareable *float64,
+) float64 {
+	allocated := 0.0
+
 	if kill.TotalDamageToVictim <= 0 || len(kill.DamageContributors) == 0 {
-		return
+		return 0
 	}
 
 	for _, contributor := range kill.DamageContributors {
@@ -102,9 +117,16 @@ func (a *Attributor) attributeDamageContributors(
 		// Calculate damage share
 		share := float64(contributor.Damage) / float64(kill.TotalDamageToVictim)
 
-		// Award proportional credit
-		playerSwing[contributor.PlayerID] += delta * DamageShareCredit * share
+		desired := delta * DamageShareCredit * share
+		alloc := allocateShare(desired, shareable)
+		if alloc <= 0 {
+			break
+		}
+		playerSwing[contributor.PlayerID] += alloc
+		allocated += alloc
 	}
+
+	return allocated
 }
 
 // attributeFlashAssists distributes credit to players who flash assisted.
@@ -112,13 +134,33 @@ func (a *Attributor) attributeFlashAssists(
 	playerSwing map[uint64]float64,
 	kill *KillEvent,
 	delta float64,
-) {
+	shareable *float64,
+) float64 {
+	allocated := 0.0
+
 	for _, flash := range kill.FlashAssists {
 		// Flash credit scales with duration (up to 3 seconds for full credit)
 		flashCredit := math.Min(flash.Duration/3.0, 1.0) * FlashAssistMaxCredit
-
-		playerSwing[flash.PlayerID] += delta * flashCredit
+		desired := delta * flashCredit
+		alloc := allocateShare(desired, shareable)
+		if alloc <= 0 {
+			break
+		}
+		playerSwing[flash.PlayerID] += alloc
+		allocated += alloc
 	}
+
+	return allocated
+}
+
+// allocateShare deducts from the remaining shareable pool and returns the allocated amount.
+func allocateShare(desired float64, shareable *float64) float64 {
+	if desired <= 0 || shareable == nil || *shareable <= 0 {
+		return 0
+	}
+	alloc := math.Min(desired, *shareable)
+	*shareable -= alloc
+	return alloc
 }
 
 // AddClutchBonus adds additional bonus for winning a clutch.

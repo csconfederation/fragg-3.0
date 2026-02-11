@@ -667,6 +667,19 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 	victimRound.ProbabilitySwing += victimContribution
 	d.addKillSwingContribution(ctx, swingResult, victimContribution)
 
+	// Credit damage contributors and flash assisters with their share of the kill swing
+	for contributorID, contributorSwing := range swingResult.ContributorSwings {
+		if contributorRound, ok := d.state.Round[contributorID]; ok {
+			contributorRound.ProbabilitySwing += contributorSwing
+			contributorRound.AddSwingContribution(model.SwingContribution{
+				Type:        "assist",
+				Amount:      contributorSwing,
+				TimeInRound: ctx.timeInRound,
+				Opponent:    ctx.victim.Name,
+			})
+		}
+	}
+
 	if swingResult.EcoMultiplier > 0 {
 		attacker := d.state.ensurePlayer(ctx.attacker)
 		attacker.EcoAdjustedKills += swingResult.EcoMultiplier

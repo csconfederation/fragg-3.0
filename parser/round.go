@@ -56,11 +56,25 @@ func (m *MatchState) ensurePlayer(p *common.Player) *model.PlayerStats {
 	id := p.SteamID64
 	if _, ok := m.Players[id]; !ok {
 		m.Players[id] = &model.PlayerStats{
-			SteamID: fmt.Sprintf("%d", id),
-			Name:    p.Name,
+			SteamID:  fmt.Sprintf("%d", id),
+			Name:     p.Name,
+			TeamName: playerClanName(p),
 		}
 	}
-	return m.Players[id]
+	ps := m.Players[id]
+	// Update team name if it wasn't available on first encounter
+	if ps.TeamName == "" {
+		ps.TeamName = playerClanName(p)
+	}
+	return ps
+}
+
+// playerClanName extracts the clan/team name from a player's team state.
+func playerClanName(p *common.Player) string {
+	if p.TeamState != nil {
+		return p.TeamState.ClanName()
+	}
+	return ""
 }
 
 // ensureRound returns the RoundStats for a player in the current round, creating it if needed.

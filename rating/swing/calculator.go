@@ -192,10 +192,11 @@ func (c *Calculator) processRoundEnd(
 
 // KillSwingResult contains the economy-adjusted swing values for killer and victim.
 type KillSwingResult struct {
-	RawSwing      float64 // Raw probability delta from the kill
-	KillerSwing   float64 // Economy-adjusted swing for the killer (bonus for hard kills)
-	VictimSwing   float64 // Economy-adjusted penalty for the victim (worse for embarrassing deaths)
-	EcoMultiplier float64 // The economy multiplier applied
+	RawSwing          float64            // Raw probability delta from the kill
+	KillerSwing       float64            // Economy-adjusted swing for the killer (after sharing with contributors)
+	VictimSwing       float64            // Economy-adjusted penalty for the victim (worse for embarrassing deaths)
+	EcoMultiplier     float64            // The economy multiplier applied
+	ContributorSwings map[uint64]float64 // Swing credited to damage/flash assisters (playerID -> amount)
 }
 
 // CalculateSingleKillSwing computes the swing for a single kill event.
@@ -228,6 +229,7 @@ func (c *Calculator) CalculateSingleKillSwing(
 // CalculateKillSwingWithEconomy computes economy-adjusted swing for both killer and victim.
 // - Killer gets bonus for hard kills (pistol vs rifle = 2x multiplier)
 // - Victim gets extra penalty for embarrassing deaths (rifle dying to pistol = 2x penalty)
+// - Damage contributors and flash assisters receive a share of the killer's swing
 func (c *Calculator) CalculateKillSwingWithEconomy(
 	state *probability.RoundState,
 	kill *KillEvent,
@@ -242,16 +244,40 @@ func (c *Calculator) CalculateKillSwingWithEconomy(
 	killerEcoMult := c.getEconomyMultiplier(duelWinRate)
 
 	// Economy multiplier for victim (embarrassing deaths = extra penalty)
-	// If killer had low win rate, victim had high win rate - dying is embarrassing
-	// victimWinRate = 1 - duelWinRate (from victim's perspective)
+	// If killer had low win rate, victim was favored - dying is embarrassing
+	// Use victim's win rate / 0.50: high victim win rate → higher penalty
 	victimWinRate := 1.0 - duelWinRate
-	victimEcoMult := c.getEconomyMultiplier(victimWinRate)
+	if victimWinRate < 0.01 {
+		victimWinRate = 0.01
+	}
+	victimEcoMult := victimWinRate / 0.50
+	if victimEcoMult > 2.0 {
+		victimEcoMult = 2.0
+	}
+
+	// Total eco-adjusted swing to distribute among killer + contributors
+	totalKillerSideSwing := rawSwing * killerEcoMult
+
+	// Use the attributor to split credit among killer, damage contributors, and flash assisters
+	playerSwings := make(map[uint64]float64)
+	c.attrib.AttributeKillCredit(playerSwings, kill, totalKillerSideSwing)
+
+	// Extract killer's share and contributor shares
+	killerSwing := playerSwings[kill.KillerID]
+	delete(playerSwings, kill.KillerID)
+
+	// playerSwings now contains only contributor shares (assisters)
+	var contributorSwings map[uint64]float64
+	if len(playerSwings) > 0 {
+		contributorSwings = playerSwings
+	}
 
 	return KillSwingResult{
-		RawSwing:      rawSwing,
-		KillerSwing:   rawSwing * killerEcoMult,
-		VictimSwing:   rawSwing * victimEcoMult,
-		EcoMultiplier: killerEcoMult,
+		RawSwing:          rawSwing,
+		KillerSwing:       killerSwing,
+		VictimSwing:       rawSwing * victimEcoMult,
+		EcoMultiplier:     killerEcoMult,
+		ContributorSwings: contributorSwings,
 	}
 }
 

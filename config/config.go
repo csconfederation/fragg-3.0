@@ -72,14 +72,32 @@ func ValidTiers() []string {
 	}
 }
 
-// IsValidTier checks if the given tier name is a recognized competitive tier.
+// IsValidTier checks if the given tier name is usable.
+// Accepts standard tiers (challenger, contender, etc.), "all", or any
+// non-empty string which is treated as a team name filter.
 func IsValidTier(tier string) bool {
+	return tier != ""
+}
+
+// IsStandardTier returns true if the tier is one of the 6 known competitive tiers.
+func IsStandardTier(tier string) bool {
 	for _, t := range ValidTiers() {
 		if t == tier {
 			return true
 		}
 	}
 	return false
+}
+
+// IsAllTier returns true if the tier value means "fetch all demos".
+func IsAllTier(tier string) bool {
+	return tier == "all"
+}
+
+// IsTeamFilter returns true if the tier value is a team name filter
+// (not a standard tier and not "all").
+func IsTeamFilter(tier string) bool {
+	return tier != "" && !IsStandardTier(tier) && !IsAllTier(tier)
 }
 
 // ParseTiers splits a comma-separated tier string into individual tier names.

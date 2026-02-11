@@ -142,16 +142,37 @@ func runCumulativeMode(cfg *config.Config, tiers []string, exporter export.Expor
 		log.Printf("\n=== Processing prefix: %s ===", prefix)
 
 		for _, tier := range tiers {
-			log.Printf("\n=== Processing tier: %s ===", tier)
+			var demos []bucket.BucketContent
+			var err error
+			// Determine the aggregator tier: "all" uses per-player team names,
+			// team filters also use per-player team names, standard tiers use the tier name.
+			aggTier := tier
 
-			log.Printf("Fetching demo list from %s%s...", cfg.BaseURL, prefix)
-			demos, err := client.GetAllDemosByTier(prefix, tier)
+			if config.IsAllTier(tier) {
+				// "all" mode: fetch every demo under the prefix
+				log.Printf("\n=== Fetching all demos ===")
+				log.Printf("Fetching demo list from %s%s...", cfg.BaseURL, prefix)
+				demos, err = client.GetAllDemos(prefix)
+				aggTier = "all"
+			} else if config.IsTeamFilter(tier) {
+				// Team name filter: fetch demos matching the team name
+				log.Printf("\n=== Fetching demos for team: %s ===", tier)
+				log.Printf("Fetching demo list from %s%s...", cfg.BaseURL, prefix)
+				demos, err = client.GetDemosByTeam(prefix, tier)
+				aggTier = "all" // use per-player team names in the tier column
+			} else {
+				// Standard tier-filtered mode (combine-{tier} format)
+				log.Printf("\n=== Processing tier: %s ===", tier)
+				log.Printf("Fetching demo list from %s%s...", cfg.BaseURL, prefix)
+				demos, err = client.GetAllDemosByTier(prefix, tier)
+			}
+
 			if err != nil {
-				log.Printf("Failed to get demos for tier %s: %v", tier, err)
+				log.Printf("Failed to get demos for %s: %v", tier, err)
 				continue
 			}
 
-			log.Printf("Found %d demos for tier '%s'", len(demos), tier)
+			log.Printf("Found %d demos for '%s'", len(demos), tier)
 
 			var downloadedDemos []downloadedDemo
 
@@ -169,9 +190,9 @@ func runCumulativeMode(cfg *config.Config, tiers []string, exporter export.Expor
 				downloadedDemos = append(downloadedDemos, downloadedDemo{Key: demo.Key, Path: demoPath})
 			}
 
-			log.Printf("Downloaded %d demos for tier %s, starting parallel parsing...", len(downloadedDemos), tier)
+			log.Printf("Downloaded %d demos for %s, starting parallel parsing...", len(downloadedDemos), tier)
 
-			successCount, allLogs := parseDemosToAggregator(cfg, downloadedDemos, aggregator, probCollector, tier)
+			successCount, allLogs := parseDemosToAggregator(cfg, downloadedDemos, aggregator, probCollector, aggTier)
 
 			if len(allLogs) > 0 {
 				log.Printf("\n========== PARSING LOGS (%s) ==========", tier)
@@ -181,7 +202,7 @@ func runCumulativeMode(cfg *config.Config, tiers []string, exporter export.Expor
 				log.Printf("========== END LOGS ==========\n")
 			}
 
-			log.Printf("Completed processing %d/%d demos for tier %s", successCount, len(downloadedDemos), tier)
+			log.Printf("Completed processing %d/%d demos for %s", successCount, len(downloadedDemos), tier)
 		}
 	}
 

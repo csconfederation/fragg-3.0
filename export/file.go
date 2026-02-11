@@ -104,16 +104,27 @@ func (f *FileExportOption) ExportAggregated(players map[string]*output.Aggregate
 		"prospect":   4,
 		"recruit":    5,
 	}
+	unknownTierBase := len(tierOrder)
 
 	playerList := make([]*output.AggregatedStats, 0, len(players))
 	for _, p := range players {
 		playerList = append(playerList, p)
 	}
 	sort.Slice(playerList, func(i, j int) bool {
-		tierI := tierOrder[playerList[i].Tier]
-		tierJ := tierOrder[playerList[j].Tier]
+		tierI, knownI := tierOrder[playerList[i].Tier]
+		tierJ, knownJ := tierOrder[playerList[j].Tier]
+		if !knownI {
+			tierI = unknownTierBase
+		}
+		if !knownJ {
+			tierJ = unknownTierBase
+		}
 		if tierI != tierJ {
 			return tierI < tierJ
+		}
+		// For unknown tiers (team names), sort alphabetically by tier name
+		if !knownI && !knownJ && playerList[i].Tier != playerList[j].Tier {
+			return playerList[i].Tier < playerList[j].Tier
 		}
 		return playerList[i].FinalRating > playerList[j].FinalRating
 	})

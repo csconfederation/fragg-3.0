@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 )
 
@@ -26,6 +27,7 @@ type ListBucketResult struct {
 	MaxKeys        int             `xml:"MaxKeys"`        // Maximum number of keys returned
 	Delimiter      string          `xml:"Delimiter"`      // Delimiter used for grouping (usually "/")
 	IsTruncated    bool            `xml:"IsTruncated"`    // Whether results are truncated
+	Marker         string          `xml:"Marker"`         // Marker for pagination
 	CommonPrefixes []CommonPrefix  `xml:"CommonPrefixes"` // Virtual "folders" in the bucket
 	Contents       []BucketContent `xml:"Contents"`       // Actual files in the bucket
 }
@@ -118,6 +120,119 @@ func (c *Client) GetAllDemosByTier(combinesPrefix, tier string) ([]BucketContent
 	return allDemos, nil
 }
 
+// GetAllDemos retrieves all demo files under the given prefix (including subfolders)
+// without filtering by tier. Used when tier is "all" or when filenames don't follow
+// the combine-{tier} naming convention.
+func (c *Client) GetAllDemos(prefix string) ([]BucketContent, error) {
+	// First try listing files directly at this prefix
+	result, err := c.listBucket(prefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list bucket at %s: %w", prefix, err)
+	}
+
+	var allDemos []BucketContent
+
+	// Collect any demo files at this level
+	for _, f := range result.Contents {
+		if isDemoFile(f.Key) {
+			allDemos = append(allDemos, f)
+		}
+	}
+
+	// Recurse into subfolders
+	for _, cp := range result.CommonPrefixes {
+		subDemos, err := c.GetAllDemos(cp.Prefix)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list files in %s: %w", cp.Prefix, err)
+		}
+		allDemos = append(allDemos, subDemos...)
+	}
+
+	return allDemos, nil
+}
+
+// isDemoFile checks if a key looks like a demo file (.dem or .dem.zip).
+func isDemoFile(key string) bool {
+	lower := strings.ToLower(key)
+	return strings.HasSuffix(lower, ".dem") ||
+		strings.HasSuffix(lower, ".dem.zip") ||
+		strings.HasSuffix(lower, ".dem.gz")
+}
+
+// ParseTierFromKey extracts the competitive tier from a demo file key.
+// For old format (combine-{tier}-...), it returns the tier name.
+// For new format (s19-M01-TeamA-vs-TeamB-...) or unrecognized formats, it returns "".
+func ParseTierFromKey(key string) string {
+	filename := path.Base(key)
+	if strings.HasPrefix(filename, "combine-") {
+		// Old format: combine-contender-mid7272-0_de_mirage-...
+		rest := strings.TrimPrefix(filename, "combine-")
+		idx := strings.Index(rest, "-")
+		if idx > 0 {
+			return rest[:idx]
+		}
+	}
+	return ""
+}
+
+// ParseTeamsFromKey extracts team names from a demo file key with the new naming format.
+// For new format (s19-M01-TeamA-vs-TeamB-mid...), it returns (TeamA, TeamB, true).
+// For old format or unrecognized formats, it returns ("", "", false).
+func ParseTeamsFromKey(key string) (team1, team2 string, ok bool) {
+	filename := path.Base(key)
+	// New format: s19-M01-TeamA-vs-TeamB-mid7712-0_de_mirage-...
+	// Find "-vs-" separator
+	vsIdx := strings.Index(filename, "-vs-")
+	if vsIdx < 0 {
+		return "", "", false
+	}
+
+	// Extract team1: everything between the second "-" and "-vs-"
+	// e.g., "s19-M01-TiltedTogglers-vs-..." -> find prefix before -vs-
+	prefix := filename[:vsIdx]
+	// Find the team name by looking for the pattern after "s##-M##-" or similar prefix
+	// Strategy: find the part after the second hyphen-separated segment that looks like a season/match prefix
+	parts := strings.SplitN(prefix, "-", 3)
+	if len(parts) < 3 {
+		return "", "", false
+	}
+	team1 = parts[2] // Everything after "s19-M01-"
+
+	// Extract team2: everything between "-vs-" and "-mid"
+	after := filename[vsIdx+4:] // skip "-vs-"
+	midIdx := strings.Index(after, "-mid")
+	if midIdx < 0 {
+		return "", "", false
+	}
+	team2 = after[:midIdx]
+
+	if team1 == "" || team2 == "" {
+		return "", "", false
+	}
+
+	return team1, team2, true
+}
+
+// GetDemosByTeam retrieves all demo files under the given prefix whose filename
+// contains the specified team name. Works with both old format (combine-...) and
+// new format (s19-M01-TeamA-vs-TeamB-...).
+func (c *Client) GetDemosByTeam(prefix, teamName string) ([]BucketContent, error) {
+	allDemos, err := c.GetAllDemos(prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	lowerTeam := strings.ToLower(teamName)
+	var filtered []BucketContent
+	for _, f := range allDemos {
+		filename := strings.ToLower(path.Base(f.Key))
+		if strings.Contains(filename, lowerTeam) {
+			filtered = append(filtered, f)
+		}
+	}
+	return filtered, nil
+}
+
 // GetDownloadURL constructs the full download URL for a given object key.
 func (c *Client) GetDownloadURL(key string) string {
 	return c.BaseURL + key
@@ -125,32 +240,61 @@ func (c *Client) GetDownloadURL(key string) string {
 
 // listBucket performs the actual HTTP request to list bucket contents.
 // It uses the delimiter "/" to enable folder-like navigation.
+// It handles pagination automatically when results are truncated.
 func (c *Client) listBucket(prefix string) (*ListBucketResult, error) {
-	params := url.Values{}
-	params.Set("delimiter", "/")
-	params.Set("prefix", prefix)
+	var combined ListBucketResult
+	marker := ""
 
-	reqURL := c.BaseURL + "?" + params.Encode()
+	for {
+		params := url.Values{}
+		params.Set("delimiter", "/")
+		params.Set("prefix", prefix)
+		if marker != "" {
+			params.Set("marker", marker)
+		}
 
-	resp, err := http.Get(reqURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch bucket listing: %w", err)
+		reqURL := c.BaseURL + "?" + params.Encode()
+
+		resp, err := http.Get(reqURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch bucket listing: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+
+		var result ListBucketResult
+		if err := xml.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse XML response: %w", err)
+		}
+
+		combined.Name = result.Name
+		combined.Prefix = result.Prefix
+		combined.MaxKeys = result.MaxKeys
+		combined.Delimiter = result.Delimiter
+		combined.CommonPrefixes = append(combined.CommonPrefixes, result.CommonPrefixes...)
+		combined.Contents = append(combined.Contents, result.Contents...)
+
+		if !result.IsTruncated {
+			break
+		}
+
+		// Use the last key as the marker for the next page
+		if len(result.Contents) > 0 {
+			marker = result.Contents[len(result.Contents)-1].Key
+		} else if result.Marker != "" {
+			marker = result.Marker
+		} else {
+			break
+		}
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var result ListBucketResult
-	if err := xml.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse XML response: %w", err)
-	}
-
-	return &result, nil
+	return &combined, nil
 }

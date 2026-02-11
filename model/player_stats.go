@@ -30,8 +30,9 @@ type MultiKillStats struct {
 // - Side-specific stats (T/CT)
 // - Calculated ratings and percentages
 type PlayerStats struct {
-	SteamID string `json:"steam_id"`
-	Name    string `json:"name"`
+	SteamID  string `json:"steam_id"`
+	Name     string `json:"name"`
+	TeamName string `json:"team_name"`
 
 	RoundsPlayed        int     `json:"rounds_played"`
 	RoundsWon           int     `json:"rounds_won"`

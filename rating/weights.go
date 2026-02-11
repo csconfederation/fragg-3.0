@@ -81,12 +81,12 @@ const (
 	DPRContribAbove = 0.25 // Multiplier when DPR > baseline (bad)
 
 	// ADR contribution multipliers
-	ADRContribAbove = 0.005 // Multiplier when ADR >= baseline
-	ADRContribBelow = 0.004 // Multiplier when ADR < baseline
+	ADRContribAbove = 0.01  // Multiplier when ADR >= baseline
+	ADRContribBelow = 0.012 // Multiplier when ADR < baseline
 
 	// KAST contribution multipliers
-	KASTContribAbove = 0.20 // Multiplier when KAST >= baseline
-	KASTContribBelow = 0.25 // Multiplier when KAST < baseline
+	KASTContribAbove = 0.30 // Multiplier when KAST >= baseline
+	KASTContribBelow = 0.40 // Multiplier when KAST < baseline
 
 	// Round swing contribution multipliers
 	SwingContribPositive = 1.40 // Multiplier for positive swing

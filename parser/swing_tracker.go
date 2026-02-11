@@ -9,20 +9,22 @@ import (
 
 // SwingTracker manages round state and swing calculation during parsing.
 type SwingTracker struct {
-	calculator    *swing.Calculator
-	damageTracker *DamageTracker
-	roundState    *probability.RoundState
-	roundEvents   []swing.RoundEvent
-	enabled       bool
+	calculator       *swing.Calculator
+	damageTracker    *DamageTracker
+	advantageTracker *AdvantageTracker
+	roundState       *probability.RoundState
+	roundEvents      []swing.RoundEvent
+	enabled          bool
 }
 
 // NewSwingTracker creates a new swing tracker.
 func NewSwingTracker() *SwingTracker {
 	return &SwingTracker{
-		calculator:    swing.NewDefaultCalculator(),
-		damageTracker: NewDamageTracker(),
-		roundEvents:   make([]swing.RoundEvent, 0),
-		enabled:       true,
+		calculator:       swing.NewDefaultCalculator(),
+		damageTracker:    NewDamageTracker(),
+		advantageTracker: NewAdvantageTracker(),
+		roundEvents:      make([]swing.RoundEvent, 0),
+		enabled:          true,
 	}
 }
 
@@ -41,6 +43,7 @@ func (st *SwingTracker) ResetRound(tAlive, ctAlive int, mapName string) {
 	st.roundState = probability.NewRoundState(tAlive, ctAlive, mapName)
 	st.roundEvents = make([]swing.RoundEvent, 0)
 	st.damageTracker.Reset()
+	st.advantageTracker.Reset()
 }
 
 // SetEconomy sets the economy categories for both teams.
@@ -75,17 +78,25 @@ func (st *SwingTracker) RecordFlash(attackerID, victimID uint64, duration float6
 	st.damageTracker.RecordFlash(attackerID, victimID, duration)
 }
 
-// RecordKill records a kill event and returns economy-adjusted swing values.
-// Returns KillerSwing (with eco bonus for hard kills) and VictimSwing (with eco penalty for embarrassing deaths).
+// KillResult wraps the swing result with survival credit information.
+type KillResult struct {
+	Swing                   swing.KillSwingResult
+	SurvivalBeneficiaries   []uint64 // Players who earn survival credit from this kill
+	SurvivalCreditPerPlayer float64  // Amount of survival credit each beneficiary earns
+	VictimPriorDamage       int      // Total damage victim took before the killing blow
+}
+
+// RecordKill records a kill event and returns economy-adjusted swing values
+// along with survival credit information for advantage creators.
 func (st *SwingTracker) RecordKill(
 	killerID, victimID uint64,
 	killerSide, victimSide common.Team,
 	killerEquip, victimEquip float64,
 	timeInRound float64,
 	isTradeKill, isHeadshot bool,
-) swing.KillSwingResult {
+) KillResult {
 	if !st.enabled || st.roundState == nil {
-		return swing.KillSwingResult{}
+		return KillResult{}
 	}
 
 	// Build kill event
@@ -108,16 +119,51 @@ func (st *SwingTracker) RecordKill(
 	// Calculate economy-adjusted swing before updating state
 	swingResult := st.calculator.CalculateKillSwingWithEconomy(st.roundState, killEvent)
 
+	// Track man advantages: get survival beneficiaries BEFORE adding new slot
+	survivalBeneficiaries := st.advantageTracker.RecordKill(killerID, killerSide)
+
+	// Record the victim's death in the advantage tracker
+	// (neutralizes one advantage slot on the victim's team)
+	st.advantageTracker.RecordDeath(victimID, victimSide)
+
+	// Calculate survival credit per beneficiary
+	var survivalCredit float64
+	if len(survivalBeneficiaries) > 0 {
+		survivalCredit = swingResult.RawSwing * SurvivalCreditShare
+	}
+
 	// Add event to round events
 	st.roundEvents = append(st.roundEvents, killEvent)
 
 	// Update state
 	st.roundState.RecordDeath(victimSide)
 
+	// Capture victim's prior damage from OTHER players (excluding the killer's damage).
+	// This represents damage taken before the killing blow, used for death penalty reduction.
+	// We exclude the killer's damage because it includes the killing blow itself.
+	victimPriorDamage := st.damageTracker.GetTotalDamageToVictim(victimID) - st.damageTracker.GetKillerDamage(killerID, victimID)
+	if victimPriorDamage < 0 {
+		victimPriorDamage = 0
+	}
+
 	// Clear victim's damage tracking data
 	st.damageTracker.ClearVictimData(victimID)
 
-	return swingResult
+	return KillResult{
+		Swing:                   swingResult,
+		SurvivalBeneficiaries:   survivalBeneficiaries,
+		SurvivalCreditPerPlayer: survivalCredit,
+		VictimPriorDamage:       victimPriorDamage,
+	}
+}
+
+// GetDamageToPlayer returns the total damage dealt to a player this round.
+// Used to estimate victim health at death time for death penalty reduction.
+func (st *SwingTracker) GetDamageToPlayer(playerID uint64) int {
+	if st.damageTracker == nil {
+		return 0
+	}
+	return st.damageTracker.GetTotalDamageToVictim(playerID)
 }
 
 // RecordBombPlant records a bomb plant event.

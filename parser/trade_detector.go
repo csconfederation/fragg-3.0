@@ -129,7 +129,21 @@ func (td *TradeDetector) CheckForTrade(
 			// This is a trade kill
 			if tradedRound, exists := rounds[recent.VictimID]; exists {
 				tradedRound.Traded = true
+				tradedRound.TradeDeath = true
 				tradedRound.SavedByTeammate = true
+
+				// Retroactively refund 30% of the death penalty since the death was traded.
+				// A traded death is less impactful because the team recovers the man disadvantage.
+				tradeRefund := tradedRound.LastDeathSwing * 0.30
+				if tradeRefund < 0 {
+					// LastDeathSwing is negative, so refund is negative; we add the positive amount back
+					tradedRound.ProbabilitySwing -= tradeRefund
+					tradedRound.AddSwingContribution(model.SwingContribution{
+						Type:   "trade_refund",
+						Amount: -tradeRefund,
+						Notes:  "Death traded — penalty reduced",
+					})
+				}
 			}
 
 			if tradedPlayer, exists := players[recent.VictimID]; exists {

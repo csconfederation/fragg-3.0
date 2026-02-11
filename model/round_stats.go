@@ -82,6 +82,7 @@ type RoundStats struct {
 
 	// Probability-based swing tracking (new for v3.0)
 	ProbabilitySwing   float64             // Win probability delta contribution
+	LastDeathSwing     float64             // Most recent death swing (for trade refund calculation)
 	EquipmentValue     float64             // Player's equipment value at round start
 	SwingContributions []SwingContribution // Detailed swing events for this round
 }

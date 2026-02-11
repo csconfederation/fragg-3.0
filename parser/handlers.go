@@ -652,7 +652,7 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 		return
 	}
 
-	swingResult := d.state.SwingTracker.RecordKill(
+	killResult := d.state.SwingTracker.RecordKill(
 		ctx.attacker.SteamID64, ctx.victim.SteamID64,
 		ctx.attacker.Team, ctx.victim.Team,
 		float64(ctx.attackerEquip), float64(ctx.victimEquip),
@@ -660,11 +660,34 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 		ctx.isTradeKill, ctx.event.IsHeadshot,
 	)
 
+	swingResult := killResult.Swing
 	round.ProbabilitySwing += swingResult.KillerSwing
 
 	victimRound := d.state.ensureRound(ctx.victim)
 	victimContribution := -swingResult.VictimSwing
+
+	// Reduce death penalty based on mitigating factors:
+	// 1. Low health: player was already damaged, death was more expected
+	// 2. Trade death: refunded retroactively in trade_detector.go
+	deathReduction := 1.0
+
+	// Low health reduction: if victim took significant prior damage, death is less their fault
+	// 100hp = full penalty, 50hp = 75% penalty, 1hp = 50% penalty
+	victimHP := 100 - killResult.VictimPriorDamage
+	if victimHP < 1 {
+		victimHP = 1
+	}
+	if victimHP < 100 {
+		// Scale: 100hp → 1.0, 50hp → 0.75, 1hp → 0.50
+		healthFactor := 0.50 + 0.50*(float64(victimHP)/100.0)
+		if healthFactor < deathReduction {
+			deathReduction = healthFactor
+		}
+	}
+
+	victimContribution *= deathReduction
 	victimRound.ProbabilitySwing += victimContribution
+	victimRound.LastDeathSwing = victimContribution
 	d.addKillSwingContribution(ctx, swingResult, victimContribution)
 
 	// Credit damage contributors and flash assisters with their share of the kill swing
@@ -677,6 +700,25 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 				TimeInRound: ctx.timeInRound,
 				Opponent:    ctx.victim.Name,
 			})
+		}
+	}
+
+	// Credit survival swing to players who created man advantages earlier in the round.
+	// If a player got a kill and stayed alive, subsequent teammate kills generate
+	// survival credit for them — rewarding the ongoing value of staying alive
+	// and maintaining the man advantage they created.
+	if killResult.SurvivalCreditPerPlayer > 0 {
+		for _, beneficiaryID := range killResult.SurvivalBeneficiaries {
+			if beneficiaryRound, ok := d.state.Round[beneficiaryID]; ok {
+				beneficiaryRound.ProbabilitySwing += killResult.SurvivalCreditPerPlayer
+				beneficiaryRound.AddSwingContribution(model.SwingContribution{
+					Type:        "survival",
+					Amount:      killResult.SurvivalCreditPerPlayer,
+					TimeInRound: ctx.timeInRound,
+					Opponent:    ctx.victim.Name,
+					Notes:       "Man advantage survival credit",
+				})
+			}
 		}
 	}
 

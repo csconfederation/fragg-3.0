@@ -81,8 +81,30 @@ type RoundStats struct {
 	PlayerSide         string
 
 	// Probability-based swing tracking (new for v3.0)
-	ProbabilitySwing float64 // Win probability delta contribution
-	EquipmentValue   float64 // Player's equipment value at round start
+	ProbabilitySwing   float64             // Win probability delta contribution
+	EquipmentValue     float64             // Player's equipment value at round start
+	SwingContributions []SwingContribution // Detailed swing events for this round
+}
+
+// SwingContribution captures a single event's impact on probability swing.
+type SwingContribution struct {
+	Type          string  `json:"type"`
+	Amount        float64 `json:"amount"`
+	TimeInRound   float64 `json:"time_in_round,omitempty"`
+	Opponent      string  `json:"opponent,omitempty"`
+	Weapon        string  `json:"weapon,omitempty"`
+	IsTrade       bool    `json:"is_trade,omitempty"`
+	IsHeadshot    bool    `json:"is_headshot,omitempty"`
+	EcoMultiplier float64 `json:"eco_multiplier,omitempty"`
+	Notes         string  `json:"notes,omitempty"`
+}
+
+// AddSwingContribution appends a swing contribution entry for the round.
+func (r *RoundStats) AddSwingContribution(contribution SwingContribution) {
+	if contribution.Amount == 0 {
+		return
+	}
+	r.SwingContributions = append(r.SwingContributions, contribution)
 }
 
 // RoundContext provides contextual information about the round state.

@@ -12,6 +12,7 @@ import (
 	"eco-rating/model"
 	"eco-rating/rating"
 	"eco-rating/rating/probability"
+	"eco-rating/rating/swing"
 	"math"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
@@ -32,6 +33,43 @@ func (d *DemoParser) registerHandlers() {
 	d.registerDamageHandler()
 	d.registerRoundDecisionHandlers()
 	d.registerRoundEndHandler()
+}
+
+// addKillSwingContribution records per-event swing contributions for killer and victim.
+func (d *DemoParser) addKillSwingContribution(ctx *killContext, swingResult swing.KillSwingResult, victimContribution float64) {
+	if ctx.attacker == nil || ctx.victim == nil {
+		return
+	}
+
+	weaponName := ""
+	if ctx.event.Weapon != nil {
+		weaponName = ctx.event.Weapon.String()
+	}
+
+	attackerRound := d.state.ensureRound(ctx.attacker)
+	if swingResult.KillerSwing != 0 {
+		attackerRound.AddSwingContribution(model.SwingContribution{
+			Type:          "kill",
+			Amount:        swingResult.KillerSwing,
+			TimeInRound:   ctx.timeInRound,
+			Opponent:      ctx.victim.Name,
+			Weapon:        weaponName,
+			IsTrade:       ctx.isTradeKill,
+			IsHeadshot:    ctx.event.IsHeadshot,
+			EcoMultiplier: swingResult.EcoMultiplier,
+		})
+	}
+
+	victimRound := d.state.ensureRound(ctx.victim)
+	if victimContribution != 0 {
+		victimRound.AddSwingContribution(model.SwingContribution{
+			Type:        "death",
+			Amount:      victimContribution,
+			TimeInRound: ctx.timeInRound,
+			Opponent:    ctx.attacker.Name,
+			Weapon:      weaponName,
+		})
+	}
 }
 
 // registerMapHandler sets up the map name extraction from server info.
@@ -74,6 +112,11 @@ func (d *DemoParser) handleRoundStart() {
 	d.state.RoundDecidedAt = 0
 	d.state.BombPlanted = false
 	d.state.RoundStartState = nil
+
+	// Clear any pending probability snapshots from skipped/aborted rounds
+	if d.collector != nil {
+		d.collector.RecordRoundStart(0, 0, false, "")
+	}
 }
 
 // registerBombHandlers sets up bomb plant, defuse, and explode handlers.
@@ -116,6 +159,11 @@ func (d *DemoParser) handleBombPlanted(e events.BombPlanted) {
 		timeInRound := currentTime - d.state.RoundStartTime
 		plantSwing := d.state.SwingTracker.RecordBombPlant(e.Player.SteamID64, timeInRound)
 		roundStats.ProbabilitySwing += plantSwing
+		roundStats.AddSwingContribution(model.SwingContribution{
+			Type:        "bomb_plant",
+			Amount:      plantSwing,
+			TimeInRound: timeInRound,
+		})
 	}
 
 	d.logger.LogBombPlant(d.state.RoundNumber, planter.Name)
@@ -146,6 +194,11 @@ func (d *DemoParser) handleBombDefused(e events.BombDefused) {
 	if d.state.SwingTracker != nil {
 		defuseSwing := d.state.SwingTracker.RecordBombDefuse(e.Player.SteamID64, timeInRound)
 		roundStats.ProbabilitySwing += defuseSwing
+		roundStats.AddSwingContribution(model.SwingContribution{
+			Type:        "bomb_defuse",
+			Amount:      defuseSwing,
+			TimeInRound: timeInRound,
+		})
 	}
 
 	d.logger.LogBombDefuse(d.state.RoundNumber, defuser.Name)
@@ -164,6 +217,13 @@ func (d *DemoParser) handleBombExplode() {
 	timeInRound := currentTime - d.state.RoundStartTime
 	d.state.RoundDecided = true
 	d.state.RoundDecidedAt = timeInRound
+
+	// Record state snapshot at bomb explosion (e.g. 0v3_planted or 2v1_planted)
+	if d.collector != nil {
+		gs := d.parser.GameState()
+		tAlive, ctAlive := d.state.CountAlivePlayers(gs.Participants().Playing())
+		d.collector.RecordStateSnapshot(tAlive, ctAlive, true) // bomb is planted
+	}
 
 	// Track bomb explode event
 	if d.state.SwingTracker != nil {
@@ -262,6 +322,9 @@ func (d *DemoParser) handleFreezetimeEnd() {
 	ctEquipTotal := 0
 
 	for _, p := range participants {
+		if p.IsBot {
+			continue
+		}
 		d.state.ensurePlayer(p)
 		roundStats := d.state.ensureRound(p)
 		roundStats.IsPistolRound = d.state.IsPistolRound
@@ -276,6 +339,14 @@ func (d *DemoParser) handleFreezetimeEnd() {
 			ctAlive++
 			ctEquipTotal += p.EquipmentValueCurrent()
 		}
+	}
+
+	// Cap at 5 per side as safety net (CS2 is 5v5)
+	if tAlive > 5 {
+		tAlive = 5
+	}
+	if ctAlive > 5 {
+		ctAlive = 5
 	}
 
 	// Initialize swing tracker for the round
@@ -437,8 +508,27 @@ func (d *DemoParser) recordKillForProbability(ctx *killContext) {
 		return
 	}
 
+	// Record state snapshot BEFORE the kill.
+	// The demoinfocs parser has already marked the victim as dead by the time
+	// the Kill event fires, so we add 1 back to the victim's side to reconstruct
+	// the pre-kill state.
 	gs := d.parser.GameState()
 	tAlive, ctAlive := d.state.CountAlivePlayers(gs.Participants().Playing())
+	if ctx.victim != nil {
+		if ctx.victim.Team == common.TeamTerrorists {
+			tAlive++
+		} else if ctx.victim.Team == common.TeamCounterTerrorists {
+			ctAlive++
+		}
+	}
+	// Cap at 5 after reconstructing pre-kill state (CountAlivePlayers caps at 5,
+	// but adding 1 back could exceed that if a 6th player was present)
+	if tAlive > 5 {
+		tAlive = 5
+	}
+	if ctAlive > 5 {
+		ctAlive = 5
+	}
 	d.collector.RecordStateSnapshot(tAlive, ctAlive, d.state.BombPlanted)
 	d.collector.RecordKill(float64(ctx.attackerEquip), float64(ctx.victimEquip))
 }
@@ -573,7 +663,9 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 	round.ProbabilitySwing += swingResult.KillerSwing
 
 	victimRound := d.state.ensureRound(ctx.victim)
-	victimRound.ProbabilitySwing -= swingResult.VictimSwing
+	victimContribution := -swingResult.VictimSwing
+	victimRound.ProbabilitySwing += victimContribution
+	d.addKillSwingContribution(ctx, swingResult, victimContribution)
 
 	if swingResult.EcoMultiplier > 0 {
 		attacker := d.state.ensurePlayer(ctx.attacker)
@@ -865,6 +957,7 @@ func (d *DemoParser) processProbabilitySwings(ctx *roundEndContext) {
 		roundStats.MultiKillRound = roundStats.Kills
 
 		player.ProbabilitySwing += roundStats.ProbabilitySwing
+		player.RoundBreakdowns = append(player.RoundBreakdowns, model.NewRoundSwingBreakdown(d.state.RoundNumber, roundStats))
 
 		if roundStats.PlayerSide == "T" {
 			player.TProbabilitySwing += roundStats.ProbabilitySwing
@@ -919,6 +1012,16 @@ func (d *DemoParser) recordRoundEndProbability(ctx *roundEndContext) {
 	}
 
 	tAlive, ctAlive := d.state.CountAlivePlayers(ctx.gs.Participants().Playing())
+
+	// Only snapshot the final state for non-elimination endings (time expiry,
+	// bomb scenarios with survivors on both sides). Elimination rounds are fully
+	// captured by kill snapshots. The RoundEnd event can fire with unreliable
+	// player alive states (engine resetting for next round), producing false
+	// Xv0 or 0vX snapshots.
+	if tAlive > 0 && ctAlive > 0 {
+		d.collector.RecordStateSnapshot(tAlive, ctAlive, d.state.BombPlanted)
+	}
+
 	d.collector.RecordRoundEnd(tAlive, ctAlive, d.state.BombPlanted, ctx.winnerTeam, d.state.MapName)
 }
 

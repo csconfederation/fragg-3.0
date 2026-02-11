@@ -78,16 +78,25 @@ func (m *MatchState) ShouldSkipEvent() bool {
 	return m.IsKnifeRound || !m.MatchStarted
 }
 
-// CountAlivePlayers counts alive players on each team from the given participants.
+// CountAlivePlayers counts alive human players on each team from the given participants.
+// Bots are excluded since their data is not meaningful for competitive probability.
+// Counts are capped at 5 per side as a safety net (CS2 is 5v5).
 func (m *MatchState) CountAlivePlayers(participants []*common.Player) (tAlive, ctAlive int) {
 	for _, p := range participants {
-		if p.IsAlive() {
-			if p.Team == common.TeamTerrorists {
-				tAlive++
-			} else if p.Team == common.TeamCounterTerrorists {
-				ctAlive++
-			}
+		if p.IsBot || !p.IsAlive() {
+			continue
 		}
+		if p.Team == common.TeamTerrorists {
+			tAlive++
+		} else if p.Team == common.TeamCounterTerrorists {
+			ctAlive++
+		}
+	}
+	if tAlive > 5 {
+		tAlive = 5
+	}
+	if ctAlive > 5 {
+		ctAlive = 5
 	}
 	return tAlive, ctAlive
 }

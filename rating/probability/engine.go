@@ -71,7 +71,7 @@ func (e *Engine) applyEconomyAdjustment(baseProb float64, state *RoundState) flo
 		multiplier = adj
 	}
 
-	return clamp(baseProb*multiplier, 0.01, 0.99)
+	return baseProb * multiplier
 }
 
 // applyMapAdjustment modifies probability based on map T/CT balance.
@@ -82,7 +82,7 @@ func (e *Engine) applyMapAdjustment(baseProb float64, mapName string) float64 {
 	// If map is T-sided (e.g., 0.52), boost T probability slightly
 	mapFactor := mapTWinRate / 0.50
 
-	return clamp(baseProb*mapFactor, 0.01, 0.99)
+	return baseProb * mapFactor
 }
 
 // applyTimeAdjustment modifies probability based on time remaining (bomb scenarios).
@@ -96,13 +96,13 @@ func (e *Engine) applyTimeAdjustment(baseProb float64, state *RoundState) float6
 
 	if state.TimeRemaining <= 5.0 {
 		// Very low time - T heavily favored unless CT is already defusing
-		return clamp(baseProb*1.15, 0.01, 0.99)
+		return baseProb * 1.15
 	} else if state.TimeRemaining <= 10.0 {
 		// Low time - T advantage increases
-		return clamp(baseProb*1.08, 0.01, 0.99)
+		return baseProb * 1.08
 	} else if state.TimeRemaining <= 20.0 {
 		// Medium time - slight T advantage
-		return clamp(baseProb*1.03, 0.01, 0.99)
+		return baseProb * 1.03
 	}
 
 	return baseProb

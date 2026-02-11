@@ -147,12 +147,16 @@ func (dc *DataCollector) RecordKill(
 	}
 	dc.data.DuelOutcomes[forwardKey].AttackerWins++
 
-	// Record defender loss: in matchup V vs A, V lost (A defended successfully)
-	reverseKey := duelKey(victimCat, attackerCat)
-	if dc.data.DuelOutcomes[reverseKey] == nil {
-		dc.data.DuelOutcomes[reverseKey] = &DuelOutcomeData{}
+	// Record defender loss: in matchup V vs A, V lost (A defended successfully).
+	// Skip for mirror matchups (e.g. awp_vs_awp) where forward and reverse keys
+	// are identical — recording both would double-count every kill.
+	if attackerCat != victimCat {
+		reverseKey := duelKey(victimCat, attackerCat)
+		if dc.data.DuelOutcomes[reverseKey] == nil {
+			dc.data.DuelOutcomes[reverseKey] = &DuelOutcomeData{}
+		}
+		dc.data.DuelOutcomes[reverseKey].DefenderWins++
 	}
-	dc.data.DuelOutcomes[reverseKey].DefenderWins++
 }
 
 // Merge combines data from another collector.
@@ -251,7 +255,14 @@ func (dc *DataCollector) BuildTablesFromData() *ProbabilityTables {
 		if total < 10 {
 			continue
 		}
-		tables.DuelWinRates[key] = float64(outcome.AttackerWins) / float64(total)
+		// Mirror matchups (e.g. awp_vs_awp) have DefenderWins=0 because the
+		// reverse key is identical to the forward key. Same-category duels are
+		// inherently 50/50.
+		if outcome.DefenderWins == 0 && outcome.AttackerWins > 0 {
+			tables.DuelWinRates[key] = 0.5
+		} else {
+			tables.DuelWinRates[key] = float64(outcome.AttackerWins) / float64(total)
+		}
 	}
 
 	// Update map adjustments

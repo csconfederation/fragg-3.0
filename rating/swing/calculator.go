@@ -81,8 +81,11 @@ func (c *Calculator) processKill(
 	// Get probability after kill
 	probAfter := c.probEngine.GetWinProbability(state, kill.KillerSide)
 
-	// Calculate raw delta
+	// Calculate raw delta (kills should always help the killer's side)
 	rawDelta := probAfter - probBefore
+	if rawDelta < 0 {
+		rawDelta = 0
+	}
 
 	// Apply economy adjustment - harder kills are worth more
 	duelWinRate := c.probEngine.GetDuelWinRate(kill.KillerEquip, kill.VictimEquip)
@@ -214,7 +217,12 @@ func (c *Calculator) CalculateSingleKillSwing(
 	// Get probability after
 	probAfter := c.probEngine.GetWinProbability(stateAfter, kill.KillerSide)
 
-	return probAfter - probBefore
+	// A kill should never reduce the killer's team win probability
+	rawSwing := probAfter - probBefore
+	if rawSwing < 0 {
+		rawSwing = 0
+	}
+	return rawSwing
 }
 
 // CalculateKillSwingWithEconomy computes economy-adjusted swing for both killer and victim.

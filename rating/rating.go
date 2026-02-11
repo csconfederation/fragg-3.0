@@ -10,6 +10,7 @@ package rating
 
 import (
 	"eco-rating/model"
+	"fmt"
 	"math"
 )
 
@@ -24,35 +25,78 @@ import (
 func ComputeFinalRating(p *model.PlayerStats) float64 {
 	rounds := float64(p.RoundsPlayed)
 	if rounds == 0 {
+		p.RatingBreakdown = model.RatingBreakdown{Baseline: RatingBaseline, FinalRating: 0}
 		return 0
 	}
 
 	adr := float64(p.Damage) / rounds
 	kast := p.KAST
+	probSwingPerRound := p.ProbabilitySwingPerRound
 
 	// ADR contribution - rewards consistent damage output
 	var adrContrib float64
+	adrMultiplier := ADRContribBelow
+	adrNotes := "ADR below baseline"
 	if adr >= BaselineADR {
-		adrContrib = (adr - BaselineADR) * ADRContribAbove
-	} else {
-		adrContrib = (adr - BaselineADR) * ADRContribBelow
+		adrMultiplier = ADRContribAbove
+		adrNotes = "ADR above baseline"
 	}
+	adrContrib = (adr - BaselineADR) * adrMultiplier
 
 	// KAST contribution - rewards round involvement
 	var kastContrib float64
+	kastMultiplier := KASTContribBelow
+	kastNotes := "KAST below baseline"
 	if kast >= BaselineKAST {
-		kastContrib = (kast - BaselineKAST) * KASTContribAbove
-	} else {
-		kastContrib = (kast - BaselineKAST) * KASTContribBelow
+		kastMultiplier = KASTContribAbove
+		kastNotes = "KAST above baseline"
 	}
+	kastContrib = (kast - BaselineKAST) * kastMultiplier
 
 	// Probability-based swing contribution (core metric)
 	// Now includes both positive swing from kills AND negative swing from deaths
-	probSwingContrib := p.ProbabilitySwingPerRound * ProbSwingContribMultiplier
+	probSwingContrib := probSwingPerRound * ProbSwingContribMultiplier
 
 	rating := RatingBaseline + adrContrib + kastContrib + probSwingContrib
+	clamped := math.Max(MinRating, math.Min(MaxRating, rating))
 
-	return math.Max(MinRating, math.Min(MaxRating, rating))
+	p.RatingBreakdown = model.RatingBreakdown{
+		Baseline: RatingBaseline,
+		ADR: model.RatingComponent{
+			Metric:       "adr",
+			Value:        adr,
+			Baseline:     BaselineADR,
+			Multiplier:   adrMultiplier,
+			Contribution: adrContrib,
+			Notes:        adrNotes,
+		},
+		KAST: model.RatingComponent{
+			Metric:       "kast",
+			Value:        kast,
+			Baseline:     BaselineKAST,
+			Multiplier:   kastMultiplier,
+			Contribution: kastContrib,
+			Notes:        kastNotes,
+		},
+		ProbabilitySwing: model.RatingComponent{
+			Metric:       "probability_swing_per_round",
+			Value:        probSwingPerRound,
+			Multiplier:   ProbSwingContribMultiplier,
+			Contribution: probSwingContrib,
+			Notes:        fmt.Sprintf("Total swing: %.4f", p.ProbabilitySwing),
+		},
+		UnclampedRating: rating,
+		FinalRating:     clamped,
+		Formula: fmt.Sprintf(
+			"rating = %.2f + (%.2f-%.2f)*%.3f + (%.2f-%.2f)*%.2f + (%.4f*%.2f)",
+			RatingBaseline,
+			adr, BaselineADR, adrMultiplier,
+			kast, BaselineKAST, kastMultiplier,
+			probSwingPerRound, ProbSwingContribMultiplier,
+		),
+	}
+
+	return clamped
 }
 
 // ComputeSideRating calculates a rating for a specific side (T or CT).

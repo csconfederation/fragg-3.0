@@ -10,11 +10,13 @@ package export
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"eco-rating/model"
 	"eco-rating/output"
@@ -64,6 +66,10 @@ func (f *FileExportOption) Export(players map[uint64]*model.PlayerStats) error {
 		if err := w.Write(row); err != nil {
 			return fmt.Errorf("failed to write row: %w", err)
 		}
+	}
+
+	if err := f.writePlayerDetailsJSON(playerList); err != nil {
+		return err
 	}
 
 	return nil
@@ -129,6 +135,76 @@ func ensureDir(path string) error {
 		return os.MkdirAll(dir, 0755)
 	}
 	return nil
+}
+
+type swingSummary struct {
+	Total            float64 `json:"total"`
+	PerRound         float64 `json:"per_round"`
+	EcoAdjustedKills float64 `json:"eco_adjusted_kills"`
+	SwingRating      float64 `json:"swing_rating"`
+}
+
+type playerDetail struct {
+	SteamID          string                      `json:"steam_id"`
+	Name             string                      `json:"name"`
+	FinalRating      float64                     `json:"final_rating"`
+	RoundsPlayed     int                         `json:"rounds_played"`
+	RatingBreakdown  model.RatingBreakdown       `json:"rating_breakdown"`
+	ProbabilitySwing swingSummary                `json:"probability_swing"`
+	RoundBreakdowns  []model.RoundSwingBreakdown `json:"round_breakdowns"`
+}
+
+func newPlayerDetail(p *model.PlayerStats) playerDetail {
+	detail := playerDetail{
+		SteamID:         p.SteamID,
+		Name:            p.Name,
+		FinalRating:     p.FinalRating,
+		RoundsPlayed:    p.RoundsPlayed,
+		RatingBreakdown: p.RatingBreakdown,
+		ProbabilitySwing: swingSummary{
+			Total:            p.ProbabilitySwing,
+			PerRound:         p.ProbabilitySwingPerRound,
+			EcoAdjustedKills: p.EcoAdjustedKills,
+			SwingRating:      p.SwingRating,
+		},
+		RoundBreakdowns: p.RoundBreakdowns,
+	}
+	if detail.RoundBreakdowns == nil {
+		detail.RoundBreakdowns = []model.RoundSwingBreakdown{}
+	}
+	return detail
+}
+
+func (f *FileExportOption) writePlayerDetailsJSON(players []*model.PlayerStats) error {
+	outputPath := f.jsonOutputPath()
+	if err := ensureDir(outputPath); err != nil {
+		return err
+	}
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create JSON file: %w", err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	details := make([]playerDetail, 0, len(players))
+	for _, p := range players {
+		details = append(details, newPlayerDetail(p))
+	}
+	if err := encoder.Encode(details); err != nil {
+		return fmt.Errorf("failed to write JSON file: %w", err)
+	}
+	return nil
+}
+
+func (f *FileExportOption) jsonOutputPath() string {
+	base := f.OutputPath
+	ext := filepath.Ext(base)
+	if ext == "" {
+		return base + ".json"
+	}
+	return strings.TrimSuffix(base, ext) + "_details.json"
 }
 
 // getSingleGameHeader returns the CSV header row for single-game exports.

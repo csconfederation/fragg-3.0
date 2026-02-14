@@ -178,16 +178,8 @@ func (c *Calculator) processRoundEnd(
 	result *RoundResult,
 ) {
 	// Handle saves - when players survive a lost round
-	if result != nil && len(result.Survivors) > 0 {
-		if result.SurvivorSide != result.Winner {
-			// Players saved on the losing team
-			// Their "reward" is the saved weapon, not extra swing
-			// Apply small penalty for not dying but losing
-			for _, survivorID := range result.Survivors {
-				playerSwing[survivorID] -= SavePenalty
-			}
-		}
-	}
+	// No penalty applied; saving weapons is a valid strategic decision
+	_ = result
 }
 
 // KillSwingResult contains the economy-adjusted swing values for killer and victim.

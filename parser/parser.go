@@ -9,8 +9,10 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"log"
 
 	"eco-rating/model"
 	"eco-rating/rating"
@@ -78,10 +80,15 @@ func (d *DemoParser) ClearPlayerFilter() {
 // Parse processes the entire demo file and computes all player statistics.
 // After parsing, it calculates derived metrics (ADR, KPR, ratings, etc.)
 // and the final eco-rating for each player.
-// Returns an error if parsing fails.
+// Returns an error if parsing fails. Truncated demos (ErrUnexpectedEndOfDemo)
+// are handled gracefully — stats collected up to the truncation point are kept.
 func (d *DemoParser) Parse() error {
 	if err := d.parser.ParseToEnd(); err != nil {
-		return fmt.Errorf("failed to parse demo: %w", err)
+		if errors.Is(err, demoinfocs.ErrUnexpectedEndOfDemo) {
+			log.Printf("Warning: demo truncated (unexpected EOF), using partial data")
+		} else {
+			return fmt.Errorf("failed to parse demo: %w", err)
+		}
 	}
 	d.computeDerivedStats()
 	return nil

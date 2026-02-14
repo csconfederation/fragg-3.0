@@ -22,9 +22,6 @@ const (
 	// DefuseCreditShare is the portion of defuse swing given to the defuser.
 	DefuseCreditShare = 0.80
 
-	// SavePenalty is the small negative swing for surviving a lost round.
-	SavePenalty = 0.02
-
 	// MaxPlantSwing caps how much swing a single bomb plant can award.
 	MaxPlantSwing = 0.10
 )

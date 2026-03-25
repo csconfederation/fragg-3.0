@@ -9,8 +9,8 @@
 package export
 
 import (
-	"eco-rating/model"
-	"eco-rating/output"
+	"github.com/ethsmith/eco-rating/model"
+	"github.com/ethsmith/eco-rating/output"
 )
 
 // ExportOption defines the interface for exporting player statistics.

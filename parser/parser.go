@@ -14,9 +14,9 @@ import (
 	"io"
 	"log"
 
-	"eco-rating/model"
-	"eco-rating/rating"
-	"eco-rating/rating/probability"
+	"github.com/ethsmith/eco-rating/model"
+	"github.com/ethsmith/eco-rating/rating"
+	"github.com/ethsmith/eco-rating/rating/probability"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
 )
@@ -187,6 +187,11 @@ func (d *DemoParser) computeDerivedStats() {
 			p.LowBuyKillsPct = float64(p.LowBuyKills) / float64(p.Kills)
 			p.DisadvantagedBuyKillsPct = float64(p.DisadvantagedBuyKills) / float64(p.Kills)
 			p.HeadshotPct = float64(p.Headshots) / float64(p.Kills)
+			p.ManAdvantageKillsPct = float64(p.ManAdvantageKills) / float64(p.Kills)
+		}
+
+		if p.Deaths > 0 {
+			p.ManDisadvantageDeathsPct = float64(p.ManDisadvantageDeaths) / float64(p.Deaths)
 		}
 
 		if p.KillsWithTTK > 0 {
@@ -215,6 +220,9 @@ func (d *DemoParser) computeDerivedStats() {
 		if p.RoundsPlayed > 0 {
 			rounds := float64(p.RoundsPlayed)
 			p.ProbabilitySwingPerRound = p.ProbabilitySwing / rounds
+			// DuelSwing: EcoKillValue - EcoDeathValue (net duel economy impact)
+			p.DuelSwing = p.EcoKillValue - p.EcoDeathValue
+			p.DuelSwingPerRound = p.DuelSwing / rounds
 			// SwingRating: scale swing to rating (0% = 1.0, +4% = 1.4, -3% = 0.7)
 			p.SwingRating = 1.0 + (p.ProbabilitySwingPerRound * 10.0)
 			if p.SwingRating < 0.5 {
@@ -231,10 +239,22 @@ func (d *DemoParser) computeDerivedStats() {
 				p.TRoundsPlayed, p.TKills, p.TDeaths, p.TDamage, p.TEcoKillValue,
 				p.TProbabilitySwing, p.TKAST, p.TMultiKills, p.TClutchRounds, p.TClutchWins)
 		}
+		if p.TKills > 0 {
+			p.TManAdvantageKillsPct = float64(p.TManAdvantageKills) / float64(p.TKills)
+		}
+		if p.TDeaths > 0 {
+			p.TManDisadvantageDeathsPct = float64(p.TManDisadvantageDeaths) / float64(p.TDeaths)
+		}
 		if p.CTRoundsPlayed > 0 {
 			p.CTEcoRating = rating.ComputeSideRating(
 				p.CTRoundsPlayed, p.CTKills, p.CTDeaths, p.CTDamage, p.CTEcoKillValue,
 				p.CTProbabilitySwing, p.CTKAST, p.CTMultiKills, p.CTClutchRounds, p.CTClutchWins)
+		}
+		if p.CTKills > 0 {
+			p.CTManAdvantageKillsPct = float64(p.CTManAdvantageKills) / float64(p.CTKills)
+		}
+		if p.CTDeaths > 0 {
+			p.CTManDisadvantageDeathsPct = float64(p.CTManDisadvantageDeaths) / float64(p.CTDeaths)
 		}
 
 		d.logger.LogPlayerSummary(p.Name, p.Kills, p.Deaths, p.Damage, p.EcoKillValue, p.EcoDeathValue, p.FinalRating)

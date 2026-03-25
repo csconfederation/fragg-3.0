@@ -9,8 +9,8 @@
 package rating
 
 import (
-	"eco-rating/model"
 	"fmt"
+	"github.com/ethsmith/eco-rating/model"
 	"math"
 )
 

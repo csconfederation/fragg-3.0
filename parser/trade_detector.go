@@ -9,8 +9,8 @@
 package parser
 
 import (
-	"eco-rating/model"
-	"eco-rating/rating"
+	"github.com/ethsmith/eco-rating/model"
+	"github.com/ethsmith/eco-rating/rating"
 	"math"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"

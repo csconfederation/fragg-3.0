@@ -1,4 +1,4 @@
-module eco-rating
+module github.com/ethsmith/eco-rating
 
 go 1.25
 

@@ -141,6 +141,10 @@ func (c *Client) GetAllDemos(prefix string) ([]BucketContent, error) {
 
 	// Recurse into subfolders
 	for _, cp := range result.CommonPrefixes {
+		// Skip the known problematic demos folder
+		if strings.Contains(cp.Prefix, "if-your-demo-is-fucked-try-these-for-now") {
+			continue
+		}
 		subDemos, err := c.GetAllDemos(cp.Prefix)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list files in %s: %w", cp.Prefix, err)

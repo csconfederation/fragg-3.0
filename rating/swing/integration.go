@@ -1,8 +1,8 @@
 package swing
 
 import (
-	"eco-rating/model"
-	"eco-rating/rating/probability"
+	"github.com/ethsmith/eco-rating/model"
+	"github.com/ethsmith/eco-rating/rating/probability"
 )
 
 // RatingIntegration provides methods to convert swing values to rating contributions.

@@ -9,7 +9,7 @@
 package output
 
 import (
-	"eco-rating/model"
+	"github.com/ethsmith/eco-rating/model"
 )
 
 // StatsAggregatorInterface defines the contract for aggregating player statistics.

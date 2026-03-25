@@ -9,8 +9,8 @@
 package output
 
 import (
-	"eco-rating/model"
-	"eco-rating/rating"
+	"github.com/ethsmith/eco-rating/model"
+	"github.com/ethsmith/eco-rating/rating"
 )
 
 // MultiKillStats tracks multi-kill round counts for aggregated statistics.
@@ -67,32 +67,35 @@ type AggregatedStats struct {
 	EconImpact                 float64        `json:"econ_impact"`
 	EcoKillValue               float64        `json:"eco_kill_value"`
 	EcoDeathValue              float64        `json:"eco_death_value"`
-	ProbabilitySwing           float64        `json:"probability_swing"`
-	ProbabilitySwingPerRound   float64        `json:"probability_swing_per_round"`
-	ClutchRounds               int            `json:"clutch_rounds"`
-	ClutchWins                 int            `json:"clutch_wins"`
-	SavedByTeammate            int            `json:"saved_by_teammate"`
-	SavedTeammate              int            `json:"saved_teammate"`
-	OpeningDeaths              int            `json:"opening_deaths"`
-	OpeningDeathsTraded        int            `json:"opening_deaths_traded"`
-	SupportRounds              int            `json:"support_rounds"`
-	AssistedKills              int            `json:"assisted_kills"`
-	OpeningAttempts            int            `json:"opening_attempts"`
-	OpeningSuccesses           int            `json:"opening_successes"`
-	RoundsWonAfterOpening      int            `json:"rounds_won_after_opening"`
-	AttackRounds               int            `json:"attack_rounds"`
-	Clutch1v1Attempts          int            `json:"clutch_1v1_attempts"`
-	Clutch1v1Wins              int            `json:"clutch_1v1_wins"`
-	TimeAlivePerRound          float64        `json:"time_alive_per_round"`
-	LastAliveRounds            int            `json:"last_alive_rounds"`
-	SavesOnLoss                int            `json:"saves_on_loss"`
-	UtilityDamage              int            `json:"utility_damage"`
-	UtilityKills               int            `json:"utility_kills"`
-	FlashesThrown              int            `json:"flashes_thrown"`
-	FlashAssists               int            `json:"flash_assists"`
-	EnemyFlashDurationPerRound float64        `json:"enemy_flash_duration_per_round"`
-	TeamFlashCount             int            `json:"team_flash_count"`
-	TeamFlashDurationPerRound  float64        `json:"team_flash_duration_per_round"`
+	DuelSwing                  float64        `json:"duel_swing"`
+	DuelSwingPerRound          float64        `json:"duel_swing_per_round"`
+	duelSwingSum               float64
+	ProbabilitySwing           float64 `json:"probability_swing"`
+	ProbabilitySwingPerRound   float64 `json:"probability_swing_per_round"`
+	ClutchRounds               int     `json:"clutch_rounds"`
+	ClutchWins                 int     `json:"clutch_wins"`
+	SavedByTeammate            int     `json:"saved_by_teammate"`
+	SavedTeammate              int     `json:"saved_teammate"`
+	OpeningDeaths              int     `json:"opening_deaths"`
+	OpeningDeathsTraded        int     `json:"opening_deaths_traded"`
+	SupportRounds              int     `json:"support_rounds"`
+	AssistedKills              int     `json:"assisted_kills"`
+	OpeningAttempts            int     `json:"opening_attempts"`
+	OpeningSuccesses           int     `json:"opening_successes"`
+	RoundsWonAfterOpening      int     `json:"rounds_won_after_opening"`
+	AttackRounds               int     `json:"attack_rounds"`
+	Clutch1v1Attempts          int     `json:"clutch_1v1_attempts"`
+	Clutch1v1Wins              int     `json:"clutch_1v1_wins"`
+	TimeAlivePerRound          float64 `json:"time_alive_per_round"`
+	LastAliveRounds            int     `json:"last_alive_rounds"`
+	SavesOnLoss                int     `json:"saves_on_loss"`
+	UtilityDamage              int     `json:"utility_damage"`
+	UtilityKills               int     `json:"utility_kills"`
+	FlashesThrown              int     `json:"flashes_thrown"`
+	FlashAssists               int     `json:"flash_assists"`
+	EnemyFlashDurationPerRound float64 `json:"enemy_flash_duration_per_round"`
+	TeamFlashCount             int     `json:"team_flash_count"`
+	TeamFlashDurationPerRound  float64 `json:"team_flash_duration_per_round"`
 	totalTimeAlive             float64
 	totalEnemyFlashDur         float64
 	totalTeamFlashDur          float64
@@ -103,6 +106,10 @@ type AggregatedStats struct {
 	PistolVsRifleKills         int     `json:"pistol_vs_rifle_kills"`
 	TradeKills                 int     `json:"trade_kills"`
 	FastTrades                 int     `json:"fast_trades"`
+	ManAdvantageKills          int     `json:"man_advantage_kills"`
+	ManDisadvantageDeaths      int     `json:"man_disadvantage_deaths"`
+	ManAdvantageKillsPct       float64 `json:"man_advantage_kills_pct"`
+	ManDisadvantageDeathsPct   float64 `json:"man_disadvantage_deaths_pct"`
 	EarlyDeaths                int     `json:"early_deaths"`
 	LowBuyKills                int     `json:"low_buy_kills"`
 	LowBuyKillsPct             float64 `json:"low_buy_kills_pct"`
@@ -127,6 +134,10 @@ type AggregatedStats struct {
 	TKAST                      float64 `json:"t_kast"`
 	TClutchRounds              int     `json:"t_clutch_rounds"`
 	TClutchWins                int     `json:"t_clutch_wins"`
+	TManAdvantageKills         int     `json:"t_man_advantage_kills"`
+	TManAdvantageKillsPct      float64 `json:"t_man_advantage_kills_pct"`
+	TManDisadvantageDeaths     int     `json:"t_man_disadvantage_deaths"`
+	TManDisadvantageDeathsPct  float64 `json:"t_man_disadvantage_deaths_pct"`
 	TRating                    float64 `json:"t_rating"`
 	TEcoRating                 float64 `json:"t_eco_rating"`
 
@@ -141,6 +152,10 @@ type AggregatedStats struct {
 	CTKAST                     float64 `json:"ct_kast"`
 	CTClutchRounds             int     `json:"ct_clutch_rounds"`
 	CTClutchWins               int     `json:"ct_clutch_wins"`
+	CTManAdvantageKills        int     `json:"ct_man_advantage_kills"`
+	CTManAdvantageKillsPct     float64 `json:"ct_man_advantage_kills_pct"`
+	CTManDisadvantageDeaths    int     `json:"ct_man_disadvantage_deaths"`
+	CTManDisadvantageDeathsPct float64 `json:"ct_man_disadvantage_deaths_pct"`
 	CTRating                   float64 `json:"ct_rating"`
 	CTEcoRating                float64 `json:"ct_eco_rating"`
 	tMultiKills                [6]int
@@ -205,15 +220,20 @@ func NewAggregator() *Aggregator {
 // AddGame incorporates statistics from a single game into the aggregator.
 // It accumulates raw counts and weighted values for later finalization.
 // The mapName is used for per-map rating tracking.
-// When tier is "all", each player's TeamName is used as their tier instead.
+// When tier is "all", players are aggregated by SteamID only (team name stored separately).
 func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName string, tier string) {
 	for _, p := range players {
 		playerTier := tier
-		if tier == "all" && p.TeamName != "" {
-			playerTier = p.TeamName
+		if tier == "all" {
+			playerTier = "all"
 		}
+		// Always use Steam ID in key - the tier value differentiates match types
 		key := p.SteamID + ":" + playerTier
 		agg := a.ensurePlayer(key, p.SteamID, p.Name, playerTier)
+		// Update team name to the most recent non-empty value
+		if p.TeamName != "" {
+			agg.Tier = p.TeamName
+		}
 		agg.GamesCount++
 		agg.RoundsPlayed += p.RoundsPlayed
 		agg.RoundsWon += p.RoundsWon
@@ -244,6 +264,7 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.MultiKills.FiveK += p.MultiKillsRaw[5]
 		agg.EcoKillValue += p.EcoKillValue
 		agg.EcoDeathValue += p.EcoDeathValue
+		agg.duelSwingSum += p.DuelSwing
 		agg.ProbabilitySwing += p.ProbabilitySwing
 		agg.ClutchRounds += p.ClutchRounds
 		agg.ClutchWins += p.ClutchWins
@@ -276,6 +297,8 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.PistolVsRifleKills += p.PistolVsRifleKills
 		agg.TradeKills += p.TradeKills
 		agg.FastTrades += p.FastTrades
+		agg.ManAdvantageKills += p.ManAdvantageKills
+		agg.ManDisadvantageDeaths += p.ManDisadvantageDeaths
 		agg.EarlyDeaths += p.EarlyDeaths
 		agg.LowBuyKills += p.LowBuyKills
 		agg.DisadvantagedBuyKills += p.DisadvantagedBuyKills
@@ -297,6 +320,8 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.TKAST += p.TKAST
 		agg.TClutchRounds += p.TClutchRounds
 		agg.TClutchWins += p.TClutchWins
+		agg.TManAdvantageKills += p.TManAdvantageKills
+		agg.TManDisadvantageDeaths += p.TManDisadvantageDeaths
 		for i := 0; i < 6; i++ {
 			agg.tMultiKills[i] += p.TMultiKills[i]
 		}
@@ -312,6 +337,8 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		agg.CTKAST += p.CTKAST
 		agg.CTClutchRounds += p.CTClutchRounds
 		agg.CTClutchWins += p.CTClutchWins
+		agg.CTManAdvantageKills += p.CTManAdvantageKills
+		agg.CTManDisadvantageDeaths += p.CTManDisadvantageDeaths
 		for i := 0; i < 6; i++ {
 			agg.ctMultiKills[i] += p.CTMultiKills[i]
 		}
@@ -348,6 +375,9 @@ func (a *Aggregator) Finalize() {
 			agg.Survival = agg.Survival / rounds
 			agg.KAST = agg.KAST / rounds
 			agg.EconImpact = agg.EconImpact / rounds
+			// DuelSwing: average across games, DuelSwingPerRound: total swing / total rounds
+			agg.DuelSwing = agg.duelSwingSum / float64(agg.GamesCount)
+			agg.DuelSwingPerRound = (agg.EcoKillValue - agg.EcoDeathValue) / rounds
 			agg.ProbabilitySwingPerRound = agg.ProbabilitySwing / rounds
 
 			// Calculate HLTV rating using centralized function
@@ -403,6 +433,10 @@ func (a *Aggregator) Finalize() {
 			agg.LowBuyKillsPct = float64(agg.LowBuyKills) / float64(agg.Kills)
 			agg.DisadvantagedBuyKillsPct = float64(agg.DisadvantagedBuyKills) / float64(agg.Kills)
 			agg.HeadshotPct = float64(agg.Headshots) / float64(agg.Kills)
+			agg.ManAdvantageKillsPct = float64(agg.ManAdvantageKills) / float64(agg.Kills)
+		}
+		if agg.Deaths > 0 {
+			agg.ManDisadvantageDeathsPct = float64(agg.ManDisadvantageDeaths) / float64(agg.Deaths)
 		}
 		if agg.KillsWithTTK > 0 {
 			agg.AvgTimeToKill = agg.TotalTimeToKill / float64(agg.KillsWithTTK)
@@ -431,6 +465,12 @@ func (a *Aggregator) Finalize() {
 				agg.TRoundsPlayed, agg.TKills, agg.TDeaths, agg.TDamage, agg.TEcoKillValue,
 				agg.TProbabilitySwing, agg.TKAST, agg.tMultiKills, agg.TClutchRounds, agg.TClutchWins)
 		}
+		if agg.TKills > 0 {
+			agg.TManAdvantageKillsPct = float64(agg.TManAdvantageKills) / float64(agg.TKills)
+		}
+		if agg.TDeaths > 0 {
+			agg.TManDisadvantageDeathsPct = float64(agg.TManDisadvantageDeaths) / float64(agg.TDeaths)
+		}
 
 		// CT-side ratings using centralized functions
 		if agg.CTRoundsPlayed > 0 {
@@ -439,6 +479,12 @@ func (a *Aggregator) Finalize() {
 			agg.CTEcoRating = rating.ComputeSideRating(
 				agg.CTRoundsPlayed, agg.CTKills, agg.CTDeaths, agg.CTDamage, agg.CTEcoKillValue,
 				agg.CTProbabilitySwing, agg.CTKAST, agg.ctMultiKills, agg.CTClutchRounds, agg.CTClutchWins)
+		}
+		if agg.CTKills > 0 {
+			agg.CTManAdvantageKillsPct = float64(agg.CTManAdvantageKills) / float64(agg.CTKills)
+		}
+		if agg.CTDeaths > 0 {
+			agg.CTManDisadvantageDeathsPct = float64(agg.CTManDisadvantageDeaths) / float64(agg.CTDeaths)
 		}
 		if agg.GamesCount > 0 {
 			agg.FinalRating = agg.ratingSum / float64(agg.GamesCount)

@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"eco-rating/rating/swing"
+	"github.com/ethsmith/eco-rating/rating/swing"
 )
 
 const (

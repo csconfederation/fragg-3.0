@@ -13,6 +13,60 @@ import (
 	"log"
 )
 
+// ParserLogger defines the interface for demo parsing logging.
+// This allows for a no-op implementation when logging is disabled.
+type ParserLogger interface {
+	GetOutput() string
+	ClearOutput()
+	SetPlayerFilter(players []string)
+	AddPlayerFilter(player string)
+	ClearPlayerFilter()
+	SetEnabled(enabled bool)
+	LogKill(round int, killer, victim string, killerEquip, victimEquip int, killValue float64)
+	LogDeath(round int, victim, killer string, victimEquip, killerEquip int, deathPenalty float64)
+	LogRoundStart(round int)
+	LogRoundEnd(round int)
+	LogTrade(round int, trader, tradedPlayer, originalKiller string)
+	LogOpeningKill(round int, killer, victim string)
+	LogMultiKill(round int, player string, kills int)
+	LogPlayerSummary(name string, kills, deaths, damage int, ecoKillValue, ecoDeathValue, finalRating float64)
+	LogBombPlant(round int, planter string)
+	LogBombDefuse(round int, defuser string)
+	LogKnifeRound()
+	LogWarmup()
+	Printf(format string, v ...interface{})
+}
+
+// noOpLogger is a no-op implementation that does nothing.
+// Used when logging is disabled to avoid any overhead.
+type noOpLogger struct{}
+
+func (n *noOpLogger) GetOutput() string                { return "" }
+func (n *noOpLogger) ClearOutput()                     {}
+func (n *noOpLogger) SetPlayerFilter(players []string) {}
+func (n *noOpLogger) AddPlayerFilter(player string)    {}
+func (n *noOpLogger) ClearPlayerFilter()               {}
+func (n *noOpLogger) SetEnabled(enabled bool)          {}
+func (n *noOpLogger) LogKill(round int, killer, victim string, killerEquip, victimEquip int, killValue float64) {
+}
+func (n *noOpLogger) LogDeath(round int, victim, killer string, victimEquip, killerEquip int, deathPenalty float64) {
+}
+func (n *noOpLogger) LogRoundStart(round int)                                         {}
+func (n *noOpLogger) LogRoundEnd(round int)                                           {}
+func (n *noOpLogger) LogTrade(round int, trader, tradedPlayer, originalKiller string) {}
+func (n *noOpLogger) LogOpeningKill(round int, killer, victim string)                 {}
+func (n *noOpLogger) LogMultiKill(round int, player string, kills int)                {}
+func (n *noOpLogger) LogPlayerSummary(name string, kills, deaths, damage int, ecoKillValue, ecoDeathValue, finalRating float64) {
+}
+func (n *noOpLogger) LogBombPlant(round int, planter string)  {}
+func (n *noOpLogger) LogBombDefuse(round int, defuser string) {}
+func (n *noOpLogger) LogKnifeRound()                          {}
+func (n *noOpLogger) LogWarmup()                              {}
+func (n *noOpLogger) Printf(format string, v ...interface{})  {}
+
+// sharedNoOpLogger is a singleton no-op logger to avoid allocations.
+var sharedNoOpLogger = &noOpLogger{}
+
 // Logger provides formatted logging for demo parsing events.
 // It supports player filtering to focus output on specific players.
 type Logger struct {
@@ -24,10 +78,14 @@ type Logger struct {
 
 // NewLogger creates a new Logger with the specified enabled state.
 // Output is captured to an internal buffer for later retrieval.
-func NewLogger(enabled bool) *Logger {
+// When disabled, returns a no-op logger to avoid any overhead.
+func NewLogger(enabled bool) ParserLogger {
+	if !enabled {
+		return sharedNoOpLogger
+	}
 	buf := &bytes.Buffer{}
 	return &Logger{
-		enabled:      enabled,
+		enabled:      true,
 		logger:       log.New(buf, "", 0),
 		buffer:       buf,
 		playerFilter: make(map[string]bool),

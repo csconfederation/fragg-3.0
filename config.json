@@ -1,9 +1,12 @@
 {
   "cumulative": true,
-  "tier": "recruit,prospect,contender,challenger,elite,premier",
-  "base_url": "https://cscdemos.nyc3.digitaloceanspaces.com/",
-  "prefixes": ["s19/Combines/"],
-  "demo_path": "",
-  "demo_dir": "D:\\demos",
-  "enable_logging": true
+  "tier": "all",
+  "base_url": "https://cscdemos.nyc3.cdn.digitaloceanspaces.com/",
+  "prefixes": ["s19/M01/","s19/M02/","s19/M03/","s19/M04/","s19/M05/","s19/M06/","s19/M07/","s19/M08/","s19/M09","s19/M10","s19/M11/","s19/M12/","s19/M13/"],
+  "demo_path": "D:\\demos\\2026-02-11_02-06-52_1_de_ancient_team_Alexander_Alexanderov_vs_team_temu_z1mple.dem",
+  "demo_dir": "/home/admin/demos/",
+  "enable_logging": false,
+  "ignore_scrims": true,
+  "kdpr_modifier": true,
+  "workers": 8
 }

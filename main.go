@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -234,9 +235,9 @@ func runCumulativeMode(cfg *config.Config, tiers []string, exporter export.Expor
 // It returns the count of successfully parsed demos and collected log output.
 // The number of workers is capped at 8 or the number of CPU cores, whichever is lower.
 func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo, aggregator *output.Aggregator, probCollector *probability.DataCollector, tier string) (int, []string) {
-	numWorkers := runtime.NumCPU()
-	if numWorkers > 8 {
-		numWorkers = 8
+	numWorkers := cfg.Workers
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
 	}
 	log.Printf("Using %d parallel workers", numWorkers)
 
@@ -318,7 +319,10 @@ func parseSingleDemo(demoPath string, enableLogging bool, kdprModifier bool, exp
 	}
 	defer demo.Close()
 
-	p := parser.NewDemoParserWithOptions(demo, enableLogging, kdprModifier)
+	// Use buffered reader for better I/O performance on large demo files
+	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
+
+	p := parser.NewDemoParserWithOptions(bufferedReader, enableLogging, kdprModifier)
 	if err := p.Parse(); err != nil {
 		log.Fatalf("Failed to parse demo: %v", err)
 	}
@@ -339,7 +343,10 @@ func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool) (
 	}
 	defer demo.Close()
 
-	p := parser.NewDemoParserWithOptions(demo, enableLogging, kdprModifier)
+	// Use buffered reader for better I/O performance on large demo files (280-530MB)
+	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
+
+	p := parser.NewDemoParserWithOptions(bufferedReader, enableLogging, kdprModifier)
 	if err := p.Parse(); err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to parse demo: %w", err)
 	}

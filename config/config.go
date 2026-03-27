@@ -25,6 +25,7 @@ type Config struct {
 	EnableLogging bool     `json:"enable_logging"` // Enable detailed parsing logs
 	IgnoreScrims  bool     `json:"ignore_scrims"`
 	KDPRModifier  bool     `json:"kdpr_modifier"` // Enable KPR/DPR rating adjustment
+	Workers       int      `json:"workers"`       // Number of parallel parsing workers (0 = auto)
 }
 
 // DefaultConfig returns a Config with sensible default values.
@@ -40,6 +41,7 @@ func DefaultConfig() *Config {
 		EnableLogging: true,
 		IgnoreScrims:  false,
 		KDPRModifier:  false,
+		Workers:       8, // Number of parallel workers (0 = use CPU count)
 	}
 }
 

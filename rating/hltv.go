@@ -32,8 +32,8 @@ func ComputeHLTVRating(input HLTVInput) float64 {
 	kpr := float64(input.Kills) / rounds
 	killRating := kpr / HLTVBaselineKPR
 
-	// Survival rating component
-	survivalRating := ((float64(input.Survivals) - float64(input.Deaths)) / rounds) / HLTVBaselineSPR
+	// Survival rating component (HLTV 1.0: survived rounds / total rounds)
+	survivalRating := (float64(input.Survivals) / rounds) / HLTVBaselineSPR
 
 	// Round multi-kill rating component
 	rmkPoints := ComputeRMKPoints(input.MultiKills)
@@ -60,8 +60,8 @@ func ComputePistolRoundRating(roundsPlayed, kills, deaths, survivals, multiKills
 	kpr := float64(kills) / rounds
 	killRating := kpr / HLTVBaselineKPR
 
-	// Survival rating
-	survivalRating := ((float64(survivals) - float64(deaths)) / rounds) / HLTVBaselineSPR
+	// Survival rating (HLTV 1.0: survived rounds / total rounds)
+	survivalRating := (float64(survivals) / rounds) / HLTVBaselineSPR
 
 	// Multi-kill rating (simplified: each 2K+ counts as 4 points)
 	rmkPoints := float64(multiKills) * 4.0

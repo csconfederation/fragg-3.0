@@ -15,6 +15,7 @@ type RatingComponent struct {
 // RatingBreakdown captures how the final rating value is composed.
 type RatingBreakdown struct {
 	Baseline         float64         `json:"baseline"`
+	KPRDPR           RatingComponent `json:"kpr_dpr"`
 	ADR              RatingComponent `json:"adr"`
 	KAST             RatingComponent `json:"kast"`
 	ProbabilitySwing RatingComponent `json:"probability_swing"`

@@ -48,7 +48,8 @@ type BucketContent struct {
 
 // Client provides methods for interacting with an S3-compatible bucket.
 type Client struct {
-	BaseURL string // Base URL of the bucket (e.g., https://bucket.nyc3.digitaloceanspaces.com/)
+	BaseURL      string // Base URL of the bucket (e.g., https://bucket.nyc3.digitaloceanspaces.com/)
+	IgnoreScrims bool
 }
 
 // NewClient creates a new bucket client with the specified base URL.
@@ -66,6 +67,9 @@ func (c *Client) ListFolders(prefix string) ([]string, error) {
 
 	folders := make([]string, 0, len(result.CommonPrefixes))
 	for _, cp := range result.CommonPrefixes {
+		if c.IgnoreScrims && isScrimsPath(cp.Prefix) {
+			continue
+		}
 		folders = append(folders, cp.Prefix)
 	}
 	return folders, nil
@@ -124,6 +128,10 @@ func (c *Client) GetAllDemosByTier(combinesPrefix, tier string) ([]BucketContent
 // without filtering by tier. Used when tier is "all" or when filenames don't follow
 // the combine-{tier} naming convention.
 func (c *Client) GetAllDemos(prefix string) ([]BucketContent, error) {
+	if c.IgnoreScrims && isScrimsPath(prefix) {
+		return nil, nil
+	}
+
 	// First try listing files directly at this prefix
 	result, err := c.listBucket(prefix)
 	if err != nil {
@@ -134,6 +142,9 @@ func (c *Client) GetAllDemos(prefix string) ([]BucketContent, error) {
 
 	// Collect any demo files at this level
 	for _, f := range result.Contents {
+		if c.IgnoreScrims && isScrimsPath(f.Key) {
+			continue
+		}
 		if isDemoFile(f.Key) {
 			allDemos = append(allDemos, f)
 		}
@@ -143,6 +154,9 @@ func (c *Client) GetAllDemos(prefix string) ([]BucketContent, error) {
 	for _, cp := range result.CommonPrefixes {
 		// Skip the known problematic demos folder
 		if strings.Contains(cp.Prefix, "if-your-demo-is-fucked-try-these-for-now") {
+			continue
+		}
+		if c.IgnoreScrims && isScrimsPath(cp.Prefix) {
 			continue
 		}
 		subDemos, err := c.GetAllDemos(cp.Prefix)
@@ -161,6 +175,11 @@ func isDemoFile(key string) bool {
 	return strings.HasSuffix(lower, ".dem") ||
 		strings.HasSuffix(lower, ".dem.zip") ||
 		strings.HasSuffix(lower, ".dem.gz")
+}
+
+func isScrimsPath(p string) bool {
+	lower := strings.ToLower(p)
+	return strings.Contains(lower, "/scrims/") || strings.HasSuffix(lower, "/scrims")
 }
 
 // ParseTierFromKey extracts the competitive tier from a demo file key.

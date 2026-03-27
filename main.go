@@ -98,7 +98,7 @@ func main() {
 	}
 
 	if cfg.DemoPath != "" {
-		parseSingleDemo(cfg.DemoPath, cfg.EnableLogging, exporter)
+		parseSingleDemo(cfg.DemoPath, cfg.EnableLogging, cfg.KDPRModifier, exporter)
 		return
 	}
 
@@ -135,8 +135,9 @@ func runCumulativeMode(cfg *config.Config, tiers []string, exporter export.Expor
 	log.Printf("Running in cumulative mode for tiers: %v", tiers)
 
 	client := bucket.NewClient(cfg.BaseURL)
+	client.IgnoreScrims = cfg.IgnoreScrims
 	dl := downloader.NewDownloader(cfg.DemoDir)
-	aggregator := output.NewAggregator()
+	aggregator := output.NewAggregatorWithOptions(cfg.KDPRModifier)
 	probCollector := probability.NewDataCollector()
 
 	for _, prefix := range cfg.Prefixes {
@@ -248,7 +249,7 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				players, mapName, logs, collector, err := parseDemoWithLogs(job.Path, cfg.EnableLogging)
+				players, mapName, logs, collector, err := parseDemoWithLogs(job.Path, cfg.EnableLogging, cfg.KDPRModifier)
 				// Determine tier from demo filename: team_ prefix = scrim, otherwise = regulation
 				demoTier := tier
 				if strings.Contains(strings.ToLower(job.Key), "team_") {
@@ -310,14 +311,14 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 
 // parseSingleDemo parses a single demo file and exports the results.
 // This is used when the -demo flag is provided or demo_path is set in config.
-func parseSingleDemo(demoPath string, enableLogging bool, exporter export.ExportOption) {
+func parseSingleDemo(demoPath string, enableLogging bool, kdprModifier bool, exporter export.ExportOption) {
 	demo, err := os.Open(demoPath)
 	if err != nil {
 		log.Fatalf("Failed to open demo: %v", err)
 	}
 	defer demo.Close()
 
-	p := parser.NewDemoParserWithLogging(demo, enableLogging)
+	p := parser.NewDemoParserWithOptions(demo, enableLogging, kdprModifier)
 	if err := p.Parse(); err != nil {
 		log.Fatalf("Failed to parse demo: %v", err)
 	}
@@ -331,14 +332,14 @@ func parseSingleDemo(demoPath string, enableLogging bool, exporter export.Export
 
 // parseDemoWithLogs opens and parses a demo file, returning player stats, map name,
 // log output, probability collector, and any error. This is the core parsing function used by both modes.
-func parseDemoWithLogs(demoPath string, enableLogging bool) (map[uint64]*model.PlayerStats, string, string, *probability.DataCollector, error) {
+func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool) (map[uint64]*model.PlayerStats, string, string, *probability.DataCollector, error) {
 	demo, err := os.Open(demoPath)
 	if err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to open demo: %w", err)
 	}
 	defer demo.Close()
 
-	p := parser.NewDemoParserWithLogging(demo, enableLogging)
+	p := parser.NewDemoParserWithOptions(demo, enableLogging, kdprModifier)
 	if err := p.Parse(); err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to parse demo: %w", err)
 	}

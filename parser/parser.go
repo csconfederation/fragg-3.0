@@ -24,28 +24,35 @@ import (
 // DemoParser wraps the demoinfocs parser and manages match state and logging.
 // It processes CS2 demo files and extracts comprehensive player statistics.
 type DemoParser struct {
-	parser    demoinfocs.Parser
-	state     *MatchState
-	logger    *Logger
-	collector *probability.DataCollector
+	parser       demoinfocs.Parser
+	state        *MatchState
+	logger       *Logger
+	collector    *probability.DataCollector
+	kdprModifier bool
 }
 
 // NewDemoParser creates a new DemoParser with logging disabled.
 func NewDemoParser(r io.Reader) *DemoParser {
-	return NewDemoParserWithLogging(r, false)
+	return NewDemoParserWithOptions(r, false, false)
 }
 
 // NewDemoParserWithLogging creates a new DemoParser with configurable logging.
 // The parser is initialized with event handlers but Parse() must be called to process.
 func NewDemoParserWithLogging(r io.Reader, enableLogging bool) *DemoParser {
+	return NewDemoParserWithOptions(r, enableLogging, false)
+}
+
+// NewDemoParserWithOptions creates a new DemoParser with configurable logging and KPR/DPR modifier.
+func NewDemoParserWithOptions(r io.Reader, enableLogging bool, kdprModifier bool) *DemoParser {
 	p := demoinfocs.NewParser(r)
 	state := NewMatchState()
 
 	dp := &DemoParser{
-		parser:    p,
-		state:     state,
-		logger:    NewLogger(enableLogging),
-		collector: probability.NewDataCollector(),
+		parser:       p,
+		state:        state,
+		logger:       NewLogger(enableLogging),
+		collector:    probability.NewDataCollector(),
+		kdprModifier: kdprModifier,
 	}
 
 	dp.registerHandlers()
@@ -55,6 +62,16 @@ func NewDemoParserWithLogging(r io.Reader, enableLogging bool) *DemoParser {
 // GetCollector returns the probability data collector for merging in cumulative mode.
 func (d *DemoParser) GetCollector() *probability.DataCollector {
 	return d.collector
+}
+
+// currentTime returns the current game time in seconds based on the current frame.
+func (d *DemoParser) currentTime() float64 {
+	return float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
+}
+
+// timeInRound returns the elapsed time since the round started.
+func (d *DemoParser) timeInRound() float64 {
+	return d.currentTime() - d.state.RoundStartTime
 }
 
 // SetLogging enables or disables detailed parsing logs.
@@ -232,12 +249,12 @@ func (d *DemoParser) computeDerivedStats() {
 			}
 		}
 
-		p.FinalRating = rating.ComputeFinalRating(p)
+		p.FinalRating = rating.ComputeFinalRating(p, d.kdprModifier)
 
 		if p.TRoundsPlayed > 0 {
 			p.TEcoRating = rating.ComputeSideRating(
 				p.TRoundsPlayed, p.TKills, p.TDeaths, p.TDamage, p.TEcoKillValue,
-				p.TProbabilitySwing, p.TKAST, p.TMultiKills, p.TClutchRounds, p.TClutchWins)
+				p.TProbabilitySwing, p.TKAST, p.TMultiKills, p.TClutchRounds, p.TClutchWins, d.kdprModifier)
 		}
 		if p.TKills > 0 {
 			p.TManAdvantageKillsPct = float64(p.TManAdvantageKills) / float64(p.TKills)
@@ -248,7 +265,7 @@ func (d *DemoParser) computeDerivedStats() {
 		if p.CTRoundsPlayed > 0 {
 			p.CTEcoRating = rating.ComputeSideRating(
 				p.CTRoundsPlayed, p.CTKills, p.CTDeaths, p.CTDamage, p.CTEcoKillValue,
-				p.CTProbabilitySwing, p.CTKAST, p.CTMultiKills, p.CTClutchRounds, p.CTClutchWins)
+				p.CTProbabilitySwing, p.CTKAST, p.CTMultiKills, p.CTClutchRounds, p.CTClutchWins, d.kdprModifier)
 		}
 		if p.CTKills > 0 {
 			p.CTManAdvantageKillsPct = float64(p.CTManAdvantageKills) / float64(p.CTKills)

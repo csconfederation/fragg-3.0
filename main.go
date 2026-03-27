@@ -19,6 +19,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -48,6 +49,7 @@ func main() {
 	demoURL := flag.String("url", "", "URL to a single demo file (.dem or .zip) to download and parse")
 	demoDir := flag.String("demo-dir", "", "Directory for downloaded demos")
 	outputPath := flag.String("output", "stats.csv", "Output path for exported stats (CSV)")
+	useStdin := flag.Bool("stdin", false, "Read demo data from stdin (for piping demo files)")
 	flag.Parse()
 
 	cfgPath := *configPath
@@ -90,6 +92,17 @@ func main() {
 		return
 	}
 
+	// Handle stdin-based demo parsing (for demo-worker integration)
+	if *useStdin {
+		parseDemoFromStdin(cfg)
+		return
+	}
+
+	// Validate mutually exclusive options
+	if cfg.CSCCompatibility && cfg.Cumulative {
+		log.Fatal("csc_compatibility and cumulative cannot both be true. CSC compatibility mode only works with single demo parsing.")
+	}
+
 	if cfg.Cumulative {
 		if cfg.Tier == "" {
 			log.Fatal("Tier must be specified in cumulative mode (use -tier flag or set in config)")
@@ -116,7 +129,7 @@ func main() {
 			}
 			demoPath = extracted
 		}
-		parseSingleDemo(demoPath, cfg.EnableLogging, cfg.KDPRModifier, exporter)
+		parseSingleDemo(demoPath, cfg, exporter)
 		return
 	}
 
@@ -231,22 +244,26 @@ func runCumulativeMode(cfg *config.Config, tiers []string, exporter export.Expor
 
 	results := aggregator.GetResults()
 
-	if err := exporter.ExportAggregated(results); err != nil {
-		log.Fatalf("Failed to export aggregated stats: %v", err)
-	}
-
-	// Save probability data
-	rounds, kills := probCollector.GetStats()
-	if rounds > 0 {
-		probDataPath := "probability_data.json"
-		if err := probCollector.SaveToFile(probDataPath); err != nil {
-			log.Printf("Warning: Failed to save probability data: %v", err)
-		} else {
-			log.Printf("Probability data saved to %s (%d rounds, %d kills)", probDataPath, rounds, kills)
+	if cfg.GenerateFiles {
+		if err := exporter.ExportAggregated(results); err != nil {
+			log.Fatalf("Failed to export aggregated stats: %v", err)
 		}
-	}
 
-	log.Printf("\nAggregated stats for %d players across %d tiers exported successfully", len(results), len(tiers))
+		// Save probability data
+		rounds, kills := probCollector.GetStats()
+		if rounds > 0 {
+			probDataPath := "probability_data.json"
+			if err := probCollector.SaveToFile(probDataPath); err != nil {
+				log.Printf("Warning: Failed to save probability data: %v", err)
+			} else {
+				log.Printf("Probability data saved to %s (%d rounds, %d kills)", probDataPath, rounds, kills)
+			}
+		}
+
+		log.Printf("\nAggregated stats for %d players across %d tiers exported successfully", len(results), len(tiers))
+	} else {
+		log.Printf("\nProcessed %d players across %d tiers (file generation disabled)", len(results), len(tiers))
+	}
 }
 
 // parseDemosToAggregator processes multiple demos in parallel using a worker pool.
@@ -351,12 +368,13 @@ func parseSingleDemoFromURL(url string, cfg *config.Config, exporter export.Expo
 	}
 
 	log.Printf("Demo downloaded to: %s", demoPath)
-	parseSingleDemo(demoPath, cfg.EnableLogging, cfg.KDPRModifier, exporter)
+	parseSingleDemo(demoPath, cfg, exporter)
 }
 
 // parseSingleDemo parses a single demo file and exports the results.
 // This is used when the -demo flag is provided or demo_path is set in config.
-func parseSingleDemo(demoPath string, enableLogging bool, kdprModifier bool, exporter export.ExportOption) {
+// When CSCCompatibility is enabled, outputs demoScrape2-compatible JSON to stdout.
+func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.ExportOption) {
 	demo, err := os.Open(demoPath)
 	if err != nil {
 		log.Fatalf("Failed to open demo: %v", err)
@@ -366,16 +384,75 @@ func parseSingleDemo(demoPath string, enableLogging bool, kdprModifier bool, exp
 	// Use buffered reader for better I/O performance on large demo files
 	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithOptions(bufferedReader, enableLogging, kdprModifier)
+	p := parser.NewDemoParserWithOptions(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier)
 	if err := p.Parse(); err != nil {
 		log.Fatalf("Failed to parse demo: %v", err)
 	}
 
-	if err := exporter.Export(p.GetPlayers()); err != nil {
-		log.Fatalf("Failed to export stats: %v", err)
+	// CSC Compatibility mode: output demoScrape2-compatible JSON
+	if cfg.CSCCompatibility {
+		players := p.GetPlayers()
+		mapName := p.GetMapName()
+		totalRounds := getTotalRounds(players)
+		tickRate := 64 // Default CS2 tick rate
+
+		game := export.ConvertToCSCGame(players, mapName, totalRounds, tickRate)
+
+		jsonData, err := json.MarshalIndent(game, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal JSON: %v", err)
+		}
+		fmt.Println(string(jsonData))
+		return
 	}
 
-	log.Printf("Results exported successfully")
+	if cfg.GenerateFiles {
+		if err := exporter.Export(p.GetPlayers()); err != nil {
+			log.Fatalf("Failed to export stats: %v", err)
+		}
+		log.Printf("Results exported successfully")
+	} else {
+		log.Printf("Demo parsed successfully (file generation disabled)")
+	}
+}
+
+// getTotalRounds calculates the total rounds played from player stats.
+func getTotalRounds(players map[uint64]*model.PlayerStats) int {
+	var maxRounds int
+	for _, p := range players {
+		if p.RoundsPlayed > maxRounds {
+			maxRounds = p.RoundsPlayed
+		}
+	}
+	return maxRounds
+}
+
+// parseDemoFromStdin reads demo data from stdin and outputs CSC-compatible JSON.
+// This is designed for integration with demo-worker, which can pipe demo data directly.
+func parseDemoFromStdin(cfg *config.Config) {
+	// Use buffered reader for stdin
+	bufferedReader := bufio.NewReaderSize(os.Stdin, 1024*1024) // 1MB buffer
+
+	p := parser.NewDemoParserWithOptions(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier)
+	if err := p.Parse(); err != nil {
+		// Output error as JSON for demo-worker compatibility
+		fmt.Fprintf(os.Stderr, "{\"error\": \"%s\"}\n", err.Error())
+		os.Exit(1)
+	}
+
+	players := p.GetPlayers()
+	mapName := p.GetMapName()
+	totalRounds := getTotalRounds(players)
+	tickRate := 64 // Default CS2 tick rate
+
+	game := export.ConvertToCSCGame(players, mapName, totalRounds, tickRate)
+
+	jsonData, err := json.Marshal(game)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "{\"error\": \"failed to marshal JSON: %s\"}\n", err.Error())
+		os.Exit(1)
+	}
+	fmt.Println(string(jsonData))
 }
 
 // parseDemoWithLogs opens and parses a demo file, returning player stats, map name,

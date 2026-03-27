@@ -16,7 +16,7 @@ package rating
 const (
 	BaselineKPR  = 0.72 // Average kills per round
 	BaselineDPR  = 0.68 // Average deaths per round
-	BaselineADR  = 77.0 // Average damage per round
+	BaselineADR  = 75.0 // Average damage per round
 	BaselineKAST = 0.72 // KAST percentage (Kill/Assist/Survive/Trade)
 )
 

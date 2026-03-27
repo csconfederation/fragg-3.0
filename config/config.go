@@ -23,6 +23,8 @@ type Config struct {
 	DemoPath      string   `json:"demo_path"`      // Path to single demo file (single mode)
 	DemoDir       string   `json:"demo_dir"`       // Local directory for downloaded demos
 	EnableLogging bool     `json:"enable_logging"` // Enable detailed parsing logs
+	IgnoreScrims  bool     `json:"ignore_scrims"`
+	KDPRModifier  bool     `json:"kdpr_modifier"` // Enable KPR/DPR rating adjustment
 }
 
 // DefaultConfig returns a Config with sensible default values.
@@ -36,6 +38,8 @@ func DefaultConfig() *Config {
 		DemoPath:      "",
 		DemoDir:       "./demos",
 		EnableLogging: true,
+		IgnoreScrims:  false,
+		KDPRModifier:  false,
 	}
 }
 

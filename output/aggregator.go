@@ -13,6 +13,14 @@ import (
 	"github.com/ethsmith/eco-rating/rating"
 )
 
+// safeDiv returns numerator/denominator as float64, or 0 if denominator is 0.
+func safeDiv(numerator, denominator int) float64 {
+	if denominator == 0 {
+		return 0
+	}
+	return float64(numerator) / float64(denominator)
+}
+
 // MultiKillStats tracks multi-kill round counts for aggregated statistics.
 type MultiKillStats struct {
 	OneK   int `json:"1k"`
@@ -207,13 +215,23 @@ type AggregatedStats struct {
 // Aggregator collects and combines player statistics from multiple games.
 // Players are keyed by "SteamID:Tier" to allow separate tracking per tier.
 type Aggregator struct {
-	Players map[string]*AggregatedStats // Map of player key to aggregated stats
+	Players      map[string]*AggregatedStats // Map of player key to aggregated stats
+	kdprModifier bool                        // Enable KPR/DPR rating adjustment
 }
 
 // NewAggregator creates a new Aggregator with an empty player map.
 func NewAggregator() *Aggregator {
 	return &Aggregator{
-		Players: make(map[string]*AggregatedStats),
+		Players:      make(map[string]*AggregatedStats),
+		kdprModifier: false,
+	}
+}
+
+// NewAggregatorWithOptions creates a new Aggregator with configurable KPR/DPR modifier.
+func NewAggregatorWithOptions(kdprModifier bool) *Aggregator {
+	return &Aggregator{
+		Players:      make(map[string]*AggregatedStats),
+		kdprModifier: kdprModifier,
 	}
 }
 
@@ -412,44 +430,26 @@ func (a *Aggregator) Finalize() {
 			agg.FlashesThrownPerRound = float64(agg.FlashesThrown) / rounds
 			agg.FlashAssistsPerRound = float64(agg.FlashAssists) / rounds
 		}
-		if agg.RoundsWon > 0 {
-			agg.KillsPerRoundWin = float64(agg.KillsInWonRounds) / float64(agg.RoundsWon)
-			agg.DamagePerRoundWin = float64(agg.DamageInWonRounds) / float64(agg.RoundsWon)
-		}
-		if agg.RoundsLost > 0 {
-			agg.SavesPerRoundLoss = float64(agg.SavesOnLoss) / float64(agg.RoundsLost)
-		}
-		if agg.Deaths > 0 {
-			agg.TradedDeathsPct = float64(agg.TradedDeaths) / float64(agg.Deaths)
-		}
-		if agg.OpeningDeaths > 0 {
-			agg.OpeningDeathsTradedPct = float64(agg.OpeningDeathsTraded) / float64(agg.OpeningDeaths)
-		}
-		if agg.Kills > 0 {
-			agg.TradeKillsPct = float64(agg.TradeKills) / float64(agg.Kills)
-			agg.AssistedKillsPct = float64(agg.AssistedKills) / float64(agg.Kills)
-			agg.DamagePerKill = float64(agg.Damage) / float64(agg.Kills)
-			agg.AWPKillsPct = float64(agg.AWPKills) / float64(agg.Kills)
-			agg.LowBuyKillsPct = float64(agg.LowBuyKills) / float64(agg.Kills)
-			agg.DisadvantagedBuyKillsPct = float64(agg.DisadvantagedBuyKills) / float64(agg.Kills)
-			agg.HeadshotPct = float64(agg.Headshots) / float64(agg.Kills)
-			agg.ManAdvantageKillsPct = float64(agg.ManAdvantageKills) / float64(agg.Kills)
-		}
-		if agg.Deaths > 0 {
-			agg.ManDisadvantageDeathsPct = float64(agg.ManDisadvantageDeaths) / float64(agg.Deaths)
-		}
+		agg.KillsPerRoundWin = safeDiv(agg.KillsInWonRounds, agg.RoundsWon)
+		agg.DamagePerRoundWin = safeDiv(agg.DamageInWonRounds, agg.RoundsWon)
+		agg.SavesPerRoundLoss = safeDiv(agg.SavesOnLoss, agg.RoundsLost)
+		agg.TradedDeathsPct = safeDiv(agg.TradedDeaths, agg.Deaths)
+		agg.OpeningDeathsTradedPct = safeDiv(agg.OpeningDeathsTraded, agg.OpeningDeaths)
+		agg.TradeKillsPct = safeDiv(agg.TradeKills, agg.Kills)
+		agg.AssistedKillsPct = safeDiv(agg.AssistedKills, agg.Kills)
+		agg.DamagePerKill = safeDiv(agg.Damage, agg.Kills)
+		agg.AWPKillsPct = safeDiv(agg.AWPKills, agg.Kills)
+		agg.LowBuyKillsPct = safeDiv(agg.LowBuyKills, agg.Kills)
+		agg.DisadvantagedBuyKillsPct = safeDiv(agg.DisadvantagedBuyKills, agg.Kills)
+		agg.HeadshotPct = safeDiv(agg.Headshots, agg.Kills)
+		agg.ManAdvantageKillsPct = safeDiv(agg.ManAdvantageKills, agg.Kills)
+		agg.ManDisadvantageDeathsPct = safeDiv(agg.ManDisadvantageDeaths, agg.Deaths)
 		if agg.KillsWithTTK > 0 {
 			agg.AvgTimeToKill = agg.TotalTimeToKill / float64(agg.KillsWithTTK)
 		}
-		if agg.OpeningAttempts > 0 {
-			agg.OpeningSuccessPct = float64(agg.OpeningSuccesses) / float64(agg.OpeningAttempts)
-		}
-		if agg.OpeningKills > 0 {
-			agg.WinPctAfterOpeningKill = float64(agg.RoundsWonAfterOpening) / float64(agg.OpeningKills)
-		}
-		if agg.Clutch1v1Attempts > 0 {
-			agg.Clutch1v1WinPct = float64(agg.Clutch1v1Wins) / float64(agg.Clutch1v1Attempts)
-		}
+		agg.OpeningSuccessPct = safeDiv(agg.OpeningSuccesses, agg.OpeningAttempts)
+		agg.WinPctAfterOpeningKill = safeDiv(agg.RoundsWonAfterOpening, agg.OpeningKills)
+		agg.Clutch1v1WinPct = safeDiv(agg.Clutch1v1Wins, agg.Clutch1v1Attempts)
 		// Pistol round rating using centralized function
 		if agg.PistolRoundsPlayed > 0 {
 			agg.PistolRoundRating = rating.ComputePistolRoundRating(
@@ -463,14 +463,10 @@ func (a *Aggregator) Finalize() {
 				agg.TRoundsPlayed, agg.TKills, agg.TDeaths, agg.TSurvivals, agg.tMultiKills)
 			agg.TEcoRating = rating.ComputeSideRating(
 				agg.TRoundsPlayed, agg.TKills, agg.TDeaths, agg.TDamage, agg.TEcoKillValue,
-				agg.TProbabilitySwing, agg.TKAST, agg.tMultiKills, agg.TClutchRounds, agg.TClutchWins)
+				agg.TProbabilitySwing, agg.TKAST, agg.tMultiKills, agg.TClutchRounds, agg.TClutchWins, a.kdprModifier)
 		}
-		if agg.TKills > 0 {
-			agg.TManAdvantageKillsPct = float64(agg.TManAdvantageKills) / float64(agg.TKills)
-		}
-		if agg.TDeaths > 0 {
-			agg.TManDisadvantageDeathsPct = float64(agg.TManDisadvantageDeaths) / float64(agg.TDeaths)
-		}
+		agg.TManAdvantageKillsPct = safeDiv(agg.TManAdvantageKills, agg.TKills)
+		agg.TManDisadvantageDeathsPct = safeDiv(agg.TManDisadvantageDeaths, agg.TDeaths)
 
 		// CT-side ratings using centralized functions
 		if agg.CTRoundsPlayed > 0 {
@@ -478,14 +474,10 @@ func (a *Aggregator) Finalize() {
 				agg.CTRoundsPlayed, agg.CTKills, agg.CTDeaths, agg.CTSurvivals, agg.ctMultiKills)
 			agg.CTEcoRating = rating.ComputeSideRating(
 				agg.CTRoundsPlayed, agg.CTKills, agg.CTDeaths, agg.CTDamage, agg.CTEcoKillValue,
-				agg.CTProbabilitySwing, agg.CTKAST, agg.ctMultiKills, agg.CTClutchRounds, agg.CTClutchWins)
+				agg.CTProbabilitySwing, agg.CTKAST, agg.ctMultiKills, agg.CTClutchRounds, agg.CTClutchWins, a.kdprModifier)
 		}
-		if agg.CTKills > 0 {
-			agg.CTManAdvantageKillsPct = float64(agg.CTManAdvantageKills) / float64(agg.CTKills)
-		}
-		if agg.CTDeaths > 0 {
-			agg.CTManDisadvantageDeathsPct = float64(agg.CTManDisadvantageDeaths) / float64(agg.CTDeaths)
-		}
+		agg.CTManAdvantageKillsPct = safeDiv(agg.CTManAdvantageKills, agg.CTKills)
+		agg.CTManDisadvantageDeathsPct = safeDiv(agg.CTManDisadvantageDeaths, agg.CTDeaths)
 		if agg.GamesCount > 0 {
 			agg.FinalRating = agg.ratingSum / float64(agg.GamesCount)
 		}

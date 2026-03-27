@@ -155,8 +155,7 @@ func (d *DemoParser) handleBombPlanted(e events.BombPlanted) {
 
 	// Track bomb plant swing
 	if d.state.SwingTracker != nil {
-		currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-		timeInRound := currentTime - d.state.RoundStartTime
+		timeInRound := d.timeInRound()
 		plantSwing := d.state.SwingTracker.RecordBombPlant(e.Player.SteamID64, timeInRound)
 		roundStats.ProbabilitySwing += plantSwing
 		roundStats.AddSwingContribution(model.SwingContribution{
@@ -186,9 +185,7 @@ func (d *DemoParser) handleBombDefused(e events.BombDefused) {
 	roundStats := d.state.ensureRound(e.Player)
 	roundStats.DefusedBomb = true
 
-	// Calculate time in round
-	currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-	timeInRound := currentTime - d.state.RoundStartTime
+	timeInRound := d.timeInRound()
 
 	// Track bomb defuse swing
 	if d.state.SwingTracker != nil {
@@ -213,8 +210,7 @@ func (d *DemoParser) handleBombExplode() {
 	if d.state.ShouldSkipEvent() {
 		return
 	}
-	currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-	timeInRound := currentTime - d.state.RoundStartTime
+	timeInRound := d.timeInRound()
 	d.state.RoundDecided = true
 	d.state.RoundDecidedAt = timeInRound
 
@@ -301,7 +297,7 @@ func (d *DemoParser) handleFreezetimeEnd() {
 
 	d.state.IsPistolRound = rating.IsPistolRound(d.state.RoundNumber)
 
-	d.state.RoundStartTime = float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
+	d.state.RoundStartTime = d.currentTime()
 
 	for _, p := range participants {
 		if p.Team == common.TeamTerrorists {
@@ -832,9 +828,7 @@ func (d *DemoParser) handlePlayerHurt(e events.PlayerHurt) {
 
 		// Track damage for swing attribution and TTK calculation
 		if d.state.SwingTracker != nil {
-			currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-			timeInRound := currentTime - d.state.RoundStartTime
-			d.state.SwingTracker.RecordDamage(e.Attacker.SteamID64, e.Player.SteamID64, int(e.HealthDamageTaken), timeInRound)
+			d.state.SwingTracker.RecordDamage(e.Attacker.SteamID64, e.Player.SteamID64, int(e.HealthDamageTaken), d.timeInRound())
 		}
 	}
 }
@@ -857,10 +851,8 @@ func (d *DemoParser) handleRoundDecisionKill() {
 	tAlive, ctAlive := d.state.CountAlivePlayers(gs.Participants().Playing())
 
 	if tAlive == 0 || ctAlive == 0 {
-		currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-		timeInRound := currentTime - d.state.RoundStartTime
 		d.state.RoundDecided = true
-		d.state.RoundDecidedAt = timeInRound
+		d.state.RoundDecidedAt = d.timeInRound()
 	}
 }
 
@@ -904,10 +896,8 @@ func (d *DemoParser) handleRoundEnd(e events.RoundEnd) {
 // buildRoundEndContext creates the context for round end processing.
 func (d *DemoParser) buildRoundEndContext(e events.RoundEnd) *roundEndContext {
 	gs := d.parser.GameState()
-	roundEndTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-	roundDuration := roundEndTime - d.state.RoundStartTime
-	currentTime := float64(d.parser.CurrentFrame()) / float64(rating.TickRate)
-	timeRemaining := math.Max(0.0, 115.0-(currentTime-d.state.RoundStartTime))
+	roundDuration := d.timeInRound()
+	timeRemaining := math.Max(0.0, 115.0-roundDuration)
 
 	roundContext := model.NewRoundContextBuilder().
 		WithRoundNumber(d.state.RoundNumber).

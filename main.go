@@ -45,6 +45,7 @@ func main() {
 	cumulative := flag.Bool("cumulative", false, "Enable cumulative mode to fetch all demos for a tier")
 	tier := flag.String("tier", "", "Tier to filter demos (challenger, contender, elite, premier, prospect, recruit)")
 	demoPath := flag.String("demo", "", "Path to a single demo file to parse")
+	demoURL := flag.String("url", "", "URL to a single demo file (.dem or .zip) to download and parse")
 	demoDir := flag.String("demo-dir", "", "Directory for downloaded demos")
 	outputPath := flag.String("output", "stats.csv", "Output path for exported stats (CSV)")
 	flag.Parse()
@@ -83,6 +84,12 @@ func main() {
 
 	exporter := export.NewFileExportOption(*outputPath)
 
+	// Handle URL-based single demo parsing
+	if *demoURL != "" {
+		parseSingleDemoFromURL(*demoURL, cfg, exporter)
+		return
+	}
+
 	if cfg.Cumulative {
 		if cfg.Tier == "" {
 			log.Fatal("Tier must be specified in cumulative mode (use -tier flag or set in config)")
@@ -99,13 +106,24 @@ func main() {
 	}
 
 	if cfg.DemoPath != "" {
-		parseSingleDemo(cfg.DemoPath, cfg.EnableLogging, cfg.KDPRModifier, exporter)
+		demoPath := cfg.DemoPath
+		// Handle zip files - extract first
+		if strings.HasSuffix(strings.ToLower(demoPath), ".zip") {
+			dl := downloader.NewDownloader(cfg.DemoDir)
+			extracted, err := dl.Extract(demoPath)
+			if err != nil {
+				log.Fatalf("Failed to extract zip: %v", err)
+			}
+			demoPath = extracted
+		}
+		parseSingleDemo(demoPath, cfg.EnableLogging, cfg.KDPRModifier, exporter)
 		return
 	}
 
 	fmt.Println("Usage:")
 	fmt.Println("  Cumulative mode: eco-rating -cumulative -tier=contender")
 	fmt.Println("  Single demo:     eco-rating -demo=path/to/demo.dem")
+	fmt.Println("  From URL:        eco-rating -url=https://example.com/demo.zip")
 	fmt.Println("  Or set demo_path in config.json")
 	fmt.Println()
 	flag.PrintDefaults()
@@ -308,6 +326,32 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 	}
 
 	return successCount, allLogs
+}
+
+// parseSingleDemoFromURL downloads a demo from a URL and parses it.
+// Supports both .dem files and .zip archives containing .dem files.
+func parseSingleDemoFromURL(url string, cfg *config.Config, exporter export.ExportOption) {
+	log.Printf("Downloading demo from URL: %s", url)
+
+	dl := downloader.NewDownloader(cfg.DemoDir)
+
+	var demoPath string
+	var err error
+
+	if strings.HasSuffix(strings.ToLower(url), ".zip") {
+		// Handle zip file
+		demoPath, err = dl.DownloadAndExtract(url)
+	} else {
+		// Handle direct .dem file
+		demoPath, err = dl.DownloadDem(url)
+	}
+
+	if err != nil {
+		log.Fatalf("Failed to download demo: %v", err)
+	}
+
+	log.Printf("Demo downloaded to: %s", demoPath)
+	parseSingleDemo(demoPath, cfg.EnableLogging, cfg.KDPRModifier, exporter)
 }
 
 // parseSingleDemo parses a single demo file and exports the results.

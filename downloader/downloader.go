@@ -147,3 +147,50 @@ func (d *Downloader) DownloadAndExtract(url string) (string, error) {
 
 	return demoPath, nil
 }
+
+// DownloadDem downloads a .dem file directly (not zipped) from a URL.
+// If the file already exists locally, it skips the download.
+func (d *Downloader) DownloadDem(url string) (string, error) {
+	if err := os.MkdirAll(d.OutputDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	parts := strings.Split(url, "/")
+	filename := parts[len(parts)-1]
+	demoPath := filepath.Join(d.OutputDir, filename)
+
+	// Check if already downloaded
+	if info, err := os.Stat(demoPath); err == nil {
+		log.Printf("    Demo already exists: %s (%.2f MB)", filename, float64(info.Size())/(1024*1024))
+		return demoPath, nil
+	}
+
+	log.Printf("    Downloading: %s", filename)
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to download %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code %d for %s", resp.StatusCode, url)
+	}
+
+	if resp.ContentLength > 0 {
+		log.Printf("    Size: %.2f MB", float64(resp.ContentLength)/(1024*1024))
+	}
+
+	out, err := os.Create(demoPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file %s: %w", demoPath, err)
+	}
+	defer out.Close()
+
+	written, err := io.Copy(out, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file %s: %w", demoPath, err)
+	}
+
+	log.Printf("    Downloaded: %.2f MB", float64(written)/(1024*1024))
+	return demoPath, nil
+}

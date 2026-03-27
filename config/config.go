@@ -16,32 +16,36 @@ import (
 // Config holds all application configuration settings.
 // These can be set via JSON config file or command-line flags.
 type Config struct {
-	Cumulative    bool     `json:"cumulative"`     // Enable batch processing mode
-	Tier          string   `json:"tier"`           // Competitive tier filter (comma-separated for multiple)
-	BaseURL       string   `json:"base_url"`       // Cloud bucket base URL
-	Prefixes      []string `json:"prefixes"`       // Bucket prefixes for demo files (multiple paths)
-	DemoPath      string   `json:"demo_path"`      // Path to single demo file (single mode)
-	DemoDir       string   `json:"demo_dir"`       // Local directory for downloaded demos
-	EnableLogging bool     `json:"enable_logging"` // Enable detailed parsing logs
-	IgnoreScrims  bool     `json:"ignore_scrims"`
-	KDPRModifier  bool     `json:"kdpr_modifier"` // Enable KPR/DPR rating adjustment
-	Workers       int      `json:"workers"`       // Number of parallel parsing workers (0 = auto)
+	Cumulative       bool     `json:"cumulative"`     // Enable batch processing mode
+	Tier             string   `json:"tier"`           // Competitive tier filter (comma-separated for multiple)
+	BaseURL          string   `json:"base_url"`       // Cloud bucket base URL
+	Prefixes         []string `json:"prefixes"`       // Bucket prefixes for demo files (multiple paths)
+	DemoPath         string   `json:"demo_path"`      // Path to single demo file (single mode)
+	DemoDir          string   `json:"demo_dir"`       // Local directory for downloaded demos
+	EnableLogging    bool     `json:"enable_logging"` // Enable detailed parsing logs
+	IgnoreScrims     bool     `json:"ignore_scrims"`
+	KDPRModifier     bool     `json:"kdpr_modifier"`     // Enable KPR/DPR rating adjustment
+	Workers          int      `json:"workers"`           // Number of parallel parsing workers (0 = auto)
+	GenerateFiles    bool     `json:"generate_files"`    // Generate stats.csv and probability_data.json files
+	CSCCompatibility bool     `json:"csc_compatibility"` // Output demoScrape2-compatible JSON (mutually exclusive with cumulative)
 }
 
 // DefaultConfig returns a Config with sensible default values.
 // The defaults point to the CSC demo bucket for season 19 combines.
 func DefaultConfig() *Config {
 	return &Config{
-		Cumulative:    false,
-		Tier:          "",
-		BaseURL:       "https://cscdemos.nyc3.digitaloceanspaces.com/",
-		Prefixes:      []string{"s19/Combines/"},
-		DemoPath:      "",
-		DemoDir:       "./demos",
-		EnableLogging: true,
-		IgnoreScrims:  false,
-		KDPRModifier:  false,
-		Workers:       8, // Number of parallel workers (0 = use CPU count)
+		Cumulative:       false,
+		Tier:             "",
+		BaseURL:          "https://cscdemos.nyc3.digitaloceanspaces.com/",
+		Prefixes:         []string{"s19/Combines/"},
+		DemoPath:         "",
+		DemoDir:          "./demos",
+		EnableLogging:    true,
+		IgnoreScrims:     false,
+		KDPRModifier:     false,
+		Workers:          8,     // Number of parallel workers (0 = use CPU count)
+		GenerateFiles:    true,  // Generate output files by default
+		CSCCompatibility: false, // Disabled by default
 	}
 }
 

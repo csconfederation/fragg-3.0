@@ -168,6 +168,35 @@ type AggregatedStats struct {
 	CTEcoRating                float64 `json:"ct_eco_rating"`
 	tMultiKills                [6]int
 	ctMultiKills               [6]int
+
+	// demoScrape2 compatibility stats
+	Clutch1v2Attempts int `json:"clutch_1v2_attempts"`
+	Clutch1v2Wins     int `json:"clutch_1v2_wins"`
+	Clutch1v3Attempts int `json:"clutch_1v3_attempts"`
+	Clutch1v3Wins     int `json:"clutch_1v3_wins"`
+	Clutch1v4Attempts int `json:"clutch_1v4_attempts"`
+	Clutch1v4Wins     int `json:"clutch_1v4_wins"`
+	Clutch1v5Attempts int `json:"clutch_1v5_attempts"`
+	Clutch1v5Wins     int `json:"clutch_1v5_wins"`
+
+	SmokesThrown     int `json:"smokes_thrown"`
+	HEsThrown        int `json:"hes_thrown"`
+	MolotovsThrown   int `json:"molotovs_thrown"`
+	TotalNadesThrown int `json:"total_nades_thrown"`
+	HEDamage         int `json:"he_damage"`
+	FireDamage       int `json:"fire_damage"`
+
+	DamageTaken     int     `json:"damage_taken"`
+	AvgTimeToDeath  float64 `json:"avg_time_to_death"`
+	totalDeathTime  float64
+	deathTimeRounds int
+
+	TOpeningKills   int `json:"t_opening_kills"`
+	TOpeningDeaths  int `json:"t_opening_deaths"`
+	CTOpeningKills  int `json:"ct_opening_kills"`
+	CTOpeningDeaths int `json:"ct_opening_deaths"`
+
+	EnemiesFlashed             int                `json:"enemies_flashed"`
 	HLTVRating                 float64            `json:"hltv_rating"`
 	FinalRating                float64            `json:"final_rating"`
 	RoundsWithKillPct          float64            `json:"rounds_with_kill_pct"`
@@ -360,6 +389,31 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 		for i := 0; i < 6; i++ {
 			agg.ctMultiKills[i] += p.CTMultiKills[i]
 		}
+
+		// demoScrape2 compatibility stats
+		agg.Clutch1v2Attempts += p.Clutch1v2Attempts
+		agg.Clutch1v2Wins += p.Clutch1v2Wins
+		agg.Clutch1v3Attempts += p.Clutch1v3Attempts
+		agg.Clutch1v3Wins += p.Clutch1v3Wins
+		agg.Clutch1v4Attempts += p.Clutch1v4Attempts
+		agg.Clutch1v4Wins += p.Clutch1v4Wins
+		agg.Clutch1v5Attempts += p.Clutch1v5Attempts
+		agg.Clutch1v5Wins += p.Clutch1v5Wins
+		agg.SmokesThrown += p.SmokesThrown
+		agg.HEsThrown += p.HEsThrown
+		agg.MolotovsThrown += p.MolotovsThrown
+		agg.TotalNadesThrown += p.TotalNadesThrown
+		agg.HEDamage += p.HEDamage
+		agg.FireDamage += p.FireDamage
+		agg.DamageTaken += p.DamageTaken
+		agg.totalDeathTime += p.TotalDeathTime
+		agg.deathTimeRounds += p.DeathTimeRounds
+		agg.TOpeningKills += p.TOpeningKills
+		agg.TOpeningDeaths += p.TOpeningDeaths
+		agg.CTOpeningKills += p.CTOpeningKills
+		agg.CTOpeningDeaths += p.CTOpeningDeaths
+		agg.EnemiesFlashed += p.EnemiesFlashed
+
 		agg.ratingSum += p.FinalRating
 		agg.hltvRatingSum += p.HLTVRating
 		agg.pistolRatingSum += p.PistolRoundRating
@@ -446,6 +500,10 @@ func (a *Aggregator) Finalize() {
 		agg.ManDisadvantageDeathsPct = safeDiv(agg.ManDisadvantageDeaths, agg.Deaths)
 		if agg.KillsWithTTK > 0 {
 			agg.AvgTimeToKill = agg.TotalTimeToKill / float64(agg.KillsWithTTK)
+		}
+		// Calculate Average Time to Death
+		if agg.deathTimeRounds > 0 {
+			agg.AvgTimeToDeath = agg.totalDeathTime / float64(agg.deathTimeRounds)
 		}
 		agg.OpeningSuccessPct = safeDiv(agg.OpeningSuccesses, agg.OpeningAttempts)
 		agg.WinPctAfterOpeningKill = safeDiv(agg.RoundsWonAfterOpening, agg.OpeningKills)

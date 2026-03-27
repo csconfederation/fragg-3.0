@@ -163,7 +163,48 @@ type PlayerStats struct {
 	CTRating                   float64 `json:"ct_rating"`
 	CTEcoRating                float64 `json:"ct_eco_rating"`
 
-	FinalRating                float64 `json:"final_rating"`
+	FinalRating float64 `json:"final_rating"`
+
+	// Clutch breakdown by opponent count (demoScrape2 compatibility)
+	Clutch1v2Attempts int `json:"clutch_1v2_attempts"`
+	Clutch1v2Wins     int `json:"clutch_1v2_wins"`
+	Clutch1v3Attempts int `json:"clutch_1v3_attempts"`
+	Clutch1v3Wins     int `json:"clutch_1v3_wins"`
+	Clutch1v4Attempts int `json:"clutch_1v4_attempts"`
+	Clutch1v4Wins     int `json:"clutch_1v4_wins"`
+	Clutch1v5Attempts int `json:"clutch_1v5_attempts"`
+	Clutch1v5Wins     int `json:"clutch_1v5_wins"`
+
+	// Utility tracking (demoScrape2 compatibility)
+	SmokesThrown     int `json:"smokes_thrown"`
+	HEsThrown        int `json:"hes_thrown"`
+	MolotovsThrown   int `json:"molotovs_thrown"`
+	TotalNadesThrown int `json:"total_nades_thrown"`
+	HEDamage         int `json:"he_damage"`
+	FireDamage       int `json:"fire_damage"`
+
+	// Damage tracking (demoScrape2 compatibility)
+	DamageTaken    int     `json:"damage_taken"`
+	DamagePerRound float64 `json:"damage_per_round"` // Same as ADR but explicit
+
+	// Average Time to Death - derived from TimeAlivePerRound
+	// ATD = average time survived in rounds where player died
+	TotalDeathTime  float64 `json:"-"`
+	DeathTimeRounds int     `json:"-"`
+	AvgTimeToDeath  float64 `json:"avg_time_to_death"`
+
+	// Side-specific opening duels (demoScrape2 compatibility)
+	TOpeningKills   int `json:"t_opening_kills"`
+	TOpeningDeaths  int `json:"t_opening_deaths"`
+	CTOpeningKills  int `json:"ct_opening_kills"`
+	CTOpeningDeaths int `json:"ct_opening_deaths"`
+
+	// Round Win Shares (RWS) - contribution to round wins
+	RoundWinShares float64 `json:"round_win_shares"`
+
+	// Enemies flashed count (separate from flash assists)
+	EnemiesFlashed int `json:"enemies_flashed"`
+
 	RoundsWithKillPct          float64 `json:"rounds_with_kill_pct"`
 	KillsPerRoundWin           float64 `json:"kills_per_round_win"`
 	RoundsWithMultiKillPct     float64 `json:"rounds_with_multi_kill_pct"`

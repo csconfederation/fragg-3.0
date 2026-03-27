@@ -246,10 +246,12 @@ func (d *DemoParser) handlePlayerFlashed(e events.PlayerFlashed) {
 
 	if e.Attacker != nil && e.Player != nil {
 		roundStats := d.state.ensureRound(e.Attacker)
+		player := d.state.ensurePlayer(e.Attacker)
 		flashDuration := e.FlashDuration().Seconds()
 		if e.Attacker.Team != e.Player.Team {
 			roundStats.FlashAssists++
 			roundStats.EnemyFlashDuration += flashDuration
+			player.EnemiesFlashed++
 
 			// Track flash for swing attribution
 			if d.state.SwingTracker != nil {
@@ -262,17 +264,30 @@ func (d *DemoParser) handlePlayerFlashed(e events.PlayerFlashed) {
 	}
 }
 
-// handleGrenadeThrow tracks flash grenade throws.
+// handleGrenadeThrow tracks all grenade throws.
 func (d *DemoParser) handleGrenadeThrow(e events.GrenadeProjectileThrow) {
 	if d.state.ShouldSkipEvent() {
 		return
 	}
 
-	if e.Projectile != nil && e.Projectile.Thrower != nil {
-		if e.Projectile.WeaponInstance != nil && e.Projectile.WeaponInstance.Type == common.EqFlash {
-			roundStats := d.state.ensureRound(e.Projectile.Thrower)
+	if e.Projectile != nil && e.Projectile.Thrower != nil && e.Projectile.WeaponInstance != nil {
+		roundStats := d.state.ensureRound(e.Projectile.Thrower)
+		player := d.state.ensurePlayer(e.Projectile.Thrower)
+
+		switch e.Projectile.WeaponInstance.Type {
+		case common.EqFlash:
 			roundStats.FlashesThrown++
+		case common.EqSmoke:
+			roundStats.SmokesThrown++
+			player.SmokesThrown++
+		case common.EqHE:
+			roundStats.HEsThrown++
+			player.HEsThrown++
+		case common.EqMolotov, common.EqIncendiary:
+			roundStats.MolotovsThrown++
+			player.MolotovsThrown++
 		}
+		player.TotalNadesThrown++
 	}
 }
 
@@ -466,6 +481,10 @@ func (d *DemoParser) processVictimDeath(ctx *killContext) {
 	victim.Deaths++
 	victimRound := d.state.ensureRound(ctx.victim)
 	victimRound.DeathTime = ctx.timeInRound
+
+	// Check if this death puts a teammate into a clutch situation
+	// We need to check BEFORE the victim is marked dead in the game state
+	d.checkClutchEntry(ctx)
 
 	for _, weapon := range ctx.victim.Weapons() {
 		if weapon.Type == common.EqAWP {
@@ -661,6 +680,13 @@ func (d *DemoParser) processOpeningKill(ctx *killContext) {
 	round.EntryFragger = true
 	round.InvolvedInOpening = true
 
+	// Track side-specific opening kills
+	if ctx.attacker.Team == common.TeamTerrorists {
+		attacker.TOpeningKills++
+	} else if ctx.attacker.Team == common.TeamCounterTerrorists {
+		attacker.CTOpeningKills++
+	}
+
 	if ctx.event.Weapon != nil && ctx.event.Weapon.Type == common.EqAWP {
 		round.AWPOpeningKill = true
 		attacker.AWPOpeningKills++
@@ -670,6 +696,13 @@ func (d *DemoParser) processOpeningKill(ctx *killContext) {
 	victim.OpeningAttempts++
 	victimRound.OpeningDeath = true
 	victimRound.InvolvedInOpening = true
+
+	// Track side-specific opening deaths
+	if ctx.victim.Team == common.TeamTerrorists {
+		victim.TOpeningDeaths++
+	} else if ctx.victim.Team == common.TeamCounterTerrorists {
+		victim.CTOpeningDeaths++
+	}
 
 	d.state.RoundHasKill = true
 	d.logger.LogOpeningKill(d.state.RoundNumber, ctx.attacker.Name, ctx.victim.Name)
@@ -812,23 +845,37 @@ func (d *DemoParser) handlePlayerHurt(e events.PlayerHurt) {
 		return
 	}
 
+	dmg := int(e.HealthDamageTaken)
+
 	if e.Attacker.Team != e.Player.Team {
 		ps := d.state.ensurePlayer(e.Attacker)
-		ps.Damage += int(e.HealthDamageTaken)
+		ps.Damage += dmg
 
 		roundStats := d.state.ensureRound(e.Attacker)
-		roundStats.Damage += int(e.HealthDamageTaken)
+		roundStats.Damage += dmg
+
+		// Track damage taken by victim
+		victim := d.state.ensurePlayer(e.Player)
+		victim.DamageTaken += dmg
+		victimRound := d.state.ensureRound(e.Player)
+		victimRound.DamageTaken += dmg
 
 		if e.Weapon != nil {
 			switch e.Weapon.Type {
-			case common.EqHE, common.EqMolotov, common.EqIncendiary:
-				roundStats.UtilityDamage += int(e.HealthDamageTaken)
+			case common.EqHE:
+				roundStats.UtilityDamage += dmg
+				roundStats.HEDamage += dmg
+				ps.HEDamage += dmg
+			case common.EqMolotov, common.EqIncendiary:
+				roundStats.UtilityDamage += dmg
+				roundStats.FireDamage += dmg
+				ps.FireDamage += dmg
 			}
 		}
 
 		// Track damage for swing attribution and TTK calculation
 		if d.state.SwingTracker != nil {
-			d.state.SwingTracker.RecordDamage(e.Attacker.SteamID64, e.Player.SteamID64, int(e.HealthDamageTaken), d.timeInRound())
+			d.state.SwingTracker.RecordDamage(e.Attacker.SteamID64, e.Player.SteamID64, dmg, d.timeInRound())
 		}
 	}
 }
@@ -970,25 +1017,32 @@ func (d *DemoParser) processSurvivalStats(ctx *roundEndContext) {
 		} else if round.DeathTime > 0 {
 			round.TimeAlive = round.DeathTime
 			ps.TotalTimeAlive += round.DeathTime
+
+			// Track time to death for ATD calculation
+			ps.TotalDeathTime += round.DeathTime
+			ps.DeathTimeRounds++
 		}
 	}
 }
 
 // processClutchDetection detects and records clutch situations.
+// Uses ClutchEnteredSize which was set when the player entered the clutch during the round.
 func (d *DemoParser) processClutchDetection(ctx *roundEndContext) {
 	for _, p := range ctx.gs.Participants().Playing() {
 		round := d.state.ensureRound(p)
 		ps := d.state.ensurePlayer(p)
 
-		aliveTeammates, aliveEnemies := d.countAliveByTeam(ctx.gs.Participants().Playing(), p.Team)
+		aliveTeammates, _ := d.countAliveByTeam(ctx.gs.Participants().Playing(), p.Team)
 
 		if p.IsAlive() && aliveTeammates == 1 {
 			ps.LastAliveRounds++
 			round.WasLastAlive = true
+		}
 
-			if aliveEnemies > 0 {
-				d.recordClutchAttempt(ps, round, aliveEnemies)
-			}
+		// Check if player entered a clutch situation during this round
+		// ClutchEnteredSize is set when a teammate dies and this player becomes last alive
+		if round.ClutchEnteredSize > 0 {
+			d.recordClutchAttempt(ps, round, round.ClutchEnteredSize)
 		}
 
 		if p.IsAlive() && !round.TeamWon {
@@ -1011,6 +1065,48 @@ func (d *DemoParser) countAliveByTeam(participants []*common.Player, team common
 	return teammates, enemies
 }
 
+// checkClutchEntry detects when a player enters a clutch situation due to a teammate dying.
+// This is called when a player dies, to check if their death puts a teammate into a 1vX.
+func (d *DemoParser) checkClutchEntry(ctx *killContext) {
+	if ctx.victim == nil {
+		return
+	}
+
+	gs := d.parser.GameState()
+	participants := gs.Participants().Playing()
+
+	// Count alive players on victim's team (excluding the victim who just died)
+	// and alive enemies
+	var aliveTeammates int
+	var aliveEnemies int
+	var lastAliveTeammate *common.Player
+
+	for _, p := range participants {
+		if p.SteamID64 == ctx.victim.SteamID64 {
+			continue // Skip the victim
+		}
+		if !p.IsAlive() {
+			continue
+		}
+		if p.Team == ctx.victim.Team {
+			aliveTeammates++
+			lastAliveTeammate = p
+		} else {
+			aliveEnemies++
+		}
+	}
+
+	// If exactly one teammate is left alive and there are enemies, they're entering a clutch
+	if aliveTeammates == 1 && aliveEnemies > 0 && lastAliveTeammate != nil {
+		clutcherRound := d.state.ensureRound(lastAliveTeammate)
+		// Only record if they haven't already entered a clutch this round
+		// (use the highest enemy count - first entry into clutch)
+		if clutcherRound.ClutchEnteredSize == 0 {
+			clutcherRound.ClutchEnteredSize = aliveEnemies
+		}
+	}
+}
+
 // recordClutchAttempt records a clutch attempt and its outcome.
 func (d *DemoParser) recordClutchAttempt(ps *model.PlayerStats, round *model.RoundStats, aliveEnemies int) {
 	round.ClutchAttempt = true
@@ -1018,10 +1114,32 @@ func (d *DemoParser) recordClutchAttempt(ps *model.PlayerStats, round *model.Rou
 	round.ClutchKills = round.Kills
 	ps.ClutchRounds++
 
-	if aliveEnemies == 1 {
+	// Track clutch attempts by size
+	switch aliveEnemies {
+	case 1:
 		ps.Clutch1v1Attempts++
 		if round.TeamWon {
 			ps.Clutch1v1Wins++
+		}
+	case 2:
+		ps.Clutch1v2Attempts++
+		if round.TeamWon {
+			ps.Clutch1v2Wins++
+		}
+	case 3:
+		ps.Clutch1v3Attempts++
+		if round.TeamWon {
+			ps.Clutch1v3Wins++
+		}
+	case 4:
+		ps.Clutch1v4Attempts++
+		if round.TeamWon {
+			ps.Clutch1v4Wins++
+		}
+	case 5:
+		ps.Clutch1v5Attempts++
+		if round.TeamWon {
+			ps.Clutch1v5Wins++
 		}
 	}
 

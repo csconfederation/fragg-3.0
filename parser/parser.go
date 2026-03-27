@@ -227,6 +227,16 @@ func (d *DemoParser) computeDerivedStats() {
 			p.Clutch1v1WinPct = float64(p.Clutch1v1Wins) / float64(p.Clutch1v1Attempts)
 		}
 
+		// Calculate Average Time to Death (ATD)
+		if p.DeathTimeRounds > 0 {
+			p.AvgTimeToDeath = p.TotalDeathTime / float64(p.DeathTimeRounds)
+		}
+
+		// Calculate DamagePerRound (same as ADR but explicit field)
+		if p.RoundsPlayed > 0 {
+			p.DamagePerRound = float64(p.Damage) / float64(p.RoundsPlayed)
+		}
+
 		p.MultiKills.OneK = p.MultiKillsRaw[1]
 		p.MultiKills.TwoK = p.MultiKillsRaw[2]
 		p.MultiKills.ThreeK = p.MultiKillsRaw[3]

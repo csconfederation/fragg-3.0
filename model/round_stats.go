@@ -47,6 +47,7 @@ type RoundStats struct {
 	ClutchAttempt      bool
 	ClutchWon          bool
 	ClutchSize         int
+	ClutchEnteredSize  int // Number of enemies when player entered clutch (0 = not in clutch)
 	SavedWeapons       bool
 	EcoKill            bool
 	AntiEcoKill        bool
@@ -79,6 +80,16 @@ type RoundStats struct {
 	LostAWP            bool
 	IsPistolRound      bool
 	PlayerSide         string
+
+	// Utility tracking per round (demoScrape2 compatibility)
+	SmokesThrown   int
+	HEsThrown      int
+	MolotovsThrown int
+	HEDamage       int
+	FireDamage     int
+
+	// Damage taken this round
+	DamageTaken int
 
 	// Probability-based swing tracking (new for v3.0)
 	ProbabilitySwing   float64             // Win probability delta contribution

@@ -26,7 +26,7 @@ import (
 type DemoParser struct {
 	parser       demoinfocs.Parser
 	state        *MatchState
-	logger       *Logger
+	logger       ParserLogger
 	collector    *probability.DataCollector
 	kdprModifier bool
 }

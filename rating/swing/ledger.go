@@ -34,7 +34,6 @@ const (
 	SwingEventBombPlant
 	SwingEventBombDefuse
 	SwingEventResidual
-	SwingEventTradeReallocation
 	SwingEventExitFrag
 )
 
@@ -139,32 +138,6 @@ func (l *RoundSwingLedger) PlayerTotals() map[uint64]float64 {
 		out[id] = v
 	}
 	return out
-}
-
-// PlayerPositiveSwing returns positive swing credited to a player so far.
-func (l *RoundSwingLedger) PlayerPositiveSwing(steamID uint64) float64 {
-	total := 0.0
-	for _, event := range l.Events {
-		for _, alloc := range event.PositiveAlloc {
-			if alloc.SteamID == steamID && alloc.Amount > 0 {
-				total += alloc.Amount
-			}
-		}
-	}
-	return total
-}
-
-// PlayerNegativeSwing returns absolute negative swing debited from a player so far.
-func (l *RoundSwingLedger) PlayerNegativeSwing(steamID uint64) float64 {
-	total := 0.0
-	for _, event := range l.Events {
-		for _, alloc := range event.NegativeAlloc {
-			if alloc.SteamID == steamID && alloc.Amount < 0 {
-				total += -alloc.Amount
-			}
-		}
-	}
-	return total
 }
 
 // ValidateRoundSwingLedger checks that player swing sums to approximately zero.

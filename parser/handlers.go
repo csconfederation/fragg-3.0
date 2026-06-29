@@ -11,7 +11,6 @@ package parser
 import (
 	"github.com/ethsmith/eco-rating/model"
 	"github.com/ethsmith/eco-rating/rating"
-	"github.com/ethsmith/eco-rating/rating/probability"
 	"github.com/ethsmith/eco-rating/rating/swing"
 	"math"
 
@@ -46,34 +45,12 @@ func (d *DemoParser) applyLedgerAllocations(allocs []swing.PlayerSwingAllocation
 			continue
 		}
 		roundStats.ProbabilitySwing += alloc.Amount
-		d.updateSwingBreakdown(roundStats, alloc)
 		roundStats.AddSwingContribution(model.SwingContribution{
 			Type:        string(alloc.Reason),
 			Amount:      alloc.Amount,
 			TimeInRound: timeInRound,
 			Opponent:    opponent,
 		})
-	}
-}
-
-func (d *DemoParser) updateSwingBreakdown(roundStats *model.RoundStats, alloc swing.PlayerSwingAllocation) {
-	switch alloc.Reason {
-	case swing.SwingReasonKillFinalHit, swing.SwingReasonKillDamageShare, swing.SwingReasonVictimDeath:
-		if alloc.Amount >= 0 {
-			roundStats.KillSwing += alloc.Amount
-		} else {
-			roundStats.DeathSwing += alloc.Amount
-		}
-	case swing.SwingReasonFlashAssist:
-		roundStats.AssistSwing += alloc.Amount
-	case swing.SwingReasonBombPlant, swing.SwingReasonPlantSupport, swing.SwingReasonBombDefuse, swing.SwingReasonDefuseSupport:
-		roundStats.ObjectiveSwing += alloc.Amount
-	case swing.SwingReasonRoundResidualWin, swing.SwingReasonRoundResidualLoss:
-		roundStats.ResidualSwing += alloc.Amount
-	case swing.SwingReasonExitFragIgnored:
-		roundStats.ExitFragSwingIgnored += alloc.Amount
-	case swing.SwingReasonSurvivalCredit:
-		roundStats.AssistSwing += alloc.Amount
 	}
 }
 
@@ -186,7 +163,6 @@ func (d *DemoParser) handleRoundStart() {
 	d.state.RoundDecided = false
 	d.state.RoundDecidedAt = 0
 	d.state.BombPlanted = false
-	d.state.RoundStartState = nil
 
 	// Clear any pending probability snapshots from skipped/aborted rounds
 	if d.collector != nil {
@@ -288,11 +264,6 @@ func (d *DemoParser) handleBombExplode() {
 		gs := d.parser.GameState()
 		tAlive, ctAlive := d.state.CountAlivePlayers(gs.Participants().Playing())
 		d.collector.RecordStateSnapshot(tAlive, ctAlive, true) // bomb is planted
-	}
-
-	// Track bomb explode event
-	if d.state.SwingTracker != nil {
-		d.state.SwingTracker.RecordBombExplode(timeInRound)
 	}
 }
 
@@ -408,7 +379,6 @@ func (d *DemoParser) handleFreezetimeEnd() {
 		d.state.ensurePlayer(p)
 		roundStats := d.state.ensureRound(p)
 		roundStats.IsPistolRound = d.state.IsPistolRound
-		roundStats.EquipmentValue = float64(p.EquipmentValueCurrent())
 
 		if p.Team == common.TeamTerrorists {
 			roundStats.PlayerSide = "T"
@@ -443,11 +413,6 @@ func (d *DemoParser) handleFreezetimeEnd() {
 			ctAvgEquip = float64(ctEquipTotal) / float64(ctAlive)
 		}
 		d.state.SwingTracker.SetEconomyFromValues(tAvgEquip, ctAvgEquip)
-
-		// Store initial state for end-of-round calculation
-		d.state.RoundStartState = probability.NewRoundState(tAlive, ctAlive, d.state.MapName)
-		d.state.RoundStartState.TEconomy = probability.CategorizeEquipment(tAvgEquip)
-		d.state.RoundStartState.CTEconomy = probability.CategorizeEquipment(ctAvgEquip)
 	}
 }
 
@@ -963,7 +928,6 @@ type roundEndContext struct {
 	winnerTeam    common.Team
 	roundDuration float64
 	timeRemaining float64
-	roundContext  *model.RoundContext
 }
 
 // handleRoundEnd processes the end of a round, updating all player statistics.
@@ -994,23 +958,11 @@ func (d *DemoParser) buildRoundEndContext(e events.RoundEnd) *roundEndContext {
 	roundDuration := d.timeInRound()
 	timeRemaining := math.Max(0.0, 115.0-roundDuration)
 
-	roundContext := model.NewRoundContextBuilder().
-		WithRoundNumber(d.state.RoundNumber).
-		WithScores(d.state.TeamScore, d.state.EnemyScore).
-		WithRoundType(determineRoundType(d.state.RoundNumber)).
-		WithTimeRemaining(timeRemaining).
-		WithOvertime(d.state.RoundNumber > 30).
-		WithMapSide(d.state.CurrentSide).
-		WithRoundDecision(d.state.RoundDecided, d.state.RoundDecidedAt).
-		CalculateImportance().
-		BuildFromRoundStats(d.state.Round)
-
 	return &roundEndContext{
 		gs:            gs,
 		winnerTeam:    e.Winner,
 		roundDuration: roundDuration,
 		timeRemaining: timeRemaining,
-		roundContext:  roundContext,
 	}
 }
 
@@ -1298,27 +1250,4 @@ func (d *DemoParser) recordRoundEndProbability(ctx *roundEndContext) {
 	}
 
 	d.collector.RecordRoundEnd(tAlive, ctAlive, d.state.BombPlanted, ctx.winnerTeam, d.state.MapName)
-}
-
-// determineRoundType categorizes a round as pistol, eco, force, or full buy
-// based on the round number. Uses MR12 format constants.
-func determineRoundType(roundNumber int) string {
-	if rating.IsPistolRound(roundNumber) {
-		return "pistol"
-	}
-
-	// Eco rounds: typically rounds 2-3 after pistol (first half) and 14-15 (second half)
-	isFirstHalfEco := roundNumber >= 2 && roundNumber <= 3
-	isSecondHalfEco := roundNumber >= rating.SecondHalfPistolRound+1 && roundNumber <= rating.SecondHalfPistolRound+2
-
-	if isFirstHalfEco || isSecondHalfEco {
-		return "eco"
-	}
-
-	// Force buy rounds (simplified heuristic)
-	if roundNumber%3 == 0 {
-		return "force"
-	}
-
-	return "full"
 }

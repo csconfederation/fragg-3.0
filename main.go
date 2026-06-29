@@ -286,7 +286,7 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				players, mapName, logs, collector, err := parseDemoWithLogs(job.Path, cfg.EnableLogging, cfg.KDPRModifier)
+				players, mapName, logs, collector, err := parseDemoWithLogs(job.Path, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
 				// Determine tier from demo filename: team_ prefix = scrim, otherwise = regulation
 				demoTier := tier
 				if strings.Contains(strings.ToLower(job.Key), "team_") {
@@ -458,7 +458,7 @@ func parseDemoFromStdin(cfg *config.Config) {
 
 // parseDemoWithLogs opens and parses a demo file, returning player stats, map name,
 // log output, probability collector, and any error. This is the core parsing function used by both modes.
-func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool) (map[uint64]*model.PlayerStats, string, string, *probability.DataCollector, error) {
+func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool, swingCfg swing.Config) (map[uint64]*model.PlayerStats, string, string, *probability.DataCollector, error) {
 	demo, err := os.Open(demoPath)
 	if err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to open demo: %w", err)
@@ -468,7 +468,7 @@ func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool) (
 	// Use buffered reader for better I/O performance on large demo files (280-530MB)
 	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithSwingConfig(bufferedReader, enableLogging, kdprModifier, swing.DefaultConfig())
+	p := parser.NewDemoParserWithSwingConfig(bufferedReader, enableLogging, kdprModifier, swingCfg)
 	if err := p.Parse(); err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to parse demo: %w", err)
 	}

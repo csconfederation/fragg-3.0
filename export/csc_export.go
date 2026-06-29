@@ -167,7 +167,7 @@ func convertPlayerStats(p *model.PlayerStats) *CSCPlayerStats {
 		// Advanced metrics
 		Wlp: p.ProbabilitySwing,
 		Mip: p.ProbabilitySwing,
-		Rws: p.RoundWinShares,
+		Rws: 0,
 		Eac: p.AssistedKills,
 		Rwk: p.RoundsWithKill,
 

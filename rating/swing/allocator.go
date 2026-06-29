@@ -115,7 +115,7 @@ func (a *PoolAllocator) AllocateKillEvent(
 	event.PositiveAlloc = positiveAllocs
 	event.NegativeAlloc = negativeAllocs
 
-	result := a.buildKillSwingResult(kill, rawDelta, positiveAllocs, negativeAllocs, killerEcoWeight)
+	result := a.buildKillSwingResult(rawDelta, killerEcoWeight)
 	return event, result
 }
 
@@ -275,34 +275,11 @@ func (a *PoolAllocator) victimEconomyWeight(duelWinRate float64) float64 {
 	return weight
 }
 
-func (a *PoolAllocator) buildKillSwingResult(
-	kill *KillEvent,
-	rawSwing float64,
-	positiveAllocs, negativeAllocs []PlayerSwingAllocation,
-	killerEcoWeight float64,
-) KillSwingResult {
-	result := KillSwingResult{
-		RawSwing:          rawSwing,
-		EcoMultiplier:     killerEcoWeight,
-		ContributorSwings: make(map[uint64]float64),
+func (a *PoolAllocator) buildKillSwingResult(rawSwing, killerEcoWeight float64) KillSwingResult {
+	return KillSwingResult{
+		RawSwing:      rawSwing,
+		EcoMultiplier: killerEcoWeight,
 	}
-
-	for _, alloc := range positiveAllocs {
-		switch alloc.SteamID {
-		case kill.KillerID:
-			result.KillerSwing += alloc.Amount
-		default:
-			result.ContributorSwings[alloc.SteamID] += alloc.Amount
-		}
-	}
-
-	for _, alloc := range negativeAllocs {
-		if alloc.SteamID == kill.VictimID {
-			result.VictimSwing += -alloc.Amount
-		}
-	}
-
-	return result
 }
 
 // AllocateTradeReallocation redistributes victim death penalty when a trade occurs.

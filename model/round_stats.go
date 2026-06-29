@@ -7,18 +7,6 @@
 
 package model
 
-// DamageContribution tracks damage dealt by a player to a specific victim.
-type DamageContribution struct {
-	PlayerID uint64
-	Damage   int
-}
-
-// FlashAssistInfo tracks flash assist details for a kill.
-type FlashAssistInfo struct {
-	PlayerID uint64
-	Duration float64 // Flash duration in seconds
-}
-
 // RoundStats tracks a player's performance within a single round.
 // This struct is populated during demo parsing and used to calculate
 // per-round metrics like round swing, KAST, and clutch statistics.
@@ -92,16 +80,9 @@ type RoundStats struct {
 	DamageTaken int
 
 	// Probability-based swing tracking (new for v3.0)
-	ProbabilitySwing     float64             // Win probability delta contribution
-	LastDeathSwing       float64             // Most recent death swing (for trade refund calculation)
-	KillSwing            float64             // Debug: swing from kills
-	DeathSwing           float64             // Debug: swing from deaths
-	AssistSwing          float64             // Debug: swing from assists/flash/survival
-	ObjectiveSwing       float64             // Debug: swing from bomb objectives
-	ResidualSwing        float64             // Debug: end-of-round residual swing
-	ExitFragSwingIgnored float64             // Debug: swing ignored on exit frags
-	EquipmentValue       float64             // Player's equipment value at round start
-	SwingContributions   []SwingContribution // Detailed swing events for this round
+	ProbabilitySwing   float64             // Win probability delta contribution
+	LastDeathSwing     float64             // Most recent death swing (for trade refund calculation)
+	SwingContributions []SwingContribution // Detailed swing events for this round
 }
 
 // SwingContribution captures a single event's impact on probability swing.
@@ -123,26 +104,4 @@ func (r *RoundStats) AddSwingContribution(contribution SwingContribution) {
 		return
 	}
 	r.SwingContributions = append(r.SwingContributions, contribution)
-}
-
-// RoundContext provides contextual information about the round state.
-// This is used by the round swing calculator to adjust impact values
-// based on round importance, score differential, and game situation.
-type RoundContext struct {
-	RoundNumber     int
-	TotalPlayers    int
-	BombPlanted     bool
-	BombDefused     bool
-	RoundType       string
-	TimeRemaining   float64
-	IsOvertimeRound bool
-	MapSide         string
-	TeamScore       int
-	EnemyScore      int
-	ScoreDiff       int
-	IsMatchPoint    bool
-	IsCloseGame     bool
-	RoundImportance float64
-	RoundDecided    bool
-	RoundDecidedAt  float64
 }

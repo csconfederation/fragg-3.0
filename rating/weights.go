@@ -89,20 +89,12 @@ const (
 	KASTContribBelow = 0.40 // Multiplier when KAST < baseline
 
 	ProbSwingContribMultiplier = 2.5
-
-	MultiKillContrib = 0.005 // Multi-kill bonus contribution multiplier
 )
 
 // Trade detection constants - used in handlers.go for trade calculations.
 const (
 	TradeWindowTicks    = 320    // Trade window in ticks (5 seconds at 64 tick)
 	TradeProximityUnits = 1200.0 // Maximum distance for trade opportunity (units)
-)
-
-// Round context constants - used for round importance calculations.
-const (
-	LateRoundTimeThreshold = 30.0 // Time threshold for late bomb plant (seconds)
-	ClutchDefuseThreshold  = 10.0 // Time threshold for clutch defuse (seconds)
 )
 
 // Round structure constants - CS2 MR12 format.

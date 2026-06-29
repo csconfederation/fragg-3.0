@@ -160,18 +160,16 @@ type playerDetail struct {
 	Name             string                      `json:"name"`
 	FinalRating      float64                     `json:"final_rating"`
 	RoundsPlayed     int                         `json:"rounds_played"`
-	RatingBreakdown  model.RatingBreakdown       `json:"rating_breakdown"`
 	ProbabilitySwing swingSummary                `json:"probability_swing"`
 	RoundBreakdowns  []model.RoundSwingBreakdown `json:"round_breakdowns"`
 }
 
 func newPlayerDetail(p *model.PlayerStats) playerDetail {
 	detail := playerDetail{
-		SteamID:         p.SteamID,
-		Name:            p.Name,
-		FinalRating:     p.FinalRating,
-		RoundsPlayed:    p.RoundsPlayed,
-		RatingBreakdown: p.RatingBreakdown,
+		SteamID:      p.SteamID,
+		Name:         p.Name,
+		FinalRating:  p.FinalRating,
+		RoundsPlayed: p.RoundsPlayed,
 		ProbabilitySwing: swingSummary{
 			Total:            p.ProbabilitySwing,
 			PerRound:         p.ProbabilitySwingPerRound,

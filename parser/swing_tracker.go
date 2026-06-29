@@ -9,32 +9,25 @@ import (
 
 // SwingTracker manages round state and swing calculation during parsing.
 type SwingTracker struct {
-	calculator       *swing.Calculator
+	engine           *probability.Engine
 	allocator        *swing.PoolAllocator
 	damageTracker    *DamageTracker
 	advantageTracker *AdvantageTracker
 	roundState       *probability.RoundState
-	roundEvents      []swing.RoundEvent
 	ledger           *swing.RoundSwingLedger
 	cfg              swing.Config
 	roundNumber      int
 	enabled          bool
 }
 
-// NewSwingTracker creates a new swing tracker with default swing config.
-func NewSwingTracker() *SwingTracker {
-	return NewSwingTrackerWithConfig(swing.DefaultConfig())
-}
-
 // NewSwingTrackerWithConfig creates a swing tracker with the given config.
 func NewSwingTrackerWithConfig(cfg swing.Config) *SwingTracker {
-	calc := swing.NewDefaultCalculator()
+	engine := probability.NewDefaultEngine()
 	return &SwingTracker{
-		calculator:       calc,
-		allocator:        swing.NewPoolAllocator(calc.GetProbabilityEngine(), cfg),
+		engine:           engine,
+		allocator:        swing.NewPoolAllocator(engine, cfg),
 		damageTracker:    NewDamageTracker(),
 		advantageTracker: NewAdvantageTracker(),
-		roundEvents:      make([]swing.RoundEvent, 0),
 		cfg:              cfg,
 		enabled:          true,
 	}
@@ -59,18 +52,9 @@ func (st *SwingTracker) Config() swing.Config {
 func (st *SwingTracker) ResetRound(roundNumber, tAlive, ctAlive int, mapName string) {
 	st.roundNumber = roundNumber
 	st.roundState = probability.NewRoundState(tAlive, ctAlive, mapName)
-	st.roundEvents = make([]swing.RoundEvent, 0)
 	st.ledger = swing.NewRoundSwingLedger(roundNumber)
 	st.damageTracker.Reset()
 	st.advantageTracker.Reset()
-}
-
-// SetEconomy sets the economy categories for both teams.
-func (st *SwingTracker) SetEconomy(tEcon, ctEcon probability.EconomyCategory) {
-	if st.roundState != nil {
-		st.roundState.TEconomy = tEcon
-		st.roundState.CTEconomy = ctEcon
-	}
 }
 
 // SetEconomyFromValues sets economy from equipment values.
@@ -104,7 +88,6 @@ type KillResult struct {
 	SurvivalBeneficiaries   []uint64
 	SurvivalCreditPerPlayer float64
 	VictimPriorDamage       int
-	SkippedExitFrag         bool
 }
 
 // RecordKill records a kill event and returns swing allocations.
@@ -168,7 +151,6 @@ func (st *SwingTracker) RecordKill(
 		}
 	}
 
-	st.roundEvents = append(st.roundEvents, killEvent)
 	st.roundState.RecordDeath(victimSide)
 	st.damageTracker.ClearVictimData(victimID)
 
@@ -178,7 +160,6 @@ func (st *SwingTracker) RecordKill(
 		SurvivalBeneficiaries:   survivalBeneficiaries,
 		SurvivalCreditPerPlayer: survivalCredit,
 		VictimPriorDamage:       victimPriorDamage,
-		SkippedExitFrag:         input.ExitFrag,
 	}
 }
 
@@ -209,14 +190,6 @@ func (st *SwingTracker) ApplyTradeReallocation(
 	return allocs
 }
 
-// GetDamageToPlayer returns the total damage dealt to a player this round.
-func (st *SwingTracker) GetDamageToPlayer(playerID uint64) int {
-	if st.damageTracker == nil {
-		return 0
-	}
-	return st.damageTracker.GetTotalDamageToVictim(playerID)
-}
-
 // RecordBombPlant records a bomb plant and returns per-player swing allocations.
 func (st *SwingTracker) RecordBombPlant(
 	planterID uint64,
@@ -240,13 +213,12 @@ func (st *SwingTracker) RecordBombPlant(
 	event, _ := st.allocator.AllocateObjectiveEvent(
 		st.roundState,
 		common.TeamTerrorists,
-		st.calculator.GetProbabilityEngine().CalculateBombPlantSwing,
+		st.engine.CalculateBombPlantSwing,
 		func(s *probability.RoundState) { s.SetBombPlanted() },
 		input,
 		swing.SwingEventBombPlant,
 	)
 	st.ledger.RecordEvent(event)
-	st.roundEvents = append(st.roundEvents, &swing.BombPlantEvent{TimeInRound: timeInRound, PlanterID: planterID})
 	return append(event.PositiveAlloc, event.NegativeAlloc...)
 }
 
@@ -273,22 +245,13 @@ func (st *SwingTracker) RecordBombDefuse(
 	event, _ := st.allocator.AllocateObjectiveEvent(
 		st.roundState,
 		common.TeamCounterTerrorists,
-		st.calculator.GetProbabilityEngine().CalculateBombDefuseSwing,
+		st.engine.CalculateBombDefuseSwing,
 		func(s *probability.RoundState) { s.SetBombDefused() },
 		input,
 		swing.SwingEventBombDefuse,
 	)
 	st.ledger.RecordEvent(event)
-	st.roundEvents = append(st.roundEvents, &swing.BombDefuseEvent{TimeInRound: timeInRound, DefuserID: defuserID})
 	return append(event.PositiveAlloc, event.NegativeAlloc...)
-}
-
-// RecordBombExplode records a bomb explosion.
-func (st *SwingTracker) RecordBombExplode(timeInRound float64) {
-	if !st.enabled || st.roundState == nil {
-		return
-	}
-	st.roundEvents = append(st.roundEvents, &swing.BombExplodeEvent{TimeInRound: timeInRound})
 }
 
 // ApplyRoundResidual applies end-of-round residual swing if enabled.
@@ -313,54 +276,15 @@ func (st *SwingTracker) FinalizeRound() []string {
 	return swing.ValidateRoundSwingLedger(st.ledger, st.cfg.ZeroSumTolerance)
 }
 
-// GetLedger returns the current round swing ledger.
-func (st *SwingTracker) GetLedger() *swing.RoundSwingLedger {
-	return st.ledger
-}
-
-// GetCurrentState returns the current round state.
-func (st *SwingTracker) GetCurrentState() *probability.RoundState {
-	if st.roundState == nil {
-		return nil
-	}
-	return st.roundState.Clone()
-}
-
 // GetCurrentWinProbability returns the current win probability for a side.
 func (st *SwingTracker) GetCurrentWinProbability(side common.Team) float64 {
 	if !st.enabled || st.roundState == nil {
 		return 0.5
 	}
-	return st.calculator.GetProbabilityEngine().GetWinProbability(st.roundState, side)
-}
-
-// CalculateRoundSwings calculates final swing values for all players (batch replay).
-func (st *SwingTracker) CalculateRoundSwings(
-	initialState *probability.RoundState,
-	result *swing.RoundResult,
-) map[uint64]float64 {
-	if !st.enabled || initialState == nil {
-		return make(map[uint64]float64)
-	}
-	return st.calculator.CalculateRoundSwing(st.roundEvents, initialState, result).PlayerSwings
-}
-
-// GetRoundEvents returns the events recorded this round.
-func (st *SwingTracker) GetRoundEvents() []swing.RoundEvent {
-	return st.roundEvents
-}
-
-// GetDamageTracker returns the damage tracker for direct access if needed.
-func (st *SwingTracker) GetDamageTracker() *DamageTracker {
-	return st.damageTracker
+	return st.engine.GetWinProbability(st.roundState, side)
 }
 
 // GetTimeToKill returns the time between first damage and kill for a specific kill.
 func (st *SwingTracker) GetTimeToKill(killerID, victimID uint64, killTime float64) float64 {
 	return st.damageTracker.GetTimeToKill(killerID, victimID, killTime)
-}
-
-// GetCalculator returns the swing calculator.
-func (st *SwingTracker) GetCalculator() *swing.Calculator {
-	return st.calculator
 }

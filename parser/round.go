@@ -11,7 +11,6 @@ package parser
 import (
 	"fmt"
 	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/rating/probability"
 	"github.com/ethsmith/eco-rating/rating/swing"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
@@ -37,14 +36,6 @@ type MatchState struct {
 	RoundDecided   bool
 	RoundDecidedAt float64
 	BombPlanted    bool
-
-	// Round start state for swing calculation
-	RoundStartState *probability.RoundState
-}
-
-// NewMatchState creates a new MatchState with initialized maps.
-func NewMatchState() *MatchState {
-	return NewMatchStateWithConfig(swing.DefaultConfig())
 }
 
 // NewMatchStateWithConfig creates a MatchState with the given swing configuration.

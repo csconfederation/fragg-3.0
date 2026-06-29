@@ -275,6 +275,10 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 	if numWorkers <= 0 {
 		numWorkers = runtime.NumCPU()
 	}
+	const maxWorkers = 4 // cap to limit RAM when parsing large demos in parallel
+	if numWorkers > maxWorkers {
+		numWorkers = maxWorkers
+	}
 	log.Printf("Using %d parallel workers", numWorkers)
 
 	jobs := make(chan downloadedDemo, len(downloadedDemos))
@@ -324,7 +328,7 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 	for result := range results {
 		processedCount++
 		if result.Error != nil {
-			log.Printf("[%d/%d] Parse error for %s: %v", processedCount, len(downloadedDemos), result.DemoKey, result.Error)
+			log.Printf("[%d/%d] Parse error for %s: %s", processedCount, len(downloadedDemos), result.DemoKey, parseErrorSummary(result.Error))
 			continue
 		}
 
@@ -454,6 +458,21 @@ func parseDemoFromStdin(cfg *config.Config) {
 		os.Exit(1)
 	}
 	fmt.Println(string(jsonData))
+}
+
+// parseErrorSummary returns the first line of a parse error, omitting demoinfocs stack traces.
+func parseErrorSummary(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if i := strings.Index(msg, "\nstacktrace:"); i >= 0 {
+		msg = msg[:i]
+	}
+	if i := strings.Index(msg, "\n"); i >= 0 {
+		msg = msg[:i]
+	}
+	return msg
 }
 
 // parseDemoWithLogs opens and parses a demo file, returning player stats, map name,

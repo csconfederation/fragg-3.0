@@ -59,7 +59,7 @@ func DefaultConfig() *Config {
 		EnableLogging:    true,
 		IgnoreScrims:     false,
 		KDPRModifier:     false,
-		Workers:          8,     // Number of parallel workers (0 = use CPU count)
+		Workers:          4,     // Parallel demo parsers (each uses significant RAM)
 		GenerateFiles:    true,  // Generate output files by default
 		CSCCompatibility: false, // Disabled by default
 

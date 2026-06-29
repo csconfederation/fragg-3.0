@@ -50,7 +50,9 @@ func NewDemoParserWithOptions(r io.Reader, enableLogging bool, kdprModifier bool
 
 // NewDemoParserWithSwingConfig creates a DemoParser with full swing configuration.
 func NewDemoParserWithSwingConfig(r io.Reader, enableLogging bool, kdprModifier bool, swingCfg swing.Config) *DemoParser {
-	p := demoinfocs.NewParser(r)
+	cfg := demoinfocs.DefaultParserConfig
+	cfg.IgnorePacketEntitiesPanic = true
+	p := demoinfocs.NewParserWithConfig(r, cfg)
 	state := NewMatchStateWithConfig(swingCfg)
 
 	dp := &DemoParser{

@@ -17,6 +17,7 @@ import (
 	"github.com/ethsmith/eco-rating/model"
 	"github.com/ethsmith/eco-rating/rating"
 	"github.com/ethsmith/eco-rating/rating/probability"
+	"github.com/ethsmith/eco-rating/rating/swing"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
 )
@@ -44,8 +45,13 @@ func NewDemoParserWithLogging(r io.Reader, enableLogging bool) *DemoParser {
 
 // NewDemoParserWithOptions creates a new DemoParser with configurable logging and KPR/DPR modifier.
 func NewDemoParserWithOptions(r io.Reader, enableLogging bool, kdprModifier bool) *DemoParser {
+	return NewDemoParserWithSwingConfig(r, enableLogging, kdprModifier, swing.DefaultConfig())
+}
+
+// NewDemoParserWithSwingConfig creates a DemoParser with full swing configuration.
+func NewDemoParserWithSwingConfig(r io.Reader, enableLogging bool, kdprModifier bool, swingCfg swing.Config) *DemoParser {
 	p := demoinfocs.NewParser(r)
-	state := NewMatchState()
+	state := NewMatchStateWithConfig(swingCfg)
 
 	dp := &DemoParser{
 		parser:       p,

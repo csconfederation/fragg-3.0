@@ -181,7 +181,7 @@ func convertPlayerStats(p *model.PlayerStats) *CSCPlayerStats {
 		DrDiff:       p.ADR - safeDiv64(float64(p.DamageTaken), float64(p.RoundsPlayed)),
 		KR:           p.KPR,
 		Tr:           safeDiv64(float64(p.TradeKills), float64(p.TradedDeaths)),
-		ImpactRating: p.RoundImpact,
+		ImpactRating: p.ProbabilitySwingPerRound,
 		Rating:       p.FinalRating,
 
 		// Side-specific stats

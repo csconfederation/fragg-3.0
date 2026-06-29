@@ -92,10 +92,16 @@ type RoundStats struct {
 	DamageTaken int
 
 	// Probability-based swing tracking (new for v3.0)
-	ProbabilitySwing   float64             // Win probability delta contribution
-	LastDeathSwing     float64             // Most recent death swing (for trade refund calculation)
-	EquipmentValue     float64             // Player's equipment value at round start
-	SwingContributions []SwingContribution // Detailed swing events for this round
+	ProbabilitySwing     float64             // Win probability delta contribution
+	LastDeathSwing       float64             // Most recent death swing (for trade refund calculation)
+	KillSwing            float64             // Debug: swing from kills
+	DeathSwing           float64             // Debug: swing from deaths
+	AssistSwing          float64             // Debug: swing from assists/flash/survival
+	ObjectiveSwing       float64             // Debug: swing from bomb objectives
+	ResidualSwing        float64             // Debug: end-of-round residual swing
+	ExitFragSwingIgnored float64             // Debug: swing ignored on exit frags
+	EquipmentValue       float64             // Player's equipment value at round start
+	SwingContributions   []SwingContribution // Detailed swing events for this round
 }
 
 // SwingContribution captures a single event's impact on probability swing.

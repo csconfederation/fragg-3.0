@@ -35,41 +35,116 @@ func (d *DemoParser) registerHandlers() {
 	d.registerRoundEndHandler()
 }
 
-// addKillSwingContribution records per-event swing contributions for killer and victim.
-func (d *DemoParser) addKillSwingContribution(ctx *killContext, swingResult swing.KillSwingResult, victimContribution float64) {
-	if ctx.attacker == nil || ctx.victim == nil {
-		return
-	}
-
-	weaponName := ""
-	if ctx.event.Weapon != nil {
-		weaponName = ctx.event.Weapon.String()
-	}
-
-	attackerRound := d.state.ensureRound(ctx.attacker)
-	if swingResult.KillerSwing != 0 {
-		attackerRound.AddSwingContribution(model.SwingContribution{
-			Type:          "kill",
-			Amount:        swingResult.KillerSwing,
-			TimeInRound:   ctx.timeInRound,
-			Opponent:      ctx.victim.Name,
-			Weapon:        weaponName,
-			IsTrade:       ctx.isTradeKill,
-			IsHeadshot:    ctx.event.IsHeadshot,
-			EcoMultiplier: swingResult.EcoMultiplier,
+// applyLedgerAllocations applies swing ledger allocations to round stats.
+func (d *DemoParser) applyLedgerAllocations(allocs []swing.PlayerSwingAllocation, timeInRound float64, opponent string) {
+	for _, alloc := range allocs {
+		if alloc.Amount == 0 {
+			continue
+		}
+		roundStats, ok := d.state.Round[alloc.SteamID]
+		if !ok {
+			continue
+		}
+		roundStats.ProbabilitySwing += alloc.Amount
+		d.updateSwingBreakdown(roundStats, alloc)
+		roundStats.AddSwingContribution(model.SwingContribution{
+			Type:        string(alloc.Reason),
+			Amount:      alloc.Amount,
+			TimeInRound: timeInRound,
+			Opponent:    opponent,
 		})
 	}
+}
 
-	victimRound := d.state.ensureRound(ctx.victim)
-	if victimContribution != 0 {
-		victimRound.AddSwingContribution(model.SwingContribution{
-			Type:        "death",
-			Amount:      victimContribution,
-			TimeInRound: ctx.timeInRound,
-			Opponent:    ctx.attacker.Name,
-			Weapon:      weaponName,
-		})
+func (d *DemoParser) updateSwingBreakdown(roundStats *model.RoundStats, alloc swing.PlayerSwingAllocation) {
+	switch alloc.Reason {
+	case swing.SwingReasonKillFinalHit, swing.SwingReasonKillDamageShare, swing.SwingReasonVictimDeath:
+		if alloc.Amount >= 0 {
+			roundStats.KillSwing += alloc.Amount
+		} else {
+			roundStats.DeathSwing += alloc.Amount
+		}
+	case swing.SwingReasonFlashAssist:
+		roundStats.AssistSwing += alloc.Amount
+	case swing.SwingReasonBombPlant, swing.SwingReasonPlantSupport, swing.SwingReasonBombDefuse, swing.SwingReasonDefuseSupport:
+		roundStats.ObjectiveSwing += alloc.Amount
+	case swing.SwingReasonRoundResidualWin, swing.SwingReasonRoundResidualLoss:
+		roundStats.ResidualSwing += alloc.Amount
+	case swing.SwingReasonExitFragIgnored:
+		roundStats.ExitFragSwingIgnored += alloc.Amount
+	case swing.SwingReasonSurvivalCredit:
+		roundStats.AssistSwing += alloc.Amount
 	}
+}
+
+func (d *DemoParser) buildPlayerRoundContext(gs demoinfocs.GameState) map[uint64]swing.PlayerRoundContext {
+	alive := make(map[uint64]bool)
+	for _, p := range gs.Participants().Playing() {
+		if p != nil && !p.IsBot {
+			alive[p.SteamID64] = p.IsAlive()
+		}
+	}
+
+	players := make(map[uint64]swing.PlayerRoundContext)
+	for steamID, roundStats := range d.state.Round {
+		side := common.TeamUnassigned
+		if roundStats.PlayerSide == "T" {
+			side = common.TeamTerrorists
+		} else if roundStats.PlayerSide == "CT" {
+			side = common.TeamCounterTerrorists
+		}
+
+		positive := 0.0
+		negative := 0.0
+		if roundStats.ProbabilitySwing > 0 {
+			positive = roundStats.ProbabilitySwing
+		} else if roundStats.ProbabilitySwing < 0 {
+			negative = -roundStats.ProbabilitySwing
+		}
+
+		players[steamID] = swing.PlayerRoundContext{
+			SteamID:       steamID,
+			Side:          side,
+			Alive:         alive[steamID],
+			Damage:        roundStats.Damage,
+			Kills:         roundStats.Kills,
+			FlashAssists:  roundStats.FlashAssists,
+			PositiveSwing: positive,
+			NegativeSwing: negative,
+			PlantedBomb:   roundStats.PlantedBomb,
+			DefusedBomb:   roundStats.DefusedBomb,
+		}
+	}
+	return players
+}
+
+func (d *DemoParser) getLosingSideTeammates(victim *common.Player, gs demoinfocs.GameState) []uint64 {
+	if victim == nil {
+		return nil
+	}
+	teammates := make([]uint64, 0)
+	for _, p := range gs.Participants().Playing() {
+		if p == nil || p.IsBot || !p.IsAlive() {
+			continue
+		}
+		if p.Team == victim.Team && p.SteamID64 != victim.SteamID64 {
+			teammates = append(teammates, p.SteamID64)
+		}
+	}
+	return teammates
+}
+
+func (d *DemoParser) getTeammateIDs(side common.Team, excludeID uint64, gs demoinfocs.GameState) []uint64 {
+	ids := make([]uint64, 0)
+	for _, p := range gs.Participants().Playing() {
+		if p == nil || p.IsBot {
+			continue
+		}
+		if p.Team == side && p.SteamID64 != excludeID {
+			ids = append(ids, p.SteamID64)
+		}
+	}
+	return ids
 }
 
 // registerMapHandler sets up the map name extraction from server info.
@@ -156,13 +231,10 @@ func (d *DemoParser) handleBombPlanted(e events.BombPlanted) {
 	// Track bomb plant swing
 	if d.state.SwingTracker != nil {
 		timeInRound := d.timeInRound()
-		plantSwing := d.state.SwingTracker.RecordBombPlant(e.Player.SteamID64, timeInRound)
-		roundStats.ProbabilitySwing += plantSwing
-		roundStats.AddSwingContribution(model.SwingContribution{
-			Type:        "bomb_plant",
-			Amount:      plantSwing,
-			TimeInRound: timeInRound,
-		})
+		gs := d.parser.GameState()
+		players := d.buildPlayerRoundContext(gs)
+		plantAllocs := d.state.SwingTracker.RecordBombPlant(e.Player.SteamID64, timeInRound, players)
+		d.applyLedgerAllocations(plantAllocs, timeInRound, "")
 	}
 
 	d.logger.LogBombPlant(d.state.RoundNumber, planter.Name)
@@ -189,13 +261,10 @@ func (d *DemoParser) handleBombDefused(e events.BombDefused) {
 
 	// Track bomb defuse swing
 	if d.state.SwingTracker != nil {
-		defuseSwing := d.state.SwingTracker.RecordBombDefuse(e.Player.SteamID64, timeInRound)
-		roundStats.ProbabilitySwing += defuseSwing
-		roundStats.AddSwingContribution(model.SwingContribution{
-			Type:        "bomb_defuse",
-			Amount:      defuseSwing,
-			TimeInRound: timeInRound,
-		})
+		gs := d.parser.GameState()
+		players := d.buildPlayerRoundContext(gs)
+		defuseAllocs := d.state.SwingTracker.RecordBombDefuse(e.Player.SteamID64, timeInRound, players)
+		d.applyLedgerAllocations(defuseAllocs, timeInRound, "")
 	}
 
 	d.logger.LogBombDefuse(d.state.RoundNumber, defuser.Name)
@@ -362,7 +431,7 @@ func (d *DemoParser) handleFreezetimeEnd() {
 
 	// Initialize swing tracker for the round
 	if d.state.SwingTracker != nil && d.state.SwingTracker.IsEnabled() {
-		d.state.SwingTracker.ResetRound(tAlive, ctAlive, d.state.MapName)
+		d.state.SwingTracker.ResetRound(d.state.RoundNumber, tAlive, ctAlive, d.state.MapName)
 
 		// Set team economies
 		tAvgEquip := 0.0
@@ -502,13 +571,26 @@ func (d *DemoParser) processVictimDeath(ctx *killContext) {
 func (d *DemoParser) processTradeDetection(ctx *killContext) {
 	if ctx.attacker != nil && ctx.victim != nil {
 		tradeResult := d.state.TradeDetector.CheckForTrade(
-			ctx.attacker, ctx.victim, ctx.currentTick, ctx.timeInRound, d.state.Players, d.state.Round)
+			ctx.attacker, ctx.victim, ctx.currentTick, ctx.timeInRound,
+			d.state.Players, d.state.Round)
 		if tradeResult.IsTrade {
 			attackerStats := d.state.ensurePlayer(ctx.attacker)
 			attackerStats.TradeDenials++
 			attackerStats.SavedTeammate++
 			attackerRound := d.state.ensureRound(ctx.attacker)
 			attackerRound.SavedTeammate = true
+
+			if tradeResult.TradeReallocation && d.state.SwingTracker != nil {
+				gs := d.parser.GameState()
+				teammateIDs := d.getTeammateIDs(ctx.attacker.Team, tradeResult.TradedPlayerID, gs)
+				allocs := d.state.SwingTracker.ApplyTradeReallocation(
+					tradeResult.TradedPlayerID,
+					ctx.attacker.Team,
+					tradeResult.OriginalDeathPenalty,
+					teammateIDs,
+				)
+				d.applyLedgerAllocations(allocs, ctx.timeInRound, ctx.victim.Name)
+			}
 
 			d.logger.LogTrade(d.state.RoundNumber, ctx.attacker.Name, tradeResult.TradedPlayerName, ctx.victim.Name)
 		}
@@ -569,7 +651,6 @@ func (d *DemoParser) processKillerStats(ctx *killContext) {
 	round.EconImpact += ctx.killValue
 	attacker.Kills++
 	attacker.EcoKillValue += ctx.killValue
-	attacker.RoundImpact += ctx.killValue
 	attacker.EconImpact += ctx.killValue
 	if ctx.event.IsHeadshot {
 		attacker.Headshots++
@@ -721,74 +802,40 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 		return
 	}
 
+	gs := d.parser.GameState()
+	losingSideTeammates := d.getLosingSideTeammates(ctx.victim, gs)
+
 	killResult := d.state.SwingTracker.RecordKill(
 		ctx.attacker.SteamID64, ctx.victim.SteamID64,
 		ctx.attacker.Team, ctx.victim.Team,
 		float64(ctx.attackerEquip), float64(ctx.victimEquip),
 		ctx.timeInRound,
 		ctx.isTradeKill, ctx.event.IsHeadshot,
+		d.state.RoundDecided,
+		losingSideTeammates,
 	)
 
 	swingResult := killResult.Swing
-	round.ProbabilitySwing += swingResult.KillerSwing
+	d.applyLedgerAllocations(killResult.Allocations, ctx.timeInRound, ctx.victim.Name)
 
-	victimRound := d.state.ensureRound(ctx.victim)
-	victimContribution := -swingResult.VictimSwing
-
-	// Reduce death penalty based on mitigating factors:
-	// 1. Low health: player was already damaged, death was more expected
-	// 2. Trade death: refunded retroactively in trade_detector.go
-	deathReduction := 1.0
-
-	// Low health reduction: if victim took significant prior damage, death is less their fault
-	// 100hp = full penalty, 50hp = 75% penalty, 1hp = 50% penalty
-	victimHP := 100 - killResult.VictimPriorDamage
-	if victimHP < 1 {
-		victimHP = 1
-	}
-	if victimHP < 100 {
-		// Scale: 100hp → 1.0, 50hp → 0.75, 1hp → 0.50
-		healthFactor := 0.50 + 0.50*(float64(victimHP)/100.0)
-		if healthFactor < deathReduction {
-			deathReduction = healthFactor
+	for _, alloc := range killResult.Allocations {
+		if alloc.SteamID == ctx.victim.SteamID64 && alloc.Reason == swing.SwingReasonVictimDeath {
+			victimRound := d.state.ensureRound(ctx.victim)
+			victimRound.LastDeathSwing = alloc.Amount
 		}
 	}
 
-	victimContribution *= deathReduction
-	victimRound.ProbabilitySwing += victimContribution
-	victimRound.LastDeathSwing = victimContribution
-	d.addKillSwingContribution(ctx, swingResult, victimContribution)
-
-	// Credit damage contributors and flash assisters with their share of the kill swing
-	for contributorID, contributorSwing := range swingResult.ContributorSwings {
-		if contributorRound, ok := d.state.Round[contributorID]; ok {
-			contributorRound.ProbabilitySwing += contributorSwing
-			contributorRound.AddSwingContribution(model.SwingContribution{
-				Type:        "assist",
-				Amount:      contributorSwing,
-				TimeInRound: ctx.timeInRound,
-				Opponent:    ctx.victim.Name,
+	if killResult.SurvivalCreditPerPlayer > 0 {
+		survivalAllocs := make([]swing.PlayerSwingAllocation, 0, len(killResult.SurvivalBeneficiaries))
+		for _, beneficiaryID := range killResult.SurvivalBeneficiaries {
+			survivalAllocs = append(survivalAllocs, swing.PlayerSwingAllocation{
+				SteamID: beneficiaryID,
+				Side:    ctx.attacker.Team,
+				Amount:  killResult.SurvivalCreditPerPlayer,
+				Reason:  swing.SwingReasonSurvivalCredit,
 			})
 		}
-	}
-
-	// Credit survival swing to players who created man advantages earlier in the round.
-	// If a player got a kill and stayed alive, subsequent teammate kills generate
-	// survival credit for them — rewarding the ongoing value of staying alive
-	// and maintaining the man advantage they created.
-	if killResult.SurvivalCreditPerPlayer > 0 {
-		for _, beneficiaryID := range killResult.SurvivalBeneficiaries {
-			if beneficiaryRound, ok := d.state.Round[beneficiaryID]; ok {
-				beneficiaryRound.ProbabilitySwing += killResult.SurvivalCreditPerPlayer
-				beneficiaryRound.AddSwingContribution(model.SwingContribution{
-					Type:        "survival",
-					Amount:      killResult.SurvivalCreditPerPlayer,
-					TimeInRound: ctx.timeInRound,
-					Opponent:    ctx.victim.Name,
-					Notes:       "Man advantage survival credit",
-				})
-			}
-		}
+		d.applyLedgerAllocations(survivalAllocs, ctx.timeInRound, ctx.victim.Name)
 	}
 
 	if swingResult.EcoMultiplier > 0 {
@@ -931,6 +978,7 @@ func (d *DemoParser) handleRoundEnd(e events.RoundEnd) {
 	d.processMultiKills()
 	d.processSurvivalStats(ctx)
 	d.processClutchDetection(ctx)
+	d.processRoundEndSwing(ctx)
 	d.processProbabilitySwings(ctx)
 	d.updateSideStats()
 	d.incrementRoundsPlayed()
@@ -1146,6 +1194,30 @@ func (d *DemoParser) recordClutchAttempt(ps *model.PlayerStats, round *model.Rou
 	if round.TeamWon {
 		round.ClutchWon = true
 		ps.ClutchWins++
+	}
+}
+
+// processRoundEndSwing applies residual swing and validates the round ledger.
+func (d *DemoParser) processRoundEndSwing(ctx *roundEndContext) {
+	if d.state.SwingTracker == nil {
+		return
+	}
+
+	maxDamage := 0
+	for _, roundStats := range d.state.Round {
+		if roundStats.Damage > maxDamage {
+			maxDamage = roundStats.Damage
+		}
+	}
+
+	players := d.buildPlayerRoundContext(ctx.gs)
+	residualAllocs := d.state.SwingTracker.ApplyRoundResidual(ctx.winnerTeam, players, maxDamage)
+	d.applyLedgerAllocations(residualAllocs, ctx.roundDuration, "")
+
+	if warnings := d.state.SwingTracker.FinalizeRound(); len(warnings) > 0 {
+		for _, warning := range warnings {
+			d.logger.Printf("Round %d swing warning: %s", d.state.RoundNumber, warning)
+		}
 	}
 }
 

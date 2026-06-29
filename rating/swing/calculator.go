@@ -9,14 +9,26 @@ import (
 // Calculator computes probability-based round swing for players.
 type Calculator struct {
 	probEngine *probability.Engine
-	attrib     *Attributor
+	cfg        Config
+	allocator  *PoolAllocator
 }
 
 // NewCalculator creates a new swing calculator with the given probability engine.
 func NewCalculator(engine *probability.Engine) *Calculator {
+	cfg := DefaultConfig()
 	return &Calculator{
 		probEngine: engine,
-		attrib:     NewAttributor(),
+		cfg:        cfg,
+		allocator:  NewPoolAllocator(engine, cfg),
+	}
+}
+
+// NewCalculatorWithConfig creates a calculator with custom swing config.
+func NewCalculatorWithConfig(engine *probability.Engine, cfg Config) *Calculator {
+	return &Calculator{
+		probEngine: engine,
+		cfg:        cfg,
+		allocator:  NewPoolAllocator(engine, cfg),
 	}
 }
 
@@ -32,244 +44,116 @@ type RoundSwingResult struct {
 	TotalCTSwing float64
 }
 
+// KillSwingResult contains swing metadata for a single kill event.
+type KillSwingResult struct {
+	RawSwing          float64
+	KillerSwing       float64
+	VictimSwing       float64
+	EcoMultiplier     float64
+	ContributorSwings map[uint64]float64
+}
+
 // CalculateRoundSwing computes swing for all players based on round events.
 func (c *Calculator) CalculateRoundSwing(
 	events []RoundEvent,
 	initialState *probability.RoundState,
 	result *RoundResult,
 ) *RoundSwingResult {
-	playerSwing := make(map[uint64]float64)
+	ledger := NewRoundSwingLedger(0)
 	state := initialState.Clone()
+	players := make(map[uint64]PlayerRoundContext)
 
-	// Process each event in order
 	for _, event := range events {
 		switch e := event.(type) {
 		case *KillEvent:
-			c.processKill(playerSwing, state, e)
+			input := KillAllocationInput{Kill: e}
+			ledgerEvent, _ := c.allocator.AllocateKillEvent(state, input)
+			ledger.RecordEvent(ledgerEvent)
+			state.RecordDeath(e.VictimSide)
+			updatePlayerContextFromKill(players, e, ledgerEvent)
 		case *BombPlantEvent:
-			c.processBombPlant(playerSwing, state, e)
+			input := ObjectiveAllocationInput{
+				PrimaryID:     e.PlanterID,
+				PrimarySide:   common.TeamTerrorists,
+				OpposingSide:  common.TeamCounterTerrorists,
+				Players:       players,
+				PrimaryShare:  c.cfg.PlantPlanterShare,
+				PrimaryReason: SwingReasonBombPlant,
+				SupportReason: SwingReasonPlantSupport,
+			}
+			ledgerEvent, _ := c.allocator.AllocateObjectiveEvent(
+				state,
+				common.TeamTerrorists,
+				c.probEngine.CalculateBombPlantSwing,
+				func(s *probability.RoundState) { s.SetBombPlanted() },
+				input,
+				SwingEventBombPlant,
+			)
+			ledger.RecordEvent(ledgerEvent)
 		case *BombDefuseEvent:
-			c.processBombDefuse(playerSwing, state, e)
+			input := ObjectiveAllocationInput{
+				PrimaryID:     e.DefuserID,
+				PrimarySide:   common.TeamCounterTerrorists,
+				OpposingSide:  common.TeamTerrorists,
+				Players:       players,
+				PrimaryShare:  c.cfg.DefuseDefuserShare,
+				PrimaryReason: SwingReasonBombDefuse,
+				SupportReason: SwingReasonDefuseSupport,
+			}
+			ledgerEvent, _ := c.allocator.AllocateObjectiveEvent(
+				state,
+				common.TeamCounterTerrorists,
+				c.probEngine.CalculateBombDefuseSwing,
+				func(s *probability.RoundState) { s.SetBombDefused() },
+				input,
+				SwingEventBombDefuse,
+			)
+			ledger.RecordEvent(ledgerEvent)
 		case *BombExplodeEvent:
-			c.processBombExplode(playerSwing, state)
+			_ = e
 		}
 	}
 
-	// Process round end (saves, final state)
-	c.processRoundEnd(playerSwing, state, result)
-
-	// Calculate totals
-	res := &RoundSwingResult{
-		PlayerSwings: playerSwing,
+	if result != nil && c.cfg.ResidualEnabled {
+		currentProb := c.probEngine.GetWinProbability(state, result.Winner)
+		ApplyRoundResidual(ledger, ResidualInput{
+			Winner:         result.Winner,
+			CurrentWinProb: currentProb,
+			Players:        players,
+		}, c.cfg)
 	}
 
-	return res
+	ValidateRoundSwingLedger(ledger, c.cfg.ZeroSumTolerance)
+	return &RoundSwingResult{PlayerSwings: ledger.PlayerTotals()}
 }
 
-// processKill handles a kill event and attributes swing to contributors.
-func (c *Calculator) processKill(
-	playerSwing map[uint64]float64,
-	state *probability.RoundState,
-	kill *KillEvent,
-) {
-	// Get probability before kill
-	probBefore := c.probEngine.GetWinProbability(state, kill.KillerSide)
-
-	// Update state
-	state.RecordDeath(kill.VictimSide)
-
-	// Get probability after kill
-	probAfter := c.probEngine.GetWinProbability(state, kill.KillerSide)
-
-	// Calculate raw delta (kills should always help the killer's side)
-	rawDelta := probAfter - probBefore
-	if rawDelta < 0 {
-		rawDelta = 0
+func updatePlayerContextFromKill(players map[uint64]PlayerRoundContext, kill *KillEvent, event SwingLedgerEvent) {
+	for _, alloc := range event.PositiveAlloc {
+		ctx := players[alloc.SteamID]
+		ctx.SteamID = alloc.SteamID
+		ctx.Side = alloc.Side
+		if alloc.Amount > 0 {
+			ctx.PositiveSwing += alloc.Amount
+		}
+		ctx.Kills++
+		players[alloc.SteamID] = ctx
 	}
-
-	// Apply economy adjustment - harder kills are worth more
-	duelWinRate := c.probEngine.GetDuelWinRate(kill.KillerEquip, kill.VictimEquip)
-	ecoMultiplier := c.getEconomyMultiplier(duelWinRate)
-	adjustedDelta := rawDelta * ecoMultiplier
-
-	// Attribute credit to contributors
-	c.attrib.AttributeKillCredit(playerSwing, kill, adjustedDelta)
-
-	// Give negative swing to victim's team (implied by probability shift)
-	// This is already captured in the probability - loser's side probability dropped
-}
-
-// getEconomyMultiplier returns a multiplier based on duel difficulty.
-// Kills in unfavorable duels (low win rate) get bonus.
-// Kills in favorable duels (high win rate) get penalty.
-func (c *Calculator) getEconomyMultiplier(duelWinRate float64) float64 {
-	// Baseline: 50% duel = 1.0 multiplier
-	// 75% duel (easy) = ~0.67 multiplier
-	// 25% duel (hard) = ~1.5 multiplier
-	if duelWinRate <= 0.01 {
-		return 2.0
+	for _, alloc := range event.NegativeAlloc {
+		ctx := players[alloc.SteamID]
+		ctx.SteamID = alloc.SteamID
+		ctx.Side = alloc.Side
+		if alloc.Amount < 0 {
+			ctx.NegativeSwing += -alloc.Amount
+		}
+		players[alloc.SteamID] = ctx
 	}
-	return 0.50 / duelWinRate
-}
-
-// processBombPlant handles a bomb plant event.
-func (c *Calculator) processBombPlant(
-	playerSwing map[uint64]float64,
-	state *probability.RoundState,
-	plant *BombPlantEvent,
-) {
-	// Get probability before plant
-	probBefore := c.probEngine.GetWinProbability(state, common.TeamTerrorists)
-
-	// Update state
-	state.SetBombPlanted()
-
-	// Get probability after plant
-	probAfter := c.probEngine.GetWinProbability(state, common.TeamTerrorists)
-
-	// Calculate delta
-	delta := probAfter - probBefore
-
-	// Planter gets majority credit for plant but cap the swing contribution
-	planterSwing := delta * PlantCreditShare
-	if planterSwing > MaxPlantSwing {
-		planterSwing = MaxPlantSwing
-	} else if planterSwing < -MaxPlantSwing {
-		planterSwing = -MaxPlantSwing
-	}
-	playerSwing[plant.PlanterID] += planterSwing
-}
-
-// processBombDefuse handles a bomb defuse event.
-func (c *Calculator) processBombDefuse(
-	playerSwing map[uint64]float64,
-	state *probability.RoundState,
-	defuse *BombDefuseEvent,
-) {
-	// Get probability before defuse
-	probBefore := c.probEngine.GetWinProbability(state, common.TeamCounterTerrorists)
-
-	// Update state
-	state.SetBombDefused()
-
-	// Get probability after defuse
-	probAfter := c.probEngine.GetWinProbability(state, common.TeamCounterTerrorists)
-
-	// Calculate delta
-	delta := probAfter - probBefore
-
-	// Defuser gets majority credit
-	playerSwing[defuse.DefuserID] += delta * DefuseCreditShare
-}
-
-// processBombExplode handles bomb explosion (no individual credit, T team wins).
-func (c *Calculator) processBombExplode(
-	playerSwing map[uint64]float64,
-	state *probability.RoundState,
-) {
-	// Bomb exploding is already factored into probability via BombPlanted state
-	// and time remaining adjustments. No additional swing attribution needed.
-}
-
-// processRoundEnd handles end-of-round swing adjustments.
-func (c *Calculator) processRoundEnd(
-	playerSwing map[uint64]float64,
-	state *probability.RoundState,
-	result *RoundResult,
-) {
-	// Handle saves - when players survive a lost round
-	// No penalty applied; saving weapons is a valid strategic decision
-	_ = result
-}
-
-// KillSwingResult contains the economy-adjusted swing values for killer and victim.
-type KillSwingResult struct {
-	RawSwing          float64            // Raw probability delta from the kill
-	KillerSwing       float64            // Economy-adjusted swing for the killer (after sharing with contributors)
-	VictimSwing       float64            // Economy-adjusted penalty for the victim (worse for embarrassing deaths)
-	EcoMultiplier     float64            // The economy multiplier applied
-	ContributorSwings map[uint64]float64 // Swing credited to damage/flash assisters (playerID -> amount)
-}
-
-// CalculateSingleKillSwing computes the swing for a single kill event.
-// Useful for real-time swing calculation during parsing.
-// Returns the raw probability delta (no economy adjustment).
-func (c *Calculator) CalculateSingleKillSwing(
-	state *probability.RoundState,
-	kill *KillEvent,
-) float64 {
-	stateBefore := state.Clone()
-
-	// Get probability before
-	probBefore := c.probEngine.GetWinProbability(stateBefore, kill.KillerSide)
-
-	// Update state for after
-	stateAfter := stateBefore.Clone()
-	stateAfter.RecordDeath(kill.VictimSide)
-
-	// Get probability after
-	probAfter := c.probEngine.GetWinProbability(stateAfter, kill.KillerSide)
-
-	// A kill should never reduce the killer's team win probability
-	rawSwing := probAfter - probBefore
-	if rawSwing < 0 {
-		rawSwing = 0
-	}
-	return rawSwing
-}
-
-// CalculateKillSwingWithEconomy computes economy-adjusted swing for both killer and victim.
-// - Killer gets bonus for hard kills (pistol vs rifle = 2x multiplier)
-// - Victim gets extra penalty for embarrassing deaths (rifle dying to pistol = 2x penalty)
-// - Damage contributors and flash assisters receive a share of the killer's swing
-func (c *Calculator) CalculateKillSwingWithEconomy(
-	state *probability.RoundState,
-	kill *KillEvent,
-) KillSwingResult {
-	// Get raw probability swing
-	rawSwing := c.CalculateSingleKillSwing(state, kill)
-
-	// Get duel win rate from killer's perspective
-	duelWinRate := c.probEngine.GetDuelWinRate(kill.KillerEquip, kill.VictimEquip)
-
-	// Economy multiplier for killer (hard kills = bonus)
-	killerEcoMult := c.getEconomyMultiplier(duelWinRate)
-
-	// Economy multiplier for victim (embarrassing deaths = extra penalty)
-	// If killer had low win rate, victim was favored - dying is embarrassing
-	// Use victim's win rate / 0.50: high victim win rate → higher penalty
-	victimWinRate := 1.0 - duelWinRate
-	if victimWinRate < 0.01 {
-		victimWinRate = 0.01
-	}
-	victimEcoMult := victimWinRate / 0.50
-	if victimEcoMult > 2.0 {
-		victimEcoMult = 2.0
-	}
-
-	// Total eco-adjusted swing to distribute among killer + contributors
-	totalKillerSideSwing := rawSwing * killerEcoMult
-
-	// Use the attributor to split credit among killer, damage contributors, and flash assisters
-	playerSwings := make(map[uint64]float64)
-	c.attrib.AttributeKillCredit(playerSwings, kill, totalKillerSideSwing)
-
-	// Extract killer's share and contributor shares
-	killerSwing := playerSwings[kill.KillerID]
-	delete(playerSwings, kill.KillerID)
-
-	// playerSwings now contains only contributor shares (assisters)
-	var contributorSwings map[uint64]float64
-	if len(playerSwings) > 0 {
-		contributorSwings = playerSwings
-	}
-
-	return KillSwingResult{
-		RawSwing:          rawSwing,
-		KillerSwing:       killerSwing,
-		VictimSwing:       rawSwing * victimEcoMult,
-		EcoMultiplier:     killerEcoMult,
-		ContributorSwings: contributorSwings,
+	if kill != nil {
+		killerCtx := players[kill.KillerID]
+		killerCtx.SteamID = kill.KillerID
+		killerCtx.Side = kill.KillerSide
+		killerCtx.Kills++
+		killerCtx.Damage += kill.KillerDamageDealt
+		players[kill.KillerID] = killerCtx
 	}
 }
 

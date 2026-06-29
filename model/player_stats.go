@@ -66,7 +66,6 @@ type PlayerStats struct {
 	MultiKillsRaw [6]int         `json:"-"`
 	MultiKills    MultiKillStats `json:"multi_kills"`
 
-	RoundImpact                float64 `json:"round_impact"`
 	Survival                   float64 `json:"survival"`
 	KAST                       float64 `json:"kast"`
 	EconImpact                 float64 `json:"econ_impact"`

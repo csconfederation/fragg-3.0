@@ -88,16 +88,9 @@ const (
 	KASTContribAbove = 0.30 // Multiplier when KAST >= baseline
 	KASTContribBelow = 0.40 // Multiplier when KAST < baseline
 
-	// Round swing contribution multipliers
-	SwingContribPositive = 1.40 // Multiplier for positive swing
-	SwingContribNegative = 1.40 // Multiplier for negative swing
-
 	ProbSwingContribMultiplier = 2.5
 
-	// Impact contribution weights
-	OpeningKillImpactWeight = 0.15  // Weight for opening kills per round
-	MultiKillImpactWeight   = 0.08  // Weight for multi-kill rounds per round
-	MultiKillContrib        = 0.005 // Multi-kill bonus contribution multiplier
+	MultiKillContrib = 0.005 // Multi-kill bonus contribution multiplier
 )
 
 // Trade detection constants - used in handlers.go for trade calculations.

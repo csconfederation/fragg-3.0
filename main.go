@@ -37,6 +37,7 @@ import (
 	"github.com/ethsmith/eco-rating/output"
 	"github.com/ethsmith/eco-rating/parser"
 	"github.com/ethsmith/eco-rating/rating/probability"
+	"github.com/ethsmith/eco-rating/rating/swing"
 )
 
 // main initializes the application, parses command-line flags, loads configuration,
@@ -384,7 +385,7 @@ func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.Export
 	// Use buffered reader for better I/O performance on large demo files
 	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithOptions(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier)
+	p := parser.NewDemoParserWithSwingConfig(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
 	if err := p.Parse(); err != nil {
 		log.Fatalf("Failed to parse demo: %v", err)
 	}
@@ -433,7 +434,7 @@ func parseDemoFromStdin(cfg *config.Config) {
 	// Use buffered reader for stdin
 	bufferedReader := bufio.NewReaderSize(os.Stdin, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithOptions(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier)
+	p := parser.NewDemoParserWithSwingConfig(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
 	if err := p.Parse(); err != nil {
 		// Output error as JSON for demo-worker compatibility
 		fmt.Fprintf(os.Stderr, "{\"error\": \"%s\"}\n", err.Error())
@@ -467,7 +468,7 @@ func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool) (
 	// Use buffered reader for better I/O performance on large demo files (280-530MB)
 	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithOptions(bufferedReader, enableLogging, kdprModifier)
+	p := parser.NewDemoParserWithSwingConfig(bufferedReader, enableLogging, kdprModifier, swing.DefaultConfig())
 	if err := p.Parse(); err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to parse demo: %w", err)
 	}

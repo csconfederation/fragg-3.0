@@ -19,9 +19,7 @@ A CS2 demo parser that calculates advanced player performance ratings based on p
 This parser processes CS2 demo files and computes comprehensive player statistics including:
 
 - **Probability Swing**: How much each action affected win probability
-- **Economic Impact**: Equipment-adjusted kill values
-- **HLTV Rating**: Standard HLTV 2.0 rating for comparison
-- **Round Swing**: Per-round impact score
+- **Economic Impact**: Equipment-adjusted kill values (export stat)
 - **140+ tracked statistics**: Opening kills, trades, clutches, utility, AWP stats, etc.
 
 ### Usage
@@ -48,7 +46,6 @@ eco-rating/
 │   ├── parser.go           # Main DemoParser struct
 │   ├── handlers.go         # Event handlers (kills, damage, rounds)
 │   ├── round.go            # MatchState management
-│   ├── round_swing.go      # Round swing calculation
 │   ├── side_stats.go       # T/CT side stat updates
 │   ├── trade_detector.go   # Trade kill detection
 │   ├── swing_tracker.go    # Probability swing tracking
@@ -249,7 +246,7 @@ Kill value adjusted for equipment advantage. Killing a rifle player with a pisto
 | `parser/parser.go` | Calculate derived metrics |
 | `output/aggregator.go` | Accumulate stats across games |
 | `export/file.go` | Add to CSV export |
-| `rating/weights.go` | Constants (mostly legacy round swing) |
+| `rating/weights.go` | Rating constants and baselines |
 | `rating/rating.go` | Final rating formula |
 | `rating/economy.go` | Economic kill/death values |
 

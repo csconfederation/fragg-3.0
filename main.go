@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -380,6 +381,26 @@ func parseSingleDemoFromURL(url string, cfg *config.Config, exporter export.Expo
 // This is used when the -demo flag is provided or demo_path is set in config.
 // When CSCCompatibility is enabled, outputs demoScrape2-compatible JSON to stdout.
 func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.ExportOption) {
+	// CSC Compatibility mode: output demoScrape2-compatible JSON (merged CSC +
+	// eco fields) via the drop-in ProcessDemo pipeline.
+	if cfg.CSCCompatibility {
+		demo, err := os.Open(demoPath)
+		if err != nil {
+			log.Fatalf("Failed to open demo: %v", err)
+		}
+		game, perr := export.ProcessDemo(demo)
+		if perr != nil && !errors.Is(perr, export.ErrNoValidRounds) && (game == nil || game.Result != "Ended") {
+			log.Fatalf("Failed to parse demo: %v", perr)
+		}
+
+		jsonData, err := json.MarshalIndent(game, "", "  ")
+		if err != nil {
+			log.Fatalf("Failed to marshal JSON: %v", err)
+		}
+		fmt.Println(string(jsonData))
+		return
+	}
+
 	demo, err := os.Open(demoPath)
 	if err != nil {
 		log.Fatalf("Failed to open demo: %v", err)
@@ -392,23 +413,6 @@ func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.Export
 	p := parser.NewDemoParserWithSwingConfig(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
 	if err := p.Parse(); err != nil {
 		log.Fatalf("Failed to parse demo: %v", err)
-	}
-
-	// CSC Compatibility mode: output demoScrape2-compatible JSON
-	if cfg.CSCCompatibility {
-		players := p.GetPlayers()
-		mapName := p.GetMapName()
-		totalRounds := getTotalRounds(players)
-		tickRate := 64 // Default CS2 tick rate
-
-		game := export.ConvertToCSCGame(players, mapName, totalRounds, tickRate)
-
-		jsonData, err := json.MarshalIndent(game, "", "  ")
-		if err != nil {
-			log.Fatalf("Failed to marshal JSON: %v", err)
-		}
-		fmt.Println(string(jsonData))
-		return
 	}
 
 	if cfg.GenerateFiles {
@@ -435,22 +439,12 @@ func getTotalRounds(players map[uint64]*model.PlayerStats) int {
 // parseDemoFromStdin reads demo data from stdin and outputs CSC-compatible JSON.
 // This is designed for integration with demo-worker, which can pipe demo data directly.
 func parseDemoFromStdin(cfg *config.Config) {
-	// Use buffered reader for stdin
-	bufferedReader := bufio.NewReaderSize(os.Stdin, 1024*1024) // 1MB buffer
-
-	p := parser.NewDemoParserWithSwingConfig(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
-	if err := p.Parse(); err != nil {
+	game, perr := export.ProcessDemo(os.Stdin)
+	if perr != nil && !errors.Is(perr, export.ErrNoValidRounds) && (game == nil || game.Result != "Ended") {
 		// Output error as JSON for demo-worker compatibility
-		fmt.Fprintf(os.Stderr, "{\"error\": \"%s\"}\n", err.Error())
+		fmt.Fprintf(os.Stderr, "{\"error\": \"%s\"}\n", perr.Error())
 		os.Exit(1)
 	}
-
-	players := p.GetPlayers()
-	mapName := p.GetMapName()
-	totalRounds := getTotalRounds(players)
-	tickRate := 64 // Default CS2 tick rate
-
-	game := export.ConvertToCSCGame(players, mapName, totalRounds, tickRate)
 
 	jsonData, err := json.Marshal(game)
 	if err != nil {

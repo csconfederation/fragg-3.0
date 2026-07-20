@@ -116,19 +116,6 @@ func (e *Engine) GetDuelWinRate(attackerEquip, victimEquip float64) float64 {
 	return e.tables.GetDuelWinRate(attackerCat, victimCat)
 }
 
-// GetDuelWinRateByCategory returns the duel win rate using economy categories.
-func (e *Engine) GetDuelWinRateByCategory(attackerCat, victimCat EconomyCategory) float64 {
-	return e.tables.GetDuelWinRate(attackerCat, victimCat)
-}
-
-// CalculateKillSwing calculates the probability swing from a kill.
-func (e *Engine) CalculateKillSwing(stateBefore, stateAfter *RoundState, killerSide common.Team) float64 {
-	probBefore := e.GetWinProbability(stateBefore, killerSide)
-	probAfter := e.GetWinProbability(stateAfter, killerSide)
-
-	return probAfter - probBefore
-}
-
 // CalculateBombPlantSwing calculates the probability swing from a bomb plant.
 func (e *Engine) CalculateBombPlantSwing(stateBefore *RoundState) float64 {
 	stateAfter := stateBefore.Clone()
@@ -149,25 +136,6 @@ func (e *Engine) CalculateBombDefuseSwing(stateBefore *RoundState) float64 {
 	probAfter := e.GetWinProbability(stateAfter, common.TeamCounterTerrorists)
 
 	return probAfter - probBefore
-}
-
-// GetEconomyAdjustedKillValue returns a multiplier for kill value based on economy.
-// Kills against better-equipped opponents are worth more (>1.0).
-// Kills against worse-equipped opponents are worth less (<1.0).
-func (e *Engine) GetEconomyAdjustedKillValue(killerEquip, victimEquip float64) float64 {
-	duelWinRate := e.GetDuelWinRate(killerEquip, victimEquip)
-
-	// If you're expected to win the duel (high win rate), the kill is worth less.
-	// If you're expected to lose (low win rate), the kill is worth more.
-	// Base value at 50% win rate = 1.0
-	// At 75% win rate (easy kill) = 0.67
-	// At 25% win rate (hard kill) = 1.50
-
-	if duelWinRate <= 0.01 {
-		return 2.0 // Cap at 2x for extreme underdog
-	}
-
-	return 0.50 / duelWinRate
 }
 
 // clampInt restricts an integer value to the range [min, max].

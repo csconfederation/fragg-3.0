@@ -167,7 +167,7 @@ func convertPlayerStats(p *model.PlayerStats) *CSCPlayerStats {
 		// Advanced metrics
 		Wlp: p.ProbabilitySwing,
 		Mip: p.ProbabilitySwing,
-		Rws: p.RoundWinShares,
+		Rws: 0,
 		Eac: p.AssistedKills,
 		Rwk: p.RoundsWithKill,
 
@@ -181,7 +181,7 @@ func convertPlayerStats(p *model.PlayerStats) *CSCPlayerStats {
 		DrDiff:       p.ADR - safeDiv64(float64(p.DamageTaken), float64(p.RoundsPlayed)),
 		KR:           p.KPR,
 		Tr:           safeDiv64(float64(p.TradeKills), float64(p.TradedDeaths)),
-		ImpactRating: p.RoundImpact,
+		ImpactRating: p.ProbabilitySwingPerRound,
 		Rating:       p.FinalRating,
 
 		// Side-specific stats

@@ -66,7 +66,6 @@ type PlayerStats struct {
 	MultiKillsRaw [6]int         `json:"-"`
 	MultiKills    MultiKillStats `json:"multi_kills"`
 
-	RoundImpact                float64 `json:"round_impact"`
 	Survival                   float64 `json:"survival"`
 	KAST                       float64 `json:"kast"`
 	EconImpact                 float64 `json:"econ_impact"`
@@ -199,9 +198,6 @@ type PlayerStats struct {
 	CTOpeningKills  int `json:"ct_opening_kills"`
 	CTOpeningDeaths int `json:"ct_opening_deaths"`
 
-	// Round Win Shares (RWS) - contribution to round wins
-	RoundWinShares float64 `json:"round_win_shares"`
-
 	// Enemies flashed count (separate from flash assists)
 	EnemiesFlashed int `json:"enemies_flashed"`
 
@@ -245,5 +241,4 @@ type PlayerStats struct {
 	EcoAdjustedKills         float64               `json:"eco_adjusted_kills"`          // Kills weighted by duel difficulty
 	SwingRating              float64               `json:"swing_rating"`                // Swing contribution to final rating
 	RoundBreakdowns          []RoundSwingBreakdown `json:"-"`
-	RatingBreakdown          RatingBreakdown       `json:"-"`
 }

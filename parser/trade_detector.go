@@ -59,11 +59,13 @@ func (td *TradeDetector) Reset() {
 
 // TradeResult contains the results of trade detection for a kill event.
 type TradeResult struct {
-	IsTrade          bool
-	TradedPlayerID   uint64
-	TradedPlayerName string
-	TradeSpeed       float64
-	WasOpeningDeath  bool
+	IsTrade              bool
+	TradedPlayerID       uint64
+	TradedPlayerName     string
+	TradeSpeed           float64
+	WasOpeningDeath      bool
+	TradeReallocation    bool
+	OriginalDeathPenalty float64
 }
 
 // RecordDeath records a death for potential trade detection.
@@ -108,7 +110,6 @@ func (td *TradeDetector) RecordDeath(
 }
 
 // CheckForTrade checks if the current kill is a trade for a previous death.
-// Returns trade information if this kill trades a teammate's death.
 func (td *TradeDetector) CheckForTrade(
 	attacker *common.Player,
 	victim *common.Player,
@@ -132,17 +133,10 @@ func (td *TradeDetector) CheckForTrade(
 				tradedRound.TradeDeath = true
 				tradedRound.SavedByTeammate = true
 
-				// Retroactively refund 30% of the death penalty since the death was traded.
-				// A traded death is less impactful because the team recovers the man disadvantage.
 				tradeRefund := tradedRound.LastDeathSwing * 0.30
 				if tradeRefund < 0 {
-					// LastDeathSwing is negative, so refund is negative; we add the positive amount back
-					tradedRound.ProbabilitySwing -= tradeRefund
-					tradedRound.AddSwingContribution(model.SwingContribution{
-						Type:   "trade_refund",
-						Amount: -tradeRefund,
-						Notes:  "Death traded — penalty reduced",
-					})
+					result.TradeReallocation = true
+					result.OriginalDeathPenalty = tradedRound.LastDeathSwing
 				}
 			}
 

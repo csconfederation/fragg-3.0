@@ -69,7 +69,6 @@ type AggregatedStats struct {
 	AWPOpeningKills     int     `json:"awp_opening_kills"`
 
 	MultiKills                 MultiKillStats `json:"multi_kills"`
-	RoundImpact                float64        `json:"round_impact"`
 	Survival                   float64        `json:"survival"`
 	KAST                       float64        `json:"kast"`
 	EconImpact                 float64        `json:"econ_impact"`
@@ -422,7 +421,6 @@ func (a *Aggregator) AddGame(players map[uint64]*model.PlayerStats, mapName stri
 			agg.mapGamesCount[mapName]++
 		}
 		rounds := float64(p.RoundsPlayed)
-		agg.RoundImpact += p.RoundImpact * rounds
 		agg.Survival += p.Survival * rounds
 		agg.KAST += p.KAST * rounds
 		agg.EconImpact += p.EconImpact * rounds
@@ -443,7 +441,6 @@ func (a *Aggregator) Finalize() {
 			agg.TimeAlivePerRound = agg.totalTimeAlive / rounds
 			agg.EnemyFlashDurationPerRound = agg.totalEnemyFlashDur / rounds
 			agg.TeamFlashDurationPerRound = agg.totalTeamFlashDur / rounds
-			agg.RoundImpact = agg.RoundImpact / rounds
 			agg.Survival = agg.Survival / rounds
 			agg.KAST = agg.KAST / rounds
 			agg.EconImpact = agg.EconImpact / rounds

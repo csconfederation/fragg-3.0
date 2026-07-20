@@ -2,28 +2,6 @@ package model
 
 import "fmt"
 
-// RatingComponent represents one piece of the final rating formula.
-type RatingComponent struct {
-	Metric       string  `json:"metric"`
-	Value        float64 `json:"value"`
-	Baseline     float64 `json:"baseline,omitempty"`
-	Multiplier   float64 `json:"multiplier"`
-	Contribution float64 `json:"contribution"`
-	Notes        string  `json:"notes,omitempty"`
-}
-
-// RatingBreakdown captures how the final rating value is composed.
-type RatingBreakdown struct {
-	Baseline         float64         `json:"baseline"`
-	KPRDPR           RatingComponent `json:"kpr_dpr"`
-	ADR              RatingComponent `json:"adr"`
-	KAST             RatingComponent `json:"kast"`
-	ProbabilitySwing RatingComponent `json:"probability_swing"`
-	UnclampedRating  float64         `json:"unclamped_rating"`
-	FinalRating      float64         `json:"final_rating"`
-	Formula          string          `json:"formula"`
-}
-
 // RoundSwingBreakdown captures per-round swing context for a player.
 type RoundSwingBreakdown struct {
 	RoundNumber      int                 `json:"round_number"`

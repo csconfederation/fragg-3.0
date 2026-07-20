@@ -160,18 +160,16 @@ type playerDetail struct {
 	Name             string                      `json:"name"`
 	FinalRating      float64                     `json:"final_rating"`
 	RoundsPlayed     int                         `json:"rounds_played"`
-	RatingBreakdown  model.RatingBreakdown       `json:"rating_breakdown"`
 	ProbabilitySwing swingSummary                `json:"probability_swing"`
 	RoundBreakdowns  []model.RoundSwingBreakdown `json:"round_breakdowns"`
 }
 
 func newPlayerDetail(p *model.PlayerStats) playerDetail {
 	detail := playerDetail{
-		SteamID:         p.SteamID,
-		Name:            p.Name,
-		FinalRating:     p.FinalRating,
-		RoundsPlayed:    p.RoundsPlayed,
-		RatingBreakdown: p.RatingBreakdown,
+		SteamID:      p.SteamID,
+		Name:         p.Name,
+		FinalRating:  p.FinalRating,
+		RoundsPlayed: p.RoundsPlayed,
 		ProbabilitySwing: swingSummary{
 			Total:            p.ProbabilitySwing,
 			PerRound:         p.ProbabilitySwingPerRound,
@@ -231,7 +229,7 @@ func getSingleGameHeader() []string {
 		"Opening Kills Per Round", "Opening Deaths Per Round", "Opening Attempts Pct", "Opening Success Pct",
 		"Rounds Won After Opening", "Win Pct After Opening Kill",
 		"Eco Kill Value", "Eco Death Value", "Duel Swing", "Duel Swing Per Round",
-		"Econ Impact", "Round Impact",
+		"Econ Impact",
 		"Probability Swing", "Probability Swing Per Round",
 		"Clutch Rounds", "Clutch Wins", "Clutch Points Per Round",
 		"Clutch 1v1 Attempts", "Clutch 1v1 Wins", "Clutch 1v1 Win Pct",
@@ -333,7 +331,6 @@ func getSingleGameRow(p *model.PlayerStats) []string {
 		formatFloat(p.DuelSwing),
 		formatFloat(p.DuelSwingPerRound),
 		formatFloat(p.EconImpact),
-		formatFloat(p.RoundImpact),
 		formatFloat(p.ProbabilitySwing),
 		formatFloat(p.ProbabilitySwingPerRound),
 		strconv.Itoa(p.ClutchRounds),
@@ -495,7 +492,7 @@ func getAggregatedHeader() []string {
 		"Opening Kills Per Round", "Opening Deaths Per Round", "Opening Attempts Pct", "Opening Success Pct",
 		"Rounds Won After Opening", "Win Pct After Opening Kill",
 		"Eco Kill Value", "Eco Death Value", "Duel Swing", "Duel Swing Per Round",
-		"Econ Impact", "Round Impact",
+		"Econ Impact",
 		"Probability Swing", "Probability Swing Per Round",
 		"Clutch Rounds", "Clutch Wins", "Clutch Points Per Round",
 		"Clutch 1v1 Attempts", "Clutch 1v1 Wins", "Clutch 1v1 Win Pct",
@@ -606,7 +603,6 @@ func getAggregatedRow(p *output.AggregatedStats) []string {
 		formatFloat(p.DuelSwing),
 		formatFloat(p.DuelSwingPerRound),
 		formatFloat(p.EconImpact),
-		formatFloat(p.RoundImpact),
 		formatFloat(p.ProbabilitySwing),
 		formatFloat(p.ProbabilitySwingPerRound),
 		strconv.Itoa(p.ClutchRounds),

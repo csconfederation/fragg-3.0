@@ -37,6 +37,7 @@ import (
 	"github.com/ethsmith/eco-rating/output"
 	"github.com/ethsmith/eco-rating/parser"
 	"github.com/ethsmith/eco-rating/rating/probability"
+	"github.com/ethsmith/eco-rating/rating/swing"
 )
 
 // main initializes the application, parses command-line flags, loads configuration,
@@ -274,6 +275,10 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 	if numWorkers <= 0 {
 		numWorkers = runtime.NumCPU()
 	}
+	const maxWorkers = 4 // cap to limit RAM when parsing large demos in parallel
+	if numWorkers > maxWorkers {
+		numWorkers = maxWorkers
+	}
 	log.Printf("Using %d parallel workers", numWorkers)
 
 	jobs := make(chan downloadedDemo, len(downloadedDemos))
@@ -285,7 +290,7 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				players, mapName, logs, collector, err := parseDemoWithLogs(job.Path, cfg.EnableLogging, cfg.KDPRModifier)
+				players, mapName, logs, collector, err := parseDemoWithLogs(job.Path, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
 				// Determine tier from demo filename: team_ prefix = scrim, otherwise = regulation
 				demoTier := tier
 				if strings.Contains(strings.ToLower(job.Key), "team_") {
@@ -323,7 +328,7 @@ func parseDemosToAggregator(cfg *config.Config, downloadedDemos []downloadedDemo
 	for result := range results {
 		processedCount++
 		if result.Error != nil {
-			log.Printf("[%d/%d] Parse error for %s: %v", processedCount, len(downloadedDemos), result.DemoKey, result.Error)
+			log.Printf("[%d/%d] Parse error for %s: %s", processedCount, len(downloadedDemos), result.DemoKey, parseErrorSummary(result.Error))
 			continue
 		}
 
@@ -384,7 +389,7 @@ func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.Export
 	// Use buffered reader for better I/O performance on large demo files
 	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithOptions(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier)
+	p := parser.NewDemoParserWithSwingConfig(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
 	if err := p.Parse(); err != nil {
 		log.Fatalf("Failed to parse demo: %v", err)
 	}
@@ -433,7 +438,7 @@ func parseDemoFromStdin(cfg *config.Config) {
 	// Use buffered reader for stdin
 	bufferedReader := bufio.NewReaderSize(os.Stdin, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithOptions(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier)
+	p := parser.NewDemoParserWithSwingConfig(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
 	if err := p.Parse(); err != nil {
 		// Output error as JSON for demo-worker compatibility
 		fmt.Fprintf(os.Stderr, "{\"error\": \"%s\"}\n", err.Error())
@@ -455,9 +460,24 @@ func parseDemoFromStdin(cfg *config.Config) {
 	fmt.Println(string(jsonData))
 }
 
+// parseErrorSummary returns the first line of a parse error, omitting demoinfocs stack traces.
+func parseErrorSummary(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if i := strings.Index(msg, "\nstacktrace:"); i >= 0 {
+		msg = msg[:i]
+	}
+	if i := strings.Index(msg, "\n"); i >= 0 {
+		msg = msg[:i]
+	}
+	return msg
+}
+
 // parseDemoWithLogs opens and parses a demo file, returning player stats, map name,
 // log output, probability collector, and any error. This is the core parsing function used by both modes.
-func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool) (map[uint64]*model.PlayerStats, string, string, *probability.DataCollector, error) {
+func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool, swingCfg swing.Config) (map[uint64]*model.PlayerStats, string, string, *probability.DataCollector, error) {
 	demo, err := os.Open(demoPath)
 	if err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to open demo: %w", err)
@@ -467,7 +487,7 @@ func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool) (
 	// Use buffered reader for better I/O performance on large demo files (280-530MB)
 	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
 
-	p := parser.NewDemoParserWithOptions(bufferedReader, enableLogging, kdprModifier)
+	p := parser.NewDemoParserWithSwingConfig(bufferedReader, enableLogging, kdprModifier, swingCfg)
 	if err := p.Parse(); err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to parse demo: %w", err)
 	}

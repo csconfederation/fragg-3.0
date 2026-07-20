@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+
+	"github.com/ethsmith/eco-rating/rating/swing"
 )
 
 // Config holds all application configuration settings.
@@ -28,6 +30,20 @@ type Config struct {
 	Workers          int      `json:"workers"`           // Number of parallel parsing workers (0 = auto)
 	GenerateFiles    bool     `json:"generate_files"`    // Generate stats.csv and probability_data.json files
 	CSCCompatibility bool     `json:"csc_compatibility"` // Output demoScrape2-compatible JSON (mutually exclusive with cumulative)
+
+	// Swing parser settings (see rating/swing/config.go for defaults)
+	SwingExitFrags              string  `json:"swing_exit_frags"`
+	SwingResidualEnabled        bool    `json:"swing_residual_enabled"`
+	SwingResidualMax            float64 `json:"swing_residual_max"`
+	SwingSavePenaltyWeight      float64 `json:"swing_save_penalty_weight"`
+	SwingPlantPlanterShare      float64 `json:"swing_plant_planter_share"`
+	SwingDefuseDefuserShare     float64 `json:"swing_defuse_defuser_share"`
+	SwingKillFinalHitBase       float64 `json:"swing_kill_final_hit_base"`
+	SwingKillDamageShareWeight  float64 `json:"swing_kill_damage_share_weight"`
+	SwingTradeKillMultiplier    float64 `json:"swing_trade_kill_multiplier"`
+	SwingSurvivalCreditEnabled  bool    `json:"swing_survival_credit_enabled"`
+	SwingSurvivalCreditMaxShare float64 `json:"swing_survival_credit_max_share"`
+	SwingZeroSumTolerance       float64 `json:"swing_zero_sum_tolerance"`
 }
 
 // DefaultConfig returns a Config with sensible default values.
@@ -43,10 +59,62 @@ func DefaultConfig() *Config {
 		EnableLogging:    true,
 		IgnoreScrims:     false,
 		KDPRModifier:     false,
-		Workers:          8,     // Number of parallel workers (0 = use CPU count)
+		Workers:          4,     // Parallel demo parsers (each uses significant RAM)
 		GenerateFiles:    true,  // Generate output files by default
 		CSCCompatibility: false, // Disabled by default
+
+		SwingExitFrags:              "zero",
+		SwingResidualEnabled:        true,
+		SwingResidualMax:            0.35,
+		SwingSavePenaltyWeight:      0.35,
+		SwingPlantPlanterShare:      0.45,
+		SwingDefuseDefuserShare:     0.60,
+		SwingKillFinalHitBase:       0.35,
+		SwingKillDamageShareWeight:  0.45,
+		SwingTradeKillMultiplier:    0.80,
+		SwingSurvivalCreditEnabled:  false,
+		SwingSurvivalCreditMaxShare: 0.05,
+		SwingZeroSumTolerance:       0.005,
 	}
+}
+
+// SwingConfig returns swing settings as a rating/swing.Config.
+func (c *Config) SwingConfig() swing.Config {
+	cfg := swing.DefaultConfig()
+	if c == nil {
+		return cfg
+	}
+	cfg.ExitFrags = swing.ExitFragMode(c.SwingExitFrags)
+	cfg.ResidualEnabled = c.SwingResidualEnabled
+	if c.SwingResidualMax > 0 {
+		cfg.ResidualMax = c.SwingResidualMax
+	}
+	if c.SwingSavePenaltyWeight > 0 {
+		cfg.SavePenaltyWeight = c.SwingSavePenaltyWeight
+	}
+	if c.SwingPlantPlanterShare > 0 {
+		cfg.PlantPlanterShare = c.SwingPlantPlanterShare
+	}
+	if c.SwingDefuseDefuserShare > 0 {
+		cfg.DefuseDefuserShare = c.SwingDefuseDefuserShare
+	}
+	if c.SwingKillFinalHitBase > 0 {
+		cfg.KillFinalHitBase = c.SwingKillFinalHitBase
+	}
+	if c.SwingKillDamageShareWeight > 0 {
+		cfg.KillDamageShareWeight = c.SwingKillDamageShareWeight
+	}
+	if c.SwingTradeKillMultiplier > 0 {
+		cfg.TradeKillMultiplier = c.SwingTradeKillMultiplier
+	}
+	cfg.SurvivalCreditEnabled = c.SwingSurvivalCreditEnabled
+	if c.SwingSurvivalCreditMaxShare > 0 {
+		cfg.SurvivalCreditMaxShare = c.SwingSurvivalCreditMaxShare
+	}
+	if c.SwingZeroSumTolerance > 0 {
+		cfg.ZeroSumTolerance = c.SwingZeroSumTolerance
+	}
+	return cfg
 }
 
 // LoadConfig reads configuration from a JSON file at the given path.

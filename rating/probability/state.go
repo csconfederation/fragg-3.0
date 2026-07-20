@@ -114,17 +114,6 @@ func (s *RoundState) SetBombDefused() {
 	s.BombDefused = true
 }
 
-// IsRoundOver returns true if the round is decided (one team eliminated or bomb exploded/defused).
-func (s *RoundState) IsRoundOver() bool {
-	if s.TAlive == 0 || s.CTAlive == 0 {
-		return true
-	}
-	if s.BombDefused {
-		return true
-	}
-	return false
-}
-
 // StateKey returns a unique key for this state for table lookups.
 func (s *RoundState) StateKey() string {
 	bombStatus := "none"

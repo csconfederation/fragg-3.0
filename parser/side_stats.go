@@ -9,7 +9,7 @@
 package parser
 
 import (
-	"github.com/ethsmith/eco-rating/model"
+	"github.com/csconfederation/fragg-3.0/model"
 )
 
 // SideStatsUpdater handles updating side-specific statistics for a player.

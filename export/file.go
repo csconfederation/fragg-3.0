@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/output"
+	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/output"
 )
 
 // FileExportOption implements ExportOption for CSV file output.

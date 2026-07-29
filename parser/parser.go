@@ -14,10 +14,10 @@ import (
 	"io"
 	"log"
 
-	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/rating"
-	"github.com/ethsmith/eco-rating/rating/probability"
-	"github.com/ethsmith/eco-rating/rating/swing"
+	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/rating"
+	"github.com/csconfederation/fragg-3.0/rating/probability"
+	"github.com/csconfederation/fragg-3.0/rating/swing"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
 )

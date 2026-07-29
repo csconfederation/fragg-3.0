@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/ethsmith/eco-rating/rating/swing"
+	"github.com/csconfederation/fragg-3.0/rating/swing"
 )
 
 const (

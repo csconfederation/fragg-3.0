@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethsmith/eco-rating/rating/swing"
+	"github.com/csconfederation/fragg-3.0/rating/swing"
 )
 
 // Config holds all application configuration settings.

@@ -9,7 +9,7 @@
 package parser
 
 import (
-	"github.com/ethsmith/eco-rating/model"
+	"github.com/csconfederation/fragg-3.0/model"
 )
 
 // DemoParserInterface defines the contract for demo parsing operations.

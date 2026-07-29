@@ -11,7 +11,7 @@ package rating
 import (
 	"math"
 
-	"github.com/ethsmith/eco-rating/model"
+	"github.com/csconfederation/fragg-3.0/model"
 )
 
 // exponentialAdjustment calculates an exponential adjustment capped at ±maxAdj.

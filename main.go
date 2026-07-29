@@ -30,15 +30,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethsmith/eco-rating/bucket"
-	"github.com/ethsmith/eco-rating/config"
-	"github.com/ethsmith/eco-rating/downloader"
-	"github.com/ethsmith/eco-rating/export"
-	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/output"
-	"github.com/ethsmith/eco-rating/parser"
-	"github.com/ethsmith/eco-rating/rating/probability"
-	"github.com/ethsmith/eco-rating/rating/swing"
+	"github.com/csconfederation/fragg-3.0/bucket"
+	"github.com/csconfederation/fragg-3.0/config"
+	"github.com/csconfederation/fragg-3.0/downloader"
+	"github.com/csconfederation/fragg-3.0/export"
+	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/output"
+	"github.com/csconfederation/fragg-3.0/parser"
+	"github.com/csconfederation/fragg-3.0/rating/probability"
+	"github.com/csconfederation/fragg-3.0/rating/swing"
 )
 
 // main initializes the application, parses command-line flags, loads configuration,

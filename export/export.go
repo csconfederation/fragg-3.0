@@ -9,8 +9,8 @@
 package export
 
 import (
-	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/output"
+	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/output"
 )
 
 // ExportOption defines the interface for exporting player statistics.

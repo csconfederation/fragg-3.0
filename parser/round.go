@@ -10,8 +10,8 @@ package parser
 
 import (
 	"fmt"
-	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/rating/swing"
+	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/rating/swing"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
 )

@@ -9,8 +9,8 @@
 package output
 
 import (
-	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/rating"
+	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/rating"
 )
 
 // safeDiv returns numerator/denominator as float64, or 0 if denominator is 0.

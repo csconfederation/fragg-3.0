@@ -3,7 +3,7 @@ package swing
 import (
 	"math"
 
-	"github.com/ethsmith/eco-rating/rating/probability"
+	"github.com/csconfederation/fragg-3.0/rating/probability"
 
 	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
 )

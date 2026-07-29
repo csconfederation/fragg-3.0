@@ -5,9 +5,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/ethsmith/eco-rating/csc"
-	"github.com/ethsmith/eco-rating/model"
-	"github.com/ethsmith/eco-rating/parser"
+	"github.com/csconfederation/fragg-3.0/csc"
+	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/parser"
 )
 
 // Game is the demoScrape2-compatible output type returned by ProcessDemo.

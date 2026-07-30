@@ -132,7 +132,10 @@ type PlayerStats struct {
 	TSurvivals                 int     `json:"t_survivals"`
 	TRoundsWithMultiKill       int     `json:"t_rounds_with_multi_kill"`
 	TEcoKillValue              float64 `json:"t_eco_kill_value"`
+	TEcoDeathValue             float64 `json:"t_eco_death_value"`
 	TProbabilitySwing          float64 `json:"t_probability_swing"`
+	TDuelSwing                 float64 `json:"t_duel_swing"`
+	TDuelSwingPerRound         float64 `json:"t_duel_swing_per_round"`
 	TKAST                      float64 `json:"t_kast"`
 	TMultiKills                [6]int  `json:"-"`
 	TClutchRounds              int     `json:"t_clutch_rounds"`
@@ -173,7 +176,10 @@ type PlayerStats struct {
 	CTSurvivals                int     `json:"ct_survivals"`
 	CTRoundsWithMultiKill      int     `json:"ct_rounds_with_multi_kill"`
 	CTEcoKillValue             float64 `json:"ct_eco_kill_value"`
+	CTEcoDeathValue            float64 `json:"ct_eco_death_value"`
 	CTProbabilitySwing         float64 `json:"ct_probability_swing"`
+	CTDuelSwing                float64 `json:"ct_duel_swing"`
+	CTDuelSwingPerRound        float64 `json:"ct_duel_swing_per_round"`
 	CTKAST                     float64 `json:"ct_kast"`
 	CTMultiKills               [6]int  `json:"-"`
 	CTClutchRounds             int     `json:"ct_clutch_rounds"`

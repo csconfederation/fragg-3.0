@@ -267,6 +267,17 @@ func (d *DemoParser) computeDerivedStats() {
 			}
 		}
 
+		if p.TRoundsPlayed > 0 {
+			tRounds := float64(p.TRoundsPlayed)
+			p.TDuelSwing = p.TEcoKillValue - p.TEcoDeathValue
+			p.TDuelSwingPerRound = p.TDuelSwing / tRounds
+		}
+		if p.CTRoundsPlayed > 0 {
+			ctRounds := float64(p.CTRoundsPlayed)
+			p.CTDuelSwing = p.CTEcoKillValue - p.CTEcoDeathValue
+			p.CTDuelSwingPerRound = p.CTDuelSwing / ctRounds
+		}
+
 		p.FinalRating = rating.ComputeFinalRating(p, d.kdprModifier)
 
 		if p.TRoundsPlayed > 0 {

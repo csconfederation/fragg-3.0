@@ -679,6 +679,11 @@ func (d *DemoParser) processKillerStats(ctx *killContext) {
 	}
 
 	victim.EcoDeathValue += ctx.deathPenalty
+	if ctx.victim.Team == common.TeamTerrorists {
+		victim.TEcoDeathValue += ctx.deathPenalty
+	} else if ctx.victim.Team == common.TeamCounterTerrorists {
+		victim.CTEcoDeathValue += ctx.deathPenalty
+	}
 }
 
 // processWeaponStats updates weapon-specific statistics.

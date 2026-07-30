@@ -11,10 +11,15 @@ func TestSideAwareEcoMergeDoesNotDuplicateWholeMatch(t *testing.T) {
 	eco := &model.PlayerStats{
 		FinalRating:        1.5,
 		ProbabilitySwing:   0.9,
+		RoundsPlayed:       18,
 		TProbabilitySwing:  0.6,
 		CTProbabilitySwing: 0.3,
 		TEcoRating:         1.2,
 		CTEcoRating:        0.8,
+		TEcoKillValue:      400,
+		TEcoDeathValue:     100,
+		CTEcoKillValue:     250,
+		CTEcoDeathValue:    50,
 		TradeKills:         5,
 		TTradeKills:        4,
 		CTTradeKills:       1,
@@ -53,5 +58,53 @@ func TestSideAwareEcoMergeDoesNotDuplicateWholeMatch(t *testing.T) {
 	}
 	if tSide.EcoKnifeKills != 2 || ctSide.EcoKnifeKills != 0 {
 		t.Fatalf("side knife kills T=%d CT=%d", tSide.EcoKnifeKills, ctSide.EcoKnifeKills)
+	}
+
+	wantTDuel := eco.TEcoKillValue - eco.TEcoDeathValue
+	wantCTDuel := eco.CTEcoKillValue - eco.CTEcoDeathValue
+	if tSide.EcoDuelSwing != wantTDuel {
+		t.Fatalf("T ecoDuelSwing = %f, want %f (not probability swing)", tSide.EcoDuelSwing, wantTDuel)
+	}
+	if ctSide.EcoDuelSwing != wantCTDuel {
+		t.Fatalf("CT ecoDuelSwing = %f, want %f (not probability swing)", ctSide.EcoDuelSwing, wantCTDuel)
+	}
+	if tSide.EcoDeathValue != eco.TEcoDeathValue {
+		t.Fatalf("T ecoDeathValue = %f, want %f", tSide.EcoDeathValue, eco.TEcoDeathValue)
+	}
+	if ctSide.EcoDeathValue != eco.CTEcoDeathValue {
+		t.Fatalf("CT ecoDeathValue = %f, want %f", ctSide.EcoDeathValue, eco.CTEcoDeathValue)
+	}
+
+	wantTDisplay := swingDisplayRating(eco.TProbabilitySwing, eco.TRoundsPlayed)
+	wantCTDisplay := swingDisplayRating(eco.CTProbabilitySwing, eco.CTRoundsPlayed)
+	if tSide.EcoSwingDisplayRating != wantTDisplay {
+		t.Fatalf("T ecoSwingDisplayRating = %f, want %f (not TEcoRating)", tSide.EcoSwingDisplayRating, wantTDisplay)
+	}
+	if ctSide.EcoSwingDisplayRating != wantCTDisplay {
+		t.Fatalf("CT ecoSwingDisplayRating = %f, want %f (not CTEcoRating)", ctSide.EcoSwingDisplayRating, wantCTDisplay)
+	}
+	if tSide.EcoSwingDisplayRating == eco.TEcoRating {
+		t.Fatal("T ecoSwingDisplayRating must not equal TEcoRating")
+	}
+	if ctSide.EcoSwingDisplayRating == eco.CTEcoRating {
+		t.Fatal("CT ecoSwingDisplayRating must not equal CTEcoRating")
+	}
+	if tSide.EcoDuelSwing == eco.TProbabilitySwing {
+		t.Fatal("T ecoDuelSwing must not equal TProbabilitySwing")
+	}
+}
+
+func TestSwingDisplayRatingClamp(t *testing.T) {
+	if got := swingDisplayRating(0, 10); got != 1.0 {
+		t.Fatalf("zero swing = %f, want 1.0", got)
+	}
+	if got := swingDisplayRating(10, 10); got != 1.5 {
+		t.Fatalf("high swing clamped = %f, want 1.5", got)
+	}
+	if got := swingDisplayRating(-10, 10); got != 0.5 {
+		t.Fatalf("low swing clamped = %f, want 0.5", got)
+	}
+	if got := swingDisplayRating(0.4, 10); got != 1.4 {
+		t.Fatalf("+4%% swing = %f, want 1.4", got)
 	}
 }

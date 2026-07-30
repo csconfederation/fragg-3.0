@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"github.com/csconfederation/fragg-3.0/rating"
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
@@ -18,7 +19,16 @@ type SwingTracker struct {
 	cfg              swing.Config
 	roundNumber      int
 	enabled          bool
+	tickRate         float64
+	lastClockTick    int
+	defaultRoundTime float64
+	bombTimer        float64
 }
+
+const (
+	defaultRoundTimeSeconds = 115.0
+	defaultBombTimerSeconds = 40.0
+)
 
 // NewSwingTrackerWithConfig creates a swing tracker with the given config.
 func NewSwingTrackerWithConfig(cfg swing.Config) *SwingTracker {
@@ -30,6 +40,9 @@ func NewSwingTrackerWithConfig(cfg swing.Config) *SwingTracker {
 		advantageTracker: NewAdvantageTracker(),
 		cfg:              cfg,
 		enabled:          true,
+		tickRate:         float64(rating.TickRate),
+		defaultRoundTime: defaultRoundTimeSeconds,
+		bombTimer:        defaultBombTimerSeconds,
 	}
 }
 
@@ -50,11 +63,40 @@ func (st *SwingTracker) Config() swing.Config {
 
 // ResetRound clears state for a new round.
 func (st *SwingTracker) ResetRound(roundNumber, tAlive, ctAlive int, mapName string) {
+	st.ResetRoundWithClock(roundNumber, tAlive, ctAlive, mapName, 0, st.defaultRoundTime)
+}
+
+// ResetRoundWithClock clears state for a new round and seeds the round clock.
+func (st *SwingTracker) ResetRoundWithClock(roundNumber, tAlive, ctAlive int, mapName string, startTick int, roundTimeSeconds float64) {
 	st.roundNumber = roundNumber
 	st.roundState = probability.NewRoundState(tAlive, ctAlive, mapName)
+	if roundTimeSeconds <= 0 {
+		roundTimeSeconds = st.defaultRoundTime
+	}
+	st.roundState.SetTimeRemaining(roundTimeSeconds)
+	st.lastClockTick = startTick
 	st.ledger = swing.NewRoundSwingLedger(roundNumber)
 	st.damageTracker.Reset()
 	st.advantageTracker.Reset()
+}
+
+// advanceClock subtracts elapsed demo time from TimeRemaining.
+func (st *SwingTracker) advanceClock(currentTick int) {
+	if st.roundState == nil || st.tickRate <= 0 {
+		return
+	}
+	if st.lastClockTick > 0 && currentTick > st.lastClockTick {
+		elapsed := float64(currentTick-st.lastClockTick) / st.tickRate
+		st.roundState.SetTimeRemaining(st.roundState.TimeRemaining - elapsed)
+	}
+	st.lastClockTick = currentTick
+}
+
+// SetTickRate overrides the assumed tick rate used for clock advancement.
+func (st *SwingTracker) SetTickRate(tickRate float64) {
+	if tickRate > 0 {
+		st.tickRate = tickRate
+	}
 }
 
 // SetEconomyFromValues sets economy from equipment values.
@@ -74,11 +116,11 @@ func (st *SwingTracker) RecordDamage(attackerID, victimID uint64, damage int, ti
 }
 
 // RecordFlash records a flash for attribution tracking.
-func (st *SwingTracker) RecordFlash(attackerID, victimID uint64, duration float64) {
+func (st *SwingTracker) RecordFlash(attackerID, victimID uint64, duration float64, tick int) {
 	if !st.enabled {
 		return
 	}
-	st.damageTracker.RecordFlash(attackerID, victimID, duration)
+	st.damageTracker.RecordFlash(attackerID, victimID, duration, tick)
 }
 
 // KillResult wraps swing allocations for a kill event.
@@ -99,10 +141,13 @@ func (st *SwingTracker) RecordKill(
 	isTradeKill, isHeadshot bool,
 	roundDecided bool,
 	losingSideTeammates []uint64,
+	currentTick int,
 ) KillResult {
 	if !st.enabled || st.roundState == nil {
 		return KillResult{}
 	}
+
+	st.advanceClock(currentTick)
 
 	killEvent := &swing.KillEvent{
 		TimeInRound:         timeInRound,
@@ -117,7 +162,7 @@ func (st *SwingTracker) RecordKill(
 		TotalDamageToVictim: st.damageTracker.GetTotalDamageToVictim(victimID),
 		KillerDamageDealt:   st.damageTracker.GetKillerDamage(killerID, victimID),
 		DamageContributors:  st.damageTracker.GetDamageContributors(victimID),
-		FlashAssists:        st.damageTracker.GetFlashAssists(victimID),
+		FlashAssists:        st.damageTracker.GetFlashAssists(victimID, currentTick, st.tickRate),
 	}
 
 	victimPriorDamage := st.damageTracker.GetTotalDamageToVictim(victimID) - st.damageTracker.GetKillerDamage(killerID, victimID)
@@ -195,10 +240,13 @@ func (st *SwingTracker) RecordBombPlant(
 	planterID uint64,
 	timeInRound float64,
 	players map[uint64]swing.PlayerRoundContext,
+	currentTick int,
 ) []swing.PlayerSwingAllocation {
 	if !st.enabled || st.roundState == nil {
 		return nil
 	}
+
+	st.advanceClock(currentTick)
 
 	input := swing.ObjectiveAllocationInput{
 		PrimaryID:     planterID,
@@ -214,7 +262,10 @@ func (st *SwingTracker) RecordBombPlant(
 		st.roundState,
 		common.TeamTerrorists,
 		st.engine.CalculateBombPlantSwing,
-		func(s *probability.RoundState) { s.SetBombPlanted() },
+		func(s *probability.RoundState) {
+			s.SetBombPlanted()
+			s.SetTimeRemaining(st.bombTimer)
+		},
 		input,
 		swing.SwingEventBombPlant,
 	)
@@ -227,10 +278,13 @@ func (st *SwingTracker) RecordBombDefuse(
 	defuserID uint64,
 	timeInRound float64,
 	players map[uint64]swing.PlayerRoundContext,
+	currentTick int,
 ) []swing.PlayerSwingAllocation {
 	if !st.enabled || st.roundState == nil {
 		return nil
 	}
+
+	st.advanceClock(currentTick)
 
 	input := swing.ObjectiveAllocationInput{
 		PrimaryID:     defuserID,

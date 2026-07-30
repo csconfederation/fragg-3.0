@@ -30,6 +30,7 @@ type DamageTracker struct {
 type FlashInfo struct {
 	AttackerID uint64
 	Duration   float64
+	Tick       int
 }
 
 // NewDamageTracker creates a new damage tracker.
@@ -76,11 +77,12 @@ func (dt *DamageTracker) RecordDamage(attackerID, victimID uint64, damage int, t
 	dt.lastDamageTime[victimID][attackerID] = timeInRound
 }
 
-// RecordFlash records that an attacker flashed a victim.
-func (dt *DamageTracker) RecordFlash(attackerID, victimID uint64, duration float64) {
+// RecordFlash records that an attacker flashed a victim at the given tick.
+func (dt *DamageTracker) RecordFlash(attackerID, victimID uint64, duration float64, tick int) {
 	dt.flashedPlayers[victimID] = append(dt.flashedPlayers[victimID], FlashInfo{
 		AttackerID: attackerID,
 		Duration:   duration,
+		Tick:       tick,
 	})
 }
 
@@ -120,22 +122,36 @@ func (dt *DamageTracker) GetKillerDamage(killerID, victimID uint64) int {
 }
 
 // GetFlashAssists returns flash assists for a victim's death.
-// Only returns recent flashes (within the flash duration window).
-func (dt *DamageTracker) GetFlashAssists(victimID uint64) []swing.FlashAssist {
-	assists := make([]swing.FlashAssist, 0)
+// Only returns flashes still active at currentTick (within flash duration),
+// deduped per attacker (keeps the longest-duration entry).
+func (dt *DamageTracker) GetFlashAssists(victimID uint64, currentTick int, tickRate float64) []swing.FlashAssist {
+	if tickRate <= 0 {
+		tickRate = 64
+	}
 
+	bestByAttacker := make(map[uint64]FlashInfo)
 	if flashes, ok := dt.flashedPlayers[victimID]; ok {
 		for _, flash := range flashes {
-			// Only count flashes with significant duration
-			if flash.Duration >= 0.5 {
-				assists = append(assists, swing.FlashAssist{
-					PlayerID: flash.AttackerID,
-					Duration: flash.Duration,
-				})
+			if flash.Duration < 0.5 {
+				continue
+			}
+			durationTicks := int(flash.Duration * tickRate)
+			if currentTick-flash.Tick > durationTicks {
+				continue
+			}
+			if prev, exists := bestByAttacker[flash.AttackerID]; !exists || flash.Duration > prev.Duration {
+				bestByAttacker[flash.AttackerID] = flash
 			}
 		}
 	}
 
+	assists := make([]swing.FlashAssist, 0, len(bestByAttacker))
+	for _, flash := range bestByAttacker {
+		assists = append(assists, swing.FlashAssist{
+			PlayerID: flash.AttackerID,
+			Duration: flash.Duration,
+		})
+	}
 	return assists
 }
 

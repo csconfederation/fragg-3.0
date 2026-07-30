@@ -62,8 +62,12 @@ func TestAllocateObjectiveEventPlantSharing(t *testing.T) {
 }
 
 func TestAllocateObjectiveEventDefuseSharing(t *testing.T) {
+	engine := probability.NewDefaultEngine()
 	cfg := DefaultConfig()
-	allocator := NewPoolAllocator(probability.NewDefaultEngine(), cfg)
+	allocator := NewPoolAllocator(engine, cfg)
+
+	state := probability.NewRoundState(2, 3, "de_dust2")
+	state.SetBombPlanted()
 
 	players := map[uint64]PlayerRoundContext{
 		300: {SteamID: 300, Side: common.TeamCounterTerrorists, Kills: 1, Alive: true},
@@ -81,22 +85,59 @@ func TestAllocateObjectiveEventDefuseSharing(t *testing.T) {
 		SupportReason: SwingReasonDefuseSupport,
 	}
 
-	pool := 0.30
-	positive := allocator.allocateObjectivePositive(input, pool)
-	negative := allocator.allocateObjectiveNegative(input, pool)
+	event, amounts := allocator.AllocateObjectiveEvent(
+		state,
+		common.TeamCounterTerrorists,
+		engine.CalculateBombDefuseSwing,
+		func(s *probability.RoundState) { s.SetBombDefused() },
+		input,
+		SwingEventBombDefuse,
+	)
 
-	defuserShare := positiveAmount(positive, 301)
-	supportShare := positiveAmount(positive, 300)
-	if defuserShare <= 0 || supportShare <= 0 {
-		t.Fatalf("expected defuser (%f) and support (%f) to receive credit", defuserShare, supportShare)
+	if !state.BombDefused {
+		t.Fatal("expected BombDefused to be set after AllocateObjectiveEvent")
+	}
+	if event.RawDelta <= 0 {
+		t.Fatalf("expected positive defuse delta via CalculateBombDefuseSwing, got %f", event.RawDelta)
+	}
+	if amounts[301] <= 0 {
+		t.Fatal("defuser should receive positive swing")
 	}
 
-	posTotal := sumAllocations(positive)
-	negTotal := sumAllocations(negative)
-	if math.Abs(posTotal-pool) > 0.001 {
-		t.Fatalf("positive allocation = %f, want %f", posTotal, pool)
+	positive := sumAllocations(event.PositiveAlloc)
+	negative := sumAllocations(event.NegativeAlloc)
+	if math.Abs(positive+negative) > cfg.ZeroSumTolerance {
+		t.Fatalf("defuse event not zero-sum: positive=%f negative=%f", positive, negative)
 	}
-	if math.Abs(negTotal+pool) > 0.001 {
-		t.Fatalf("negative allocation = %f, want -%f", negTotal, pool)
+}
+
+func TestAllocateObjectiveEventPlantAppliesStateEvenIfDeltaNonPositive(t *testing.T) {
+	engine := probability.NewDefaultEngine()
+	cfg := DefaultConfig()
+	allocator := NewPoolAllocator(engine, cfg)
+
+	// Any alive state: applyState must run regardless of delta sign.
+	state := probability.NewRoundState(2, 1, "de_dust2")
+	input := ObjectiveAllocationInput{
+		PrimaryID:     1,
+		PrimarySide:   common.TeamTerrorists,
+		OpposingSide:  common.TeamCounterTerrorists,
+		Players:       map[uint64]PlayerRoundContext{1: {SteamID: 1, Side: common.TeamTerrorists, Alive: true}},
+		PrimaryShare:  cfg.PlantPlanterShare,
+		PrimaryReason: SwingReasonBombPlant,
+		SupportReason: SwingReasonPlantSupport,
+	}
+
+	_, _ = allocator.AllocateObjectiveEvent(
+		state,
+		common.TeamTerrorists,
+		engine.CalculateBombPlantSwing,
+		func(s *probability.RoundState) { s.SetBombPlanted() },
+		input,
+		SwingEventBombPlant,
+	)
+
+	if !state.BombPlanted {
+		t.Fatal("BombPlanted must be set even when plant delta is non-positive")
 	}
 }

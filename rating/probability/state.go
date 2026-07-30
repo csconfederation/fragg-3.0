@@ -114,6 +114,14 @@ func (s *RoundState) SetBombDefused() {
 	s.BombDefused = true
 }
 
+// SetTimeRemaining sets seconds remaining on the round/bomb clock.
+func (s *RoundState) SetTimeRemaining(seconds float64) {
+	if seconds < 0 {
+		seconds = 0
+	}
+	s.TimeRemaining = seconds
+}
+
 // StateKey returns a unique key for this state for table lookups.
 func (s *RoundState) StateKey() string {
 	bombStatus := "none"

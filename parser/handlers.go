@@ -209,7 +209,7 @@ func (d *DemoParser) handleBombPlanted(e events.BombPlanted) {
 		timeInRound := d.timeInRound()
 		gs := d.parser.GameState()
 		players := d.buildPlayerRoundContext(gs)
-		plantAllocs := d.state.SwingTracker.RecordBombPlant(e.Player.SteamID64, timeInRound, players)
+		plantAllocs := d.state.SwingTracker.RecordBombPlant(e.Player.SteamID64, timeInRound, players, gs.IngameTick())
 		d.applyLedgerAllocations(plantAllocs, timeInRound, "")
 	}
 
@@ -239,7 +239,7 @@ func (d *DemoParser) handleBombDefused(e events.BombDefused) {
 	if d.state.SwingTracker != nil {
 		gs := d.parser.GameState()
 		players := d.buildPlayerRoundContext(gs)
-		defuseAllocs := d.state.SwingTracker.RecordBombDefuse(e.Player.SteamID64, timeInRound, players)
+		defuseAllocs := d.state.SwingTracker.RecordBombDefuse(e.Player.SteamID64, timeInRound, players, gs.IngameTick())
 		d.applyLedgerAllocations(defuseAllocs, timeInRound, "")
 	}
 
@@ -295,7 +295,7 @@ func (d *DemoParser) handlePlayerFlashed(e events.PlayerFlashed) {
 
 			// Track flash for swing attribution
 			if d.state.SwingTracker != nil {
-				d.state.SwingTracker.RecordFlash(e.Attacker.SteamID64, e.Player.SteamID64, flashDuration)
+				d.state.SwingTracker.RecordFlash(e.Attacker.SteamID64, e.Player.SteamID64, flashDuration, d.parser.GameState().IngameTick())
 			}
 		} else if e.Attacker.SteamID64 != e.Player.SteamID64 {
 			roundStats.TeamFlashCount++
@@ -401,7 +401,8 @@ func (d *DemoParser) handleFreezetimeEnd() {
 
 	// Initialize swing tracker for the round
 	if d.state.SwingTracker != nil && d.state.SwingTracker.IsEnabled() {
-		d.state.SwingTracker.ResetRound(d.state.RoundNumber, tAlive, ctAlive, d.state.MapName)
+		startTick := d.parser.GameState().IngameTick()
+		d.state.SwingTracker.ResetRoundWithClock(d.state.RoundNumber, tAlive, ctAlive, d.state.MapName, startTick, defaultRoundTimeSeconds)
 
 		// Set team economies
 		tAvgEquip := 0.0
@@ -778,6 +779,7 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 		ctx.isTradeKill, ctx.event.IsHeadshot,
 		d.state.RoundDecided,
 		losingSideTeammates,
+		ctx.currentTick,
 	)
 
 	swingResult := killResult.Swing
@@ -1208,10 +1210,13 @@ func (d *DemoParser) updateSideStats() {
 	}
 }
 
-// incrementRoundsPlayed increments rounds played for all players.
+// incrementRoundsPlayed increments rounds played for players who participated
+// in the current round (present in d.state.Round), not the match-lifetime roster.
 func (d *DemoParser) incrementRoundsPlayed() {
-	for _, p := range d.state.Players {
-		p.RoundsPlayed++
+	for steamID := range d.state.Round {
+		if p, ok := d.state.Players[steamID]; ok {
+			p.RoundsPlayed++
+		}
 	}
 }
 

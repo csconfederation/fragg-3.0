@@ -19,6 +19,14 @@ func NewDefaultEngine() *Engine {
 
 // GetWinProbability returns the probability that the specified side wins the round.
 func (e *Engine) GetWinProbability(state *RoundState, side common.Team) float64 {
+	// Defuse is a terminal CT win — skip table/economy/time adjustments.
+	if state.BombDefused {
+		if side == common.TeamCounterTerrorists {
+			return 1.0
+		}
+		return 0.0
+	}
+
 	// Get base probability (T-side win rate)
 	tWinProb := e.getBaseProbability(state)
 
@@ -42,7 +50,7 @@ func (e *Engine) GetWinProbability(state *RoundState, side common.Team) float64 
 
 // getBaseProbability returns the T-side win probability from the lookup tables.
 func (e *Engine) getBaseProbability(state *RoundState) float64 {
-	return e.tables.GetBaseWinProbability(state.TAlive, state.CTAlive, state.BombPlanted)
+	return e.tables.GetBaseWinProbability(state.TAlive, state.CTAlive, state.BombPlanted, state.BombDefused)
 }
 
 // applyEconomyAdjustment modifies probability based on economy differential.

@@ -1,6 +1,7 @@
 package swing
 
 import (
+	"log"
 	"math"
 
 	"github.com/csconfederation/fragg-3.0/rating/probability"
@@ -90,6 +91,8 @@ func (a *PoolAllocator) AllocateKillEvent(
 
 	rawDelta := probAfter - probBefore
 	if rawDelta < 0 {
+		log.Printf("swing: negative kill delta clamped to 0 (killerSide=%v victimSide=%v before=%.4f after=%.4f tAlive=%d ctAlive=%d planted=%v)",
+			kill.KillerSide, kill.VictimSide, probBefore, probAfter, stateBefore.TAlive, stateBefore.CTAlive, stateBefore.BombPlanted)
 		rawDelta = 0
 	}
 	if input.ExitFragScale > 0 && input.ExitFragScale < 1 {
@@ -357,6 +360,9 @@ func (a *PoolAllocator) AllocateObjectiveEvent(
 
 	stateBefore := state.Clone()
 	delta := calcDelta(stateBefore)
+	// Always apply the state transition so BombPlanted/BombDefused stay in sync
+	// even when the modeled delta is non-positive (e.g. rare table edge cases).
+	applyState(state)
 	if delta <= 0 {
 		return event, nil
 	}
@@ -377,7 +383,6 @@ func (a *PoolAllocator) AllocateObjectiveEvent(
 		playerAmounts[alloc.SteamID] += alloc.Amount
 	}
 
-	applyState(state)
 	return event, playerAmounts
 }
 

@@ -63,7 +63,9 @@ func (u *SideStatsUpdater) updateTSide() {
 		if u.roundStats.ClutchWon {
 			u.player.TClutchWins++
 		}
+		u.recordSideClutchAttempts(true)
 	}
+	u.applySideEcoCounters(true)
 }
 
 // updateCTSide updates CT-side specific statistics.
@@ -92,6 +94,170 @@ func (u *SideStatsUpdater) updateCTSide() {
 		u.player.CTClutchRounds++
 		if u.roundStats.ClutchWon {
 			u.player.CTClutchWins++
+		}
+		u.recordSideClutchAttempts(false)
+	}
+	u.applySideEcoCounters(false)
+}
+
+func (u *SideStatsUpdater) recordSideClutchAttempts(tSide bool) {
+	size := u.roundStats.ClutchEnteredSize
+	if size == 0 {
+		size = u.roundStats.ClutchSize
+	}
+	switch size {
+	case 1:
+		if tSide {
+			u.player.TClutch1v1Attempts++
+		} else {
+			u.player.CTClutch1v1Attempts++
+		}
+	case 2:
+		if tSide {
+			u.player.TClutch1v2Attempts++
+		} else {
+			u.player.CTClutch1v2Attempts++
+		}
+	case 3:
+		if tSide {
+			u.player.TClutch1v3Attempts++
+		} else {
+			u.player.CTClutch1v3Attempts++
+		}
+	case 4:
+		if tSide {
+			u.player.TClutch1v4Attempts++
+		} else {
+			u.player.CTClutch1v4Attempts++
+		}
+	case 5:
+		if tSide {
+			u.player.TClutch1v5Attempts++
+		} else {
+			u.player.CTClutch1v5Attempts++
+		}
+	}
+}
+
+func (u *SideStatsUpdater) applySideEcoCounters(tSide bool) {
+	rs := u.roundStats
+	p := u.player
+	if rs.GotAssist {
+		if tSide {
+			p.TAssistedKills += rs.Assists
+		} else {
+			p.CTAssistedKills += rs.Assists
+		}
+	}
+	if rs.TradeKill {
+		if tSide {
+			p.TTradeKills++
+			if rs.TradeSpeed > 0 && rs.TradeSpeed < 2.0 {
+				p.TFastTrades++
+			}
+		} else {
+			p.CTTradeKills++
+			if rs.TradeSpeed > 0 && rs.TradeSpeed < 2.0 {
+				p.CTFastTrades++
+			}
+		}
+	}
+	if rs.TradeDenials > 0 {
+		if tSide {
+			p.TTradeDenials += rs.TradeDenials
+		} else {
+			p.CTTradeDenials += rs.TradeDenials
+		}
+	}
+	if rs.OpeningDeath && rs.Traded {
+		if tSide {
+			p.TOpeningDeathsTraded++
+		} else {
+			p.CTOpeningDeathsTraded++
+		}
+	}
+	if rs.AWPKills > 0 {
+		if tSide {
+			p.TAWPKills += rs.AWPKills
+		} else {
+			p.CTAWPKills += rs.AWPKills
+		}
+	}
+	if rs.AWPKill {
+		if tSide {
+			p.TRoundsWithAWPKill++
+		} else {
+			p.CTRoundsWithAWPKill++
+		}
+	}
+	if rs.AWPOpeningKill {
+		if tSide {
+			p.TAWPOpeningKills++
+		} else {
+			p.CTAWPOpeningKills++
+		}
+	}
+	if rs.AWPKills >= 2 {
+		if tSide {
+			p.TAWPMultiKillRounds++
+		} else {
+			p.CTAWPMultiKillRounds++
+		}
+	}
+	if rs.LostAWP {
+		if tSide {
+			p.TAWPDeaths++
+		} else {
+			p.CTAWPDeaths++
+		}
+	}
+	if rs.ExitFrags > 0 {
+		if tSide {
+			p.TExitFrags += rs.ExitFrags
+		} else {
+			p.CTExitFrags += rs.ExitFrags
+		}
+	}
+	if rs.KnifeKill {
+		if tSide {
+			p.TKnifeKills++
+		} else {
+			p.CTKnifeKills++
+		}
+	}
+	if rs.PistolVsRifleKill {
+		if tSide {
+			p.TPistolVsRifleKills++
+		} else {
+			p.CTPistolVsRifleKills++
+		}
+	}
+	if rs.UtilityKills > 0 {
+		if tSide {
+			p.TUtilityKills += rs.UtilityKills
+		} else {
+			p.CTUtilityKills += rs.UtilityKills
+		}
+	}
+	if rs.DeathTime > 0 && rs.DeathTime < 30.0 {
+		if tSide {
+			p.TEarlyDeaths++
+		} else {
+			p.CTEarlyDeaths++
+		}
+	}
+	if rs.SavedByTeammate {
+		if tSide {
+			p.TSavedByTeammate++
+		} else {
+			p.CTSavedByTeammate++
+		}
+	}
+	if rs.SavedTeammate {
+		if tSide {
+			p.TSavedTeammate++
+		} else {
+			p.CTSavedTeammate++
 		}
 	}
 }

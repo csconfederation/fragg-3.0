@@ -34,6 +34,10 @@ type Game struct {
 	TeamOrder                []string                `json:"teamOrder"`
 	TotalRounds              int                     `json:"totalRounds"`
 	TotalWPAlog              []*wpalog               `json:"totalWPAlog"`
+	// EcoStatsOK is true only when the eco-rating merge completed successfully.
+	// False means eco* / swing_rating fields are unset/zero and must not be
+	// treated as genuine zero ratings.
+	EcoStatsOK bool `json:"ecoStatsOK"`
 }
 
 // MarshalJSON preserves Game's public numeric PlayerOrder API while emitting

@@ -82,6 +82,9 @@ func allocatePositiveResidual(input ResidualInput, winner common.Team, residual 
 		if ctx.PlantedBomb {
 			score += 0.25
 		}
+		if ctx.DefusedBomb {
+			score += 0.25
+		}
 		if score > 0 {
 			weights[steamID] = score
 		}

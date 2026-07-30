@@ -96,6 +96,11 @@ func DefaultTables() *ProbabilityTables {
 	tables.BaseWinProb["0v1_planted"] = 0.118 // 309 / 2620
 	tables.BaseWinProb["0v0_planted"] = 1.000 // Bomb explodes, T wins (249/249)
 
+	// Empirical cells can violate alive-count / plant monotonicity due to
+	// selection bias and small samples. Enforce invariants so a kill or plant
+	// never lowers the beneficiary's modeled win probability.
+	EnforceMonotonicity(tables)
+
 	// === DUEL WIN RATES ===
 	// Format: "attacker_vs_defender" (e.g., "rifle_vs_pistol")
 	// Values represent attacker win probability from empirical data

@@ -29,7 +29,12 @@ func NewProbabilityTables() *ProbabilityTables {
 }
 
 // GetBaseWinProbability returns the T-side win probability for a given state.
-func (t *ProbabilityTables) GetBaseWinProbability(tAlive, ctAlive int, bombPlanted bool) float64 {
+// bombDefused takes precedence: a defused bomb is a CT win (T WP = 0).
+func (t *ProbabilityTables) GetBaseWinProbability(tAlive, ctAlive int, bombPlanted, bombDefused bool) float64 {
+	if bombDefused {
+		return 0.0
+	}
+
 	bombStatus := "none"
 	if bombPlanted {
 		bombStatus = "planted"
@@ -42,6 +47,79 @@ func (t *ProbabilityTables) GetBaseWinProbability(tAlive, ctAlive int, bombPlant
 
 	// Fallback: calculate based on player advantage
 	return t.calculateFallbackProbability(tAlive, ctAlive, bombPlanted)
+}
+
+// EnforceMonotonicity adjusts BaseWinProb so that:
+//   - for fixed T-alive, fewer CTs alive never lowers T-win WP
+//   - for fixed CT-alive, fewer Ts alive never raises T-win WP
+//   - for matching alive counts, planted WP >= none WP
+//
+// Forced endpoints (0 alive on either side) are left unchanged.
+func EnforceMonotonicity(t *ProbabilityTables) {
+	if t == nil || t.BaseWinProb == nil {
+		return
+	}
+
+	for _, status := range []string{"none", "planted"} {
+		get := func(tv, ctv int) float64 {
+			return t.BaseWinProb[stateKeyFromComponents(tv, ctv, status)]
+		}
+		set := func(tv, ctv int, v float64) {
+			t.BaseWinProb[stateKeyFromComponents(tv, ctv, status)] = v
+		}
+
+		// Killing a CT must never lower T-win: for fixed T, WP non-decreasing as CT decreases.
+		for tv := 1; tv <= 5; tv++ {
+			running := get(tv, 5)
+			for ctv := 4; ctv >= 1; ctv-- {
+				v := get(tv, ctv)
+				if v < running {
+					v = running
+					set(tv, ctv, v)
+				}
+				running = v
+			}
+		}
+
+		// Killing a T must never raise T-win: for fixed CT, WP non-increasing as T decreases.
+		for ctv := 1; ctv <= 5; ctv++ {
+			running := get(5, ctv)
+			for tv := 4; tv >= 1; tv-- {
+				v := get(tv, ctv)
+				if v > running {
+					v = running
+					set(tv, ctv, v)
+				}
+				running = v
+			}
+		}
+
+		// Re-apply CT-kill direction after the T-kill pass (constraints can interact).
+		for tv := 1; tv <= 5; tv++ {
+			running := get(tv, 5)
+			for ctv := 4; ctv >= 1; ctv-- {
+				v := get(tv, ctv)
+				if v < running {
+					v = running
+					set(tv, ctv, v)
+				}
+				running = v
+			}
+		}
+	}
+
+	// Planting must never lower T-win for the same alive counts.
+	for tv := 1; tv <= 5; tv++ {
+		for ctv := 1; ctv <= 5; ctv++ {
+			noneKey := stateKeyFromComponents(tv, ctv, "none")
+			plantedKey := stateKeyFromComponents(tv, ctv, "planted")
+			noneProb := t.BaseWinProb[noneKey]
+			plantedProb := t.BaseWinProb[plantedKey]
+			if plantedProb < noneProb {
+				t.BaseWinProb[plantedKey] = noneProb
+			}
+		}
+	}
 }
 
 // calculateFallbackProbability provides a reasonable estimate when no empirical data exists.

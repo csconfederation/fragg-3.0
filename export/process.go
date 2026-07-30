@@ -3,6 +3,7 @@ package export
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 
 	"github.com/csconfederation/fragg-3.0/csc"
@@ -75,8 +76,11 @@ func ProcessDemo(demo io.ReadCloser) (game *Game, err error) {
 	}
 
 	// Pipeline 2: eco-rating (additive). Failures here must not change the CSC
-	// result the worker relies on, so they are swallowed after logging.
-	if ecoFile, oerr := os.Open(tmpPath); oerr == nil {
+	// result the worker relies on; they are logged and EcoStatsOK stays false.
+	ecoFile, oerr := os.Open(tmpPath)
+	if oerr != nil {
+		log.Printf("export: eco merge skipped: reopen demo: %v", oerr)
+	} else {
 		mergeEcoStats(game, ecoFile)
 		ecoFile.Close()
 	}
@@ -88,12 +92,15 @@ func ProcessDemo(demo io.ReadCloser) (game *Game, err error) {
 // metrics onto the CSC game's player maps, matched by SteamID.
 func mergeEcoStats(game *csc.Game, r io.ReadCloser) {
 	defer func() {
-		// eco-rating parsing is best-effort; never let it break ProcessDemo.
-		_ = recover()
+		if rec := recover(); rec != nil {
+			log.Printf("export: eco merge panic recovered: %v", rec)
+			game.EcoStatsOK = false
+		}
 	}()
 
 	p := parser.NewDemoParser(r)
 	if perr := p.Parse(); perr != nil {
+		log.Printf("export: eco parse failed: %v", perr)
 		return
 	}
 
@@ -102,42 +109,44 @@ func mergeEcoStats(game *csc.Game, r io.ReadCloser) {
 		game.MapName = p.GetMapName()
 	}
 
-	mergeInto(game.TotalPlayerStats, players)
-	mergeInto(game.TPlayerStats, players)
-	mergeInto(game.CtPlayerStats, players)
+	mergeInto(game.TotalPlayerStats, players, applyTotalEcoStats)
+	mergeInto(game.TPlayerStats, players, applyTEcoStats)
+	mergeInto(game.CtPlayerStats, players, applyCTEcoStats)
+	game.EcoStatsOK = true
 }
 
+type ecoApplyFunc func(dst *csc.PlayerStats, eco *model.PlayerStats)
+
 // mergeInto copies eco metrics onto every CSC player present in dst.
-func mergeInto(dst map[uint64]*csc.PlayerStats, eco map[uint64]*model.PlayerStats) {
+func mergeInto(dst map[uint64]*csc.PlayerStats, eco map[uint64]*model.PlayerStats, apply ecoApplyFunc) {
 	for steamID, cscPlayer := range dst {
 		ecoPlayer, ok := eco[steamID]
 		if !ok || ecoPlayer == nil || cscPlayer == nil {
 			continue
 		}
-		applyEcoStats(cscPlayer, ecoPlayer)
+		apply(cscPlayer, ecoPlayer)
 	}
 }
 
-// applyEcoStats maps eco-rating's PlayerStats onto the additive eco* fields of
-// a CSC player. It only writes eco fields; demoScrape2 fields are untouched.
-func applyEcoStats(dst *csc.PlayerStats, eco *model.PlayerStats) {
-	// Primary eco rating -> swing_rating (never final_rating).
-	dst.SwingRating = eco.FinalRating
+func perRound(total float64, rounds int) float64 {
+	if rounds <= 0 {
+		return 0
+	}
+	return total / float64(rounds)
+}
 
-	// Probability-swing metrics.
+// applyTotalEcoStats maps whole-match eco fields onto TotalPlayerStats.
+func applyTotalEcoStats(dst *csc.PlayerStats, eco *model.PlayerStats) {
+	dst.SwingRating = eco.FinalRating
 	dst.EcoProbabilitySwing = eco.ProbabilitySwing
 	dst.EcoProbabilitySwingPerRound = eco.ProbabilitySwingPerRound
 	dst.EcoTProbabilitySwing = eco.TProbabilitySwing
 	dst.EcoCTProbabilitySwing = eco.CTProbabilitySwing
-
-	// Eco duel economy.
 	dst.EcoKillValue = eco.EcoKillValue
 	dst.EcoDeathValue = eco.EcoDeathValue
 	dst.EcoDuelSwing = eco.DuelSwing
 	dst.EcoDuelSwingPerRound = eco.DuelSwingPerRound
 	dst.EcoAdjustedKills = eco.EcoAdjustedKills
-
-	// Eco ratings.
 	dst.EcoHLTVRating = eco.HLTVRating
 	dst.EcoHLTVCtRating = eco.CTRating
 	dst.EcoHLTVTRating = eco.TRating
@@ -145,36 +154,24 @@ func applyEcoStats(dst *csc.PlayerStats, eco *model.PlayerStats) {
 	dst.EcoTEcoRating = eco.TEcoRating
 	dst.EcoSwingDisplayRating = eco.SwingRating
 	dst.EcoPistolRoundRating = eco.PistolRoundRating
-
-	// Assisted kills (eco definition).
 	dst.EcoAssistedKills = eco.AssistedKills
-
-	// Clutch attempts.
 	dst.EcoClutch1v1Attempts = eco.Clutch1v1Attempts
 	dst.EcoClutch1v2Attempts = eco.Clutch1v2Attempts
 	dst.EcoClutch1v3Attempts = eco.Clutch1v3Attempts
 	dst.EcoClutch1v4Attempts = eco.Clutch1v4Attempts
 	dst.EcoClutch1v5Attempts = eco.Clutch1v5Attempts
-
-	// Trade detail (eco model).
 	dst.EcoTradeKills = eco.TradeKills
 	dst.EcoTradeDenials = eco.TradeDenials
 	dst.EcoFastTrades = eco.FastTrades
 	dst.EcoOpeningDeathsTraded = eco.OpeningDeathsTraded
-
-	// AWP extras.
 	dst.EcoAWPOpeningKills = eco.AWPOpeningKills
 	dst.EcoAWPMultiKillRounds = eco.AWPMultiKillRounds
 	dst.EcoAWPDeaths = eco.AWPDeaths
 	dst.EcoRoundsWithAWPKill = eco.RoundsWithAWPKill
 	dst.EcoAWPKillsPerRound = eco.AWPKillsPerRound
-
-	// Timing.
 	dst.EcoTimeAlivePerRound = eco.TimeAlivePerRound
 	dst.EcoAvgTimeToDeath = eco.AvgTimeToDeath
 	dst.EcoAvgTimeToKill = eco.AvgTimeToKill
-
-	// Other unique eco metrics.
 	dst.EcoManAdvantageKills = eco.ManAdvantageKills
 	dst.EcoManDisadvantageDeaths = eco.ManDisadvantageDeaths
 	dst.EcoExitFrags = eco.ExitFrags
@@ -187,4 +184,108 @@ func applyEcoStats(dst *csc.PlayerStats, eco *model.PlayerStats) {
 	dst.EcoEarlyDeaths = eco.EarlyDeaths
 	dst.EcoSavedByTeammate = eco.SavedByTeammate
 	dst.EcoSavedTeammate = eco.SavedTeammate
+}
+
+// applyTEcoStats maps T-side eco fields onto TPlayerStats.
+func applyTEcoStats(dst *csc.PlayerStats, eco *model.PlayerStats) {
+	rounds := eco.TRoundsPlayed
+	dst.SwingRating = eco.TEcoRating
+	dst.EcoProbabilitySwing = eco.TProbabilitySwing
+	dst.EcoProbabilitySwingPerRound = perRound(eco.TProbabilitySwing, rounds)
+	dst.EcoTProbabilitySwing = eco.TProbabilitySwing
+	dst.EcoCTProbabilitySwing = 0
+	dst.EcoKillValue = eco.TEcoKillValue
+	dst.EcoDeathValue = 0
+	dst.EcoDuelSwing = eco.TProbabilitySwing
+	dst.EcoDuelSwingPerRound = perRound(eco.TProbabilitySwing, rounds)
+	dst.EcoAdjustedKills = 0
+	dst.EcoHLTVRating = eco.TRating
+	dst.EcoHLTVCtRating = 0
+	dst.EcoHLTVTRating = eco.TRating
+	dst.EcoCTEcoRating = 0
+	dst.EcoTEcoRating = eco.TEcoRating
+	dst.EcoSwingDisplayRating = eco.TEcoRating
+	dst.EcoPistolRoundRating = 0
+	dst.EcoAssistedKills = eco.TAssistedKills
+	dst.EcoClutch1v1Attempts = eco.TClutch1v1Attempts
+	dst.EcoClutch1v2Attempts = eco.TClutch1v2Attempts
+	dst.EcoClutch1v3Attempts = eco.TClutch1v3Attempts
+	dst.EcoClutch1v4Attempts = eco.TClutch1v4Attempts
+	dst.EcoClutch1v5Attempts = eco.TClutch1v5Attempts
+	dst.EcoTradeKills = eco.TTradeKills
+	dst.EcoTradeDenials = eco.TTradeDenials
+	dst.EcoFastTrades = eco.TFastTrades
+	dst.EcoOpeningDeathsTraded = eco.TOpeningDeathsTraded
+	dst.EcoAWPOpeningKills = eco.TAWPOpeningKills
+	dst.EcoAWPMultiKillRounds = eco.TAWPMultiKillRounds
+	dst.EcoAWPDeaths = eco.TAWPDeaths
+	dst.EcoRoundsWithAWPKill = eco.TRoundsWithAWPKill
+	dst.EcoAWPKillsPerRound = perRound(float64(eco.TAWPKills), rounds)
+	dst.EcoTimeAlivePerRound = 0
+	dst.EcoAvgTimeToDeath = 0
+	dst.EcoAvgTimeToKill = 0
+	dst.EcoManAdvantageKills = eco.TManAdvantageKills
+	dst.EcoManDisadvantageDeaths = eco.TManDisadvantageDeaths
+	dst.EcoExitFrags = eco.TExitFrags
+	dst.EcoKnifeKills = eco.TKnifeKills
+	dst.EcoPistolVsRifleKills = eco.TPistolVsRifleKills
+	dst.EcoLowBuyKills = 0
+	dst.EcoDisadvantagedBuyKills = 0
+	dst.EcoUtilityKills = eco.TUtilityKills
+	dst.EcoPerfectKills = 0
+	dst.EcoEarlyDeaths = eco.TEarlyDeaths
+	dst.EcoSavedByTeammate = eco.TSavedByTeammate
+	dst.EcoSavedTeammate = eco.TSavedTeammate
+}
+
+// applyCTEcoStats maps CT-side eco fields onto CtPlayerStats.
+func applyCTEcoStats(dst *csc.PlayerStats, eco *model.PlayerStats) {
+	rounds := eco.CTRoundsPlayed
+	dst.SwingRating = eco.CTEcoRating
+	dst.EcoProbabilitySwing = eco.CTProbabilitySwing
+	dst.EcoProbabilitySwingPerRound = perRound(eco.CTProbabilitySwing, rounds)
+	dst.EcoTProbabilitySwing = 0
+	dst.EcoCTProbabilitySwing = eco.CTProbabilitySwing
+	dst.EcoKillValue = eco.CTEcoKillValue
+	dst.EcoDeathValue = 0
+	dst.EcoDuelSwing = eco.CTProbabilitySwing
+	dst.EcoDuelSwingPerRound = perRound(eco.CTProbabilitySwing, rounds)
+	dst.EcoAdjustedKills = 0
+	dst.EcoHLTVRating = eco.CTRating
+	dst.EcoHLTVCtRating = eco.CTRating
+	dst.EcoHLTVTRating = 0
+	dst.EcoCTEcoRating = eco.CTEcoRating
+	dst.EcoTEcoRating = 0
+	dst.EcoSwingDisplayRating = eco.CTEcoRating
+	dst.EcoPistolRoundRating = 0
+	dst.EcoAssistedKills = eco.CTAssistedKills
+	dst.EcoClutch1v1Attempts = eco.CTClutch1v1Attempts
+	dst.EcoClutch1v2Attempts = eco.CTClutch1v2Attempts
+	dst.EcoClutch1v3Attempts = eco.CTClutch1v3Attempts
+	dst.EcoClutch1v4Attempts = eco.CTClutch1v4Attempts
+	dst.EcoClutch1v5Attempts = eco.CTClutch1v5Attempts
+	dst.EcoTradeKills = eco.CTTradeKills
+	dst.EcoTradeDenials = eco.CTTradeDenials
+	dst.EcoFastTrades = eco.CTFastTrades
+	dst.EcoOpeningDeathsTraded = eco.CTOpeningDeathsTraded
+	dst.EcoAWPOpeningKills = eco.CTAWPOpeningKills
+	dst.EcoAWPMultiKillRounds = eco.CTAWPMultiKillRounds
+	dst.EcoAWPDeaths = eco.CTAWPDeaths
+	dst.EcoRoundsWithAWPKill = eco.CTRoundsWithAWPKill
+	dst.EcoAWPKillsPerRound = perRound(float64(eco.CTAWPKills), rounds)
+	dst.EcoTimeAlivePerRound = 0
+	dst.EcoAvgTimeToDeath = 0
+	dst.EcoAvgTimeToKill = 0
+	dst.EcoManAdvantageKills = eco.CTManAdvantageKills
+	dst.EcoManDisadvantageDeaths = eco.CTManDisadvantageDeaths
+	dst.EcoExitFrags = eco.CTExitFrags
+	dst.EcoKnifeKills = eco.CTKnifeKills
+	dst.EcoPistolVsRifleKills = eco.CTPistolVsRifleKills
+	dst.EcoLowBuyKills = 0
+	dst.EcoDisadvantagedBuyKills = 0
+	dst.EcoUtilityKills = eco.CTUtilityKills
+	dst.EcoPerfectKills = 0
+	dst.EcoEarlyDeaths = eco.CTEarlyDeaths
+	dst.EcoSavedByTeammate = eco.CTSavedByTeammate
+	dst.EcoSavedTeammate = eco.CTSavedTeammate
 }

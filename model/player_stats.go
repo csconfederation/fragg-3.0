@@ -143,6 +143,29 @@ type PlayerStats struct {
 	TManDisadvantageDeathsPct  float64 `json:"t_man_disadvantage_deaths_pct"`
 	TRating                    float64 `json:"t_rating"`
 	TEcoRating                 float64 `json:"t_eco_rating"`
+	// T-side counterparts of whole-match eco counters (for side-aware export).
+	TAssistedKills             int     `json:"t_assisted_kills"`
+	TClutch1v1Attempts         int     `json:"t_clutch_1v1_attempts"`
+	TClutch1v2Attempts         int     `json:"t_clutch_1v2_attempts"`
+	TClutch1v3Attempts         int     `json:"t_clutch_1v3_attempts"`
+	TClutch1v4Attempts         int     `json:"t_clutch_1v4_attempts"`
+	TClutch1v5Attempts         int     `json:"t_clutch_1v5_attempts"`
+	TTradeKills                int     `json:"t_trade_kills"`
+	TTradeDenials              int     `json:"t_trade_denials"`
+	TFastTrades                int     `json:"t_fast_trades"`
+	TOpeningDeathsTraded       int     `json:"t_opening_deaths_traded"`
+	TAWPKills                  int     `json:"t_awp_kills"`
+	TAWPOpeningKills           int     `json:"t_awp_opening_kills"`
+	TAWPMultiKillRounds        int     `json:"t_awp_multi_kill_rounds"`
+	TAWPDeaths                 int     `json:"t_awp_deaths"`
+	TRoundsWithAWPKill         int     `json:"t_rounds_with_awp_kill"`
+	TExitFrags                 int     `json:"t_exit_frags"`
+	TKnifeKills                int     `json:"t_knife_kills"`
+	TPistolVsRifleKills        int     `json:"t_pistol_vs_rifle_kills"`
+	TUtilityKills              int     `json:"t_utility_kills"`
+	TEarlyDeaths               int     `json:"t_early_deaths"`
+	TSavedByTeammate           int     `json:"t_saved_by_teammate"`
+	TSavedTeammate             int     `json:"t_saved_teammate"`
 	CTRoundsPlayed             int     `json:"ct_rounds_played"`
 	CTKills                    int     `json:"ct_kills"`
 	CTDeaths                   int     `json:"ct_deaths"`
@@ -161,6 +184,29 @@ type PlayerStats struct {
 	CTManDisadvantageDeathsPct float64 `json:"ct_man_disadvantage_deaths_pct"`
 	CTRating                   float64 `json:"ct_rating"`
 	CTEcoRating                float64 `json:"ct_eco_rating"`
+	// CT-side counterparts of whole-match eco counters (for side-aware export).
+	CTAssistedKills       int `json:"ct_assisted_kills"`
+	CTClutch1v1Attempts   int `json:"ct_clutch_1v1_attempts"`
+	CTClutch1v2Attempts   int `json:"ct_clutch_1v2_attempts"`
+	CTClutch1v3Attempts   int `json:"ct_clutch_1v3_attempts"`
+	CTClutch1v4Attempts   int `json:"ct_clutch_1v4_attempts"`
+	CTClutch1v5Attempts   int `json:"ct_clutch_1v5_attempts"`
+	CTTradeKills          int `json:"ct_trade_kills"`
+	CTTradeDenials        int `json:"ct_trade_denials"`
+	CTFastTrades          int `json:"ct_fast_trades"`
+	CTOpeningDeathsTraded int `json:"ct_opening_deaths_traded"`
+	CTAWPKills            int `json:"ct_awp_kills"`
+	CTAWPOpeningKills     int `json:"ct_awp_opening_kills"`
+	CTAWPMultiKillRounds  int `json:"ct_awp_multi_kill_rounds"`
+	CTAWPDeaths           int `json:"ct_awp_deaths"`
+	CTRoundsWithAWPKill   int `json:"ct_rounds_with_awp_kill"`
+	CTExitFrags           int `json:"ct_exit_frags"`
+	CTKnifeKills          int `json:"ct_knife_kills"`
+	CTPistolVsRifleKills  int `json:"ct_pistol_vs_rifle_kills"`
+	CTUtilityKills        int `json:"ct_utility_kills"`
+	CTEarlyDeaths         int `json:"ct_early_deaths"`
+	CTSavedByTeammate     int `json:"ct_saved_by_teammate"`
+	CTSavedTeammate       int `json:"ct_saved_teammate"`
 
 	FinalRating float64 `json:"final_rating"`
 

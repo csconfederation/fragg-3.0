@@ -1,11 +1,3 @@
-// =============================================================================
-// DISCLAIMER: Comments in this file were generated with AI assistance to help
-// users find and understand code for reference while building FraGG 3.0.
-// =============================================================================
-
-// Package parser provides CS2 demo file parsing functionality.
-// This file implements trade detection logic, which identifies when a player's
-// death is "traded" by a teammate killing the original attacker within a time window.
 package parser
 
 import (
@@ -36,7 +28,9 @@ type recentKill struct {
 // TradeDetector handles trade kill detection logic.
 // A trade occurs when a teammate kills the player who killed you within a time window.
 type TradeDetector struct {
-	recentKills      map[uint64]recentKill
+	// recentKills maps killer SteamID -> chronologically ordered kills this round.
+	// Multiple victims are retained so earlier deaths remain tradeable.
+	recentKills      map[uint64][]recentKill
 	recentTeamDeaths map[uint64]float64
 	pendingTrades    map[uint64][]pendingTrade
 }
@@ -44,7 +38,7 @@ type TradeDetector struct {
 // NewTradeDetector creates a new TradeDetector with initialized maps.
 func NewTradeDetector() *TradeDetector {
 	return &TradeDetector{
-		recentKills:      make(map[uint64]recentKill),
+		recentKills:      make(map[uint64][]recentKill),
 		recentTeamDeaths: make(map[uint64]float64),
 		pendingTrades:    make(map[uint64][]pendingTrade),
 	}
@@ -52,7 +46,7 @@ func NewTradeDetector() *TradeDetector {
 
 // Reset clears all trade detection state for a new round.
 func (td *TradeDetector) Reset() {
-	td.recentKills = make(map[uint64]recentKill)
+	td.recentKills = make(map[uint64][]recentKill)
 	td.recentTeamDeaths = make(map[uint64]float64)
 	td.pendingTrades = make(map[uint64][]pendingTrade)
 }
@@ -109,6 +103,25 @@ func (td *TradeDetector) RecordDeath(
 	}
 }
 
+// findTradeableDeath finds the oldest still-in-window teammate death caused by
+// victim (the player just killed), and removes that entry so it cannot be
+// double-traded.
+func (td *TradeDetector) findTradeableDeath(attacker, victim *common.Player, currentTick int) (recentKill, bool) {
+	kills := td.recentKills[victim.SteamID64]
+	for i, recent := range kills {
+		if recent.VictimTeam != attacker.Team {
+			continue
+		}
+		if currentTick-recent.Tick > rating.TradeWindowTicks {
+			continue
+		}
+		// Remove this entry (oldest match).
+		td.recentKills[victim.SteamID64] = append(kills[:i], kills[i+1:]...)
+		return recent, true
+	}
+	return recentKill{}, false
+}
+
 // CheckForTrade checks if the current kill is a trade for a previous death.
 func (td *TradeDetector) CheckForTrade(
 	attacker *common.Player,
@@ -124,37 +137,34 @@ func (td *TradeDetector) CheckForTrade(
 		return result
 	}
 
-	// Check if this kill trades a recent teammate death
-	if recent, ok := td.recentKills[victim.SteamID64]; ok {
-		if recent.VictimTeam == attacker.Team && currentTick-recent.Tick <= rating.TradeWindowTicks {
-			// This is a trade kill
-			if tradedRound, exists := rounds[recent.VictimID]; exists {
-				tradedRound.Traded = true
-				tradedRound.TradeDeath = true
-				tradedRound.SavedByTeammate = true
+	recent, ok := td.findTradeableDeath(attacker, victim, currentTick)
+	if ok {
+		if tradedRound, exists := rounds[recent.VictimID]; exists {
+			tradedRound.Traded = true
+			tradedRound.TradeDeath = true
+			tradedRound.SavedByTeammate = true
 
-				tradeRefund := tradedRound.LastDeathSwing * 0.30
-				if tradeRefund < 0 {
-					result.TradeReallocation = true
-					result.OriginalDeathPenalty = tradedRound.LastDeathSwing
-				}
+			tradeRefund := tradedRound.LastDeathSwing * 0.30
+			if tradeRefund < 0 {
+				result.TradeReallocation = true
+				result.OriginalDeathPenalty = tradedRound.LastDeathSwing
 			}
-
-			if tradedPlayer, exists := players[recent.VictimID]; exists {
-				tradedPlayer.TradedDeaths++
-				result.TradedPlayerName = tradedPlayer.Name
-				result.TradedPlayerID = recent.VictimID
-
-				if tradedRound, exists := rounds[recent.VictimID]; exists {
-					if tradedRound.OpeningDeath {
-						tradedPlayer.OpeningDeathsTraded++
-						result.WasOpeningDeath = true
-					}
-				}
-			}
-
-			result.IsTrade = true
 		}
+
+		if tradedPlayer, exists := players[recent.VictimID]; exists {
+			tradedPlayer.TradedDeaths++
+			result.TradedPlayerName = tradedPlayer.Name
+			result.TradedPlayerID = recent.VictimID
+
+			if tradedRound, exists := rounds[recent.VictimID]; exists {
+				if tradedRound.OpeningDeath {
+					tradedPlayer.OpeningDeathsTraded++
+					result.WasOpeningDeath = true
+				}
+			}
+		}
+
+		result.IsTrade = true
 	}
 
 	// Remove pending trades for the victim (they're dead now)
@@ -174,16 +184,18 @@ func (td *TradeDetector) CheckTradeKill(
 		return false, 0
 	}
 
-	if recent, ok := td.recentKills[victim.SteamID64]; ok {
+	// Peek without consuming — CheckForTrade owns consumption when both run.
+	for _, recent := range td.recentKills[victim.SteamID64] {
 		if recent.VictimTeam == attacker.Team && currentTick-recent.Tick <= rating.TradeWindowTicks {
 			isTradeKill = true
 			if deathTime, exists := td.recentTeamDeaths[recent.VictimID]; exists {
 				tradeSpeed = timeInRound - deathTime
 			}
+			return isTradeKill, tradeSpeed
 		}
 	}
 
-	return isTradeKill, tradeSpeed
+	return false, 0
 }
 
 // RecordKill records a kill for future trade detection.
@@ -192,11 +204,11 @@ func (td *TradeDetector) RecordKill(attacker *common.Player, victim *common.Play
 		return
 	}
 
-	td.recentKills[attacker.SteamID64] = recentKill{
+	td.recentKills[attacker.SteamID64] = append(td.recentKills[attacker.SteamID64], recentKill{
 		VictimID:   victim.SteamID64,
 		VictimTeam: victim.Team,
 		Tick:       currentTick,
-	}
+	})
 }
 
 // ProcessExpiredTrades checks for expired pending trades and marks them as failed.

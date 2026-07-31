@@ -218,6 +218,22 @@ func TestEvaluateEcoStatsSideCoverageGap(t *testing.T) {
 	}
 }
 
+func TestEvaluateEcoStatsReportsEveryFailedCondition(t *testing.T) {
+	// Round divergence must not mask the coverage failures behind it.
+	game := goodGame(24, 1, 2)
+	eco := map[uint64]*model.PlayerStats{1: ecoPlayer()}
+
+	ok, reason := evaluateEcoStats(game, eco, 30)
+	if ok {
+		t.Fatal("multiple failures must not be flagged OK")
+	}
+	for _, want := range []string{"coverage-gap", "round-divergence", "side-coverage-gap"} {
+		if !strings.Contains(reason, want) {
+			t.Fatalf("reason = %q, missing %s", reason, want)
+		}
+	}
+}
+
 func TestSwingDisplayRatingClamp(t *testing.T) {
 	if got := swingDisplayRating(0, 10); got != 1.0 {
 		t.Fatalf("zero swing = %f, want 1.0", got)

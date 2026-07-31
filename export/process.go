@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/csconfederation/fragg-3.0/csc"
 	"github.com/csconfederation/fragg-3.0/model"
@@ -144,17 +145,24 @@ func mergeEcoStats(game *csc.Game, r io.ReadCloser) {
 //
 // Bots are excluded from the coverage requirement: the eco parser deliberately
 // skips them while the CSC pipeline keeps bot rows.
+//
+// Every condition is evaluated (rather than returning on the first failure) so a
+// noisy condition cannot mask the others in logs.
 func evaluateEcoStats(game *csc.Game, eco map[uint64]*model.PlayerStats, ecoRounds int) (bool, string) {
+	// Nothing downstream of this is meaningful when eco saw no players at all,
+	// and every other condition would trivially fail too, so report just this.
 	if len(eco) == 0 {
 		return false, "empty-eco-map (eco parse produced no players)"
 	}
 
+	var reasons []string
+
 	humans, missing := coverage(game.TotalPlayerStats, eco)
-	if humans == 0 {
-		return false, "no-csc-players (nothing to merge onto)"
-	}
-	if missing > 0 {
-		return false, fmt.Sprintf("coverage-gap (%d of %d non-bot players missing from eco map)", missing, humans)
+	switch {
+	case humans == 0:
+		reasons = append(reasons, "no-csc-players (nothing to merge onto)")
+	case missing > 0:
+		reasons = append(reasons, fmt.Sprintf("coverage-gap (%d of %d non-bot players missing from eco map)", missing, humans))
 	}
 
 	// game.Rounds is the post-removeInvalidRounds slice (endOfMatchProcessing
@@ -162,16 +170,19 @@ func evaluateEcoStats(game *csc.Game, eco map[uint64]*model.PlayerStats, ecoRoun
 	// is deliberately not used here: it is derived from the server's round
 	// integrity counters, not from the rounds that were actually aggregated.
 	if cscRounds := len(game.Rounds); ecoRounds != cscRounds {
-		return false, fmt.Sprintf("round-divergence (eco=%d csc=%d)", ecoRounds, cscRounds)
+		reasons = append(reasons, fmt.Sprintf("round-divergence (eco=%d csc=%d)", ecoRounds, cscRounds))
 	}
 
 	if n := sideCoverageGaps(game.TPlayerStats, eco, func(p *model.PlayerStats) int { return p.TRoundsPlayed }); n > 0 {
-		return false, fmt.Sprintf("side-coverage-gap (%d non-bot players have T rounds in csc but none in eco)", n)
+		reasons = append(reasons, fmt.Sprintf("side-coverage-gap (%d non-bot players have T rounds in csc but none in eco)", n))
 	}
 	if n := sideCoverageGaps(game.CtPlayerStats, eco, func(p *model.PlayerStats) int { return p.CTRoundsPlayed }); n > 0 {
-		return false, fmt.Sprintf("side-coverage-gap (%d non-bot players have CT rounds in csc but none in eco)", n)
+		reasons = append(reasons, fmt.Sprintf("side-coverage-gap (%d non-bot players have CT rounds in csc but none in eco)", n))
 	}
 
+	if len(reasons) > 0 {
+		return false, strings.Join(reasons, "; ")
+	}
 	return true, ""
 }
 

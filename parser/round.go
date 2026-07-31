@@ -19,15 +19,21 @@ import (
 // MatchState holds all state information during demo parsing.
 // It tracks players, current round stats, and various flags for game state.
 type MatchState struct {
-	Players        map[uint64]*model.PlayerStats
-	Round          map[uint64]*model.RoundStats
-	TradeDetector  *TradeDetector
-	SwingTracker   *SwingTracker
-	RoundHasKill   bool
-	MatchStarted   bool
-	IsKnifeRound   bool
-	IsPistolRound  bool
-	RoundNumber    int
+	Players       map[uint64]*model.PlayerStats
+	Round         map[uint64]*model.RoundStats
+	TradeDetector *TradeDetector
+	SwingTracker  *SwingTracker
+	RoundHasKill  bool
+	MatchStarted  bool
+	IsKnifeRound  bool
+	IsPistolRound bool
+	RoundNumber   int
+	// RoundsCounted is the number of RoundEnd events that actually fed the
+	// aggregates (warmup and knife rounds excluded). Unlike RoundNumber, which
+	// is a monotonic freezetime-driven counter, this is the true denominator
+	// behind the eco aggregates and is what export compares against the CSC
+	// pipeline's post-dedup round count.
+	RoundsCounted  int
 	MapName        string
 	RoundStartTime float64
 	CurrentSide    string

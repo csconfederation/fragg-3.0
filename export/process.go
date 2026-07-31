@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/csconfederation/fragg-3.0/csc"
 	"github.com/csconfederation/fragg-3.0/model"
@@ -112,7 +113,109 @@ func mergeEcoStats(game *csc.Game, r io.ReadCloser) {
 	mergeInto(game.TotalPlayerStats, players, applyTotalEcoStats)
 	mergeInto(game.TPlayerStats, players, applyTEcoStats)
 	mergeInto(game.CtPlayerStats, players, applyCTEcoStats)
-	game.EcoStatsOK = true
+
+	// The merge itself is best-effort and always runs; EcoStatsOK is what
+	// downstream gates on, so a partial or divergent merge is flagged rather
+	// than reverted.
+	ok, reason := evaluateEcoStats(game, players, p.GetRoundsCounted())
+	game.EcoStatsOK = ok
+	if !ok {
+		log.Printf("export: eco stats not OK: %s", reason)
+	}
+}
+
+// evaluateEcoStats decides whether the eco merge produced complete, trustworthy
+// data for this game. It returns false plus a short machine-greppable reason so
+// operators can tell the failure classes apart in logs.
+//
+// Three things have to hold:
+//
+//  1. The eco parser produced players at all. A truncated demo can leave the
+//     eco pipeline "successful" (demoinfocs tolerates ErrUnexpectedEndOfDemo)
+//     with an empty player map, in which case every eco field stays zero.
+//  2. Every non-bot player CSC saw was also seen by eco, on the whole-match map
+//     and on each side map they played. Unmatched players silently keep zero
+//     eco fields, which downstream would read as a genuine zero rating.
+//  3. Eco's round count agrees with CSC's post-dedup valid round count. The eco
+//     pipeline has no replay/redo-round dedup (CSC has removeInvalidRounds), so
+//     a mid-match crash and restore inflates eco's denominator and double-counts
+//     events. The observed defect is inflation (eco > csc), but any disagreement
+//     means the two pipelines aggregated different round sets, so the check is a
+//     plain inequality.
+//
+// Bots are excluded from the coverage requirement: the eco parser deliberately
+// skips them while the CSC pipeline keeps bot rows.
+//
+// Every condition is evaluated (rather than returning on the first failure) so a
+// noisy condition cannot mask the others in logs.
+func evaluateEcoStats(game *csc.Game, eco map[uint64]*model.PlayerStats, ecoRounds int) (bool, string) {
+	// Nothing downstream of this is meaningful when eco saw no players at all,
+	// and every other condition would trivially fail too, so report just this.
+	if len(eco) == 0 {
+		return false, "empty-eco-map (eco parse produced no players)"
+	}
+
+	var reasons []string
+
+	humans, missing := coverage(game.TotalPlayerStats, eco)
+	switch {
+	case humans == 0:
+		reasons = append(reasons, "no-csc-players (nothing to merge onto)")
+	case missing > 0:
+		reasons = append(reasons, fmt.Sprintf("coverage-gap (%d of %d non-bot players missing from eco map)", missing, humans))
+	}
+
+	// game.Rounds is the post-removeInvalidRounds slice (endOfMatchProcessing
+	// runs it before aggregating), so it is the deduped count. game.TotalRounds
+	// is deliberately not used here: it is derived from the server's round
+	// integrity counters, not from the rounds that were actually aggregated.
+	if cscRounds := len(game.Rounds); ecoRounds != cscRounds {
+		reasons = append(reasons, fmt.Sprintf("round-divergence (eco=%d csc=%d)", ecoRounds, cscRounds))
+	}
+
+	if n := sideCoverageGaps(game.TPlayerStats, eco, func(p *model.PlayerStats) int { return p.TRoundsPlayed }); n > 0 {
+		reasons = append(reasons, fmt.Sprintf("side-coverage-gap (%d non-bot players have T rounds in csc but none in eco)", n))
+	}
+	if n := sideCoverageGaps(game.CtPlayerStats, eco, func(p *model.PlayerStats) int { return p.CTRoundsPlayed }); n > 0 {
+		reasons = append(reasons, fmt.Sprintf("side-coverage-gap (%d non-bot players have CT rounds in csc but none in eco)", n))
+	}
+
+	if len(reasons) > 0 {
+		return false, strings.Join(reasons, "; ")
+	}
+	return true, ""
+}
+
+// coverage counts the non-bot players in dst and how many of them have no
+// counterpart in the eco map.
+func coverage(dst map[uint64]*csc.PlayerStats, eco map[uint64]*model.PlayerStats) (humans, missing int) {
+	for steamID, cscPlayer := range dst {
+		if cscPlayer == nil || cscPlayer.IsBot {
+			continue
+		}
+		humans++
+		if eco[steamID] == nil {
+			missing++
+		}
+	}
+	return humans, missing
+}
+
+// sideCoverageGaps counts non-bot players who played rounds on a side according
+// to CSC but have no eco rounds recorded for that side. Their side swing_rating
+// would otherwise stay zero while the game was flagged OK.
+func sideCoverageGaps(dst map[uint64]*csc.PlayerStats, eco map[uint64]*model.PlayerStats, sideRounds func(*model.PlayerStats) int) int {
+	gaps := 0
+	for steamID, cscPlayer := range dst {
+		if cscPlayer == nil || cscPlayer.IsBot || cscPlayer.Rounds <= 0 {
+			continue
+		}
+		ecoPlayer := eco[steamID]
+		if ecoPlayer == nil || sideRounds(ecoPlayer) <= 0 {
+			gaps++
+		}
+	}
+	return gaps
 }
 
 type ecoApplyFunc func(dst *csc.PlayerStats, eco *model.PlayerStats)

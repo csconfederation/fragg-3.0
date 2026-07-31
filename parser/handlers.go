@@ -956,6 +956,10 @@ func (d *DemoParser) handleRoundEnd(e events.RoundEnd) {
 	d.updateTeamScores(ctx.winnerTeam)
 	d.recordRoundEndProbability(ctx)
 
+	// Count this round only once it has been fully aggregated, so the counter
+	// always matches the number of rounds folded into the eco stats.
+	d.state.RoundsCounted++
+
 	d.logger.LogRoundEnd(d.state.RoundNumber)
 }
 

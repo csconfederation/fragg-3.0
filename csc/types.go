@@ -10,6 +10,11 @@ import (
 // while keeping the ported field layout identical to demoScrape2.
 type PlayerStats = playerStats
 
+// Round is an exported alias for the demoScrape2-compatible per-round struct,
+// letting other packages inspect Game.Rounds (which is the post-dedup round
+// list once end-of-match processing has run).
+type Round = round
+
 type Game struct {
 	//winnerID         int
 	CoreID                   string                  `json:"coreID"`

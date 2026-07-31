@@ -312,6 +312,15 @@ func (d *DemoParser) GetPlayers() map[uint64]*model.PlayerStats {
 	return d.state.Players
 }
 
+// GetRoundsCounted returns the number of rounds that were aggregated into the
+// player stats (warmup and knife rounds excluded). Callers use it to sanity
+// check the eco pipeline's round count against another pipeline's; the eco
+// pipeline has no replay/redo-round dedup, so a match that was restarted
+// mid-way inflates this value.
+func (d *DemoParser) GetRoundsCounted() int {
+	return d.state.RoundsCounted
+}
+
 // GetMapName returns the name of the map played (e.g., "de_dust2").
 func (d *DemoParser) GetMapName() string {
 	return d.state.MapName

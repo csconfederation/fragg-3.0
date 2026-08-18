@@ -152,13 +152,11 @@ func (td *TradeDetector) CheckForTrade(
 		}
 
 		if tradedPlayer, exists := players[recent.VictimID]; exists {
-			tradedPlayer.TradedDeaths++
 			result.TradedPlayerName = tradedPlayer.Name
 			result.TradedPlayerID = recent.VictimID
 
 			if tradedRound, exists := rounds[recent.VictimID]; exists {
 				if tradedRound.OpeningDeath {
-					tradedPlayer.OpeningDeathsTraded++
 					result.WasOpeningDeath = true
 				}
 			}

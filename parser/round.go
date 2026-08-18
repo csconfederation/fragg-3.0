@@ -28,12 +28,13 @@ type MatchState struct {
 	IsKnifeRound  bool
 	IsPistolRound bool
 	RoundNumber   int
-	// RoundsCounted is the number of RoundEnd events that actually fed the
-	// aggregates (warmup and knife rounds excluded). Unlike RoundNumber, which
+	// RoundsCounted is the number of rounds that were aggregated into the
+	// player stats (warmup and knife rounds excluded). Unlike RoundNumber, which
 	// is a monotonic freezetime-driven counter, this is the true denominator
 	// behind the eco aggregates and is what export compares against the CSC
 	// pipeline's post-dedup round count.
 	RoundsCounted  int
+	RoundActive    bool
 	MapName        string
 	RoundStartTime float64
 	CurrentSide    string
@@ -90,9 +91,9 @@ func (m *MatchState) ensureRound(p *common.Player) *model.RoundStats {
 }
 
 // ShouldSkipEvent returns true if the current event should be skipped
-// (knife round or match not started).
+// (no live CSC/eco round, knife round).
 func (m *MatchState) ShouldSkipEvent() bool {
-	return m.IsKnifeRound || !m.MatchStarted
+	return !m.RoundActive || m.IsKnifeRound
 }
 
 // CountAlivePlayers counts alive human players on each team from the given participants.

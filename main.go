@@ -18,7 +18,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -36,7 +35,6 @@ import (
 	"github.com/csconfederation/fragg-3.0/export"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/output"
-	"github.com/csconfederation/fragg-3.0/parser"
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 )
@@ -405,18 +403,21 @@ func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.Export
 	if err != nil {
 		log.Fatalf("Failed to open demo: %v", err)
 	}
-	defer demo.Close()
 
-	// Use buffered reader for better I/O performance on large demo files
-	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
-
-	p := parser.NewDemoParserWithSwingConfig(bufferedReader, cfg.EnableLogging, cfg.KDPRModifier, cfg.SwingConfig())
-	if err := p.Parse(); err != nil {
-		log.Fatalf("Failed to parse demo: %v", err)
+	_, eco, perr := export.ProcessDemoWithEco(demo, export.ProcessOptions{
+		EnableLogging: cfg.EnableLogging,
+		KDPRModifier:  cfg.KDPRModifier,
+		SwingConfig:   cfg.SwingConfig(),
+	})
+	if perr != nil && !errors.Is(perr, export.ErrNoValidRounds) {
+		log.Fatalf("Failed to parse demo: %v", perr)
+	}
+	if eco == nil {
+		log.Fatalf("Failed to parse demo: eco parser missing")
 	}
 
 	if cfg.GenerateFiles {
-		if err := exporter.Export(p.GetPlayers()); err != nil {
+		if err := exporter.Export(eco.GetPlayers()); err != nil {
 			log.Fatalf("Failed to export stats: %v", err)
 		}
 		log.Printf("Results exported successfully")
@@ -476,15 +477,18 @@ func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool, s
 	if err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to open demo: %w", err)
 	}
-	defer demo.Close()
 
-	// Use buffered reader for better I/O performance on large demo files (280-530MB)
-	bufferedReader := bufio.NewReaderSize(demo, 1024*1024) // 1MB buffer
-
-	p := parser.NewDemoParserWithSwingConfig(bufferedReader, enableLogging, kdprModifier, swingCfg)
-	if err := p.Parse(); err != nil {
-		return nil, "", "", nil, fmt.Errorf("failed to parse demo: %w", err)
+	_, eco, perr := export.ProcessDemoWithEco(demo, export.ProcessOptions{
+		EnableLogging: enableLogging,
+		KDPRModifier:  kdprModifier,
+		SwingConfig:   swingCfg,
+	})
+	if perr != nil && !errors.Is(perr, export.ErrNoValidRounds) {
+		return nil, "", "", nil, fmt.Errorf("failed to parse demo: %w", perr)
+	}
+	if eco == nil {
+		return nil, "", "", nil, fmt.Errorf("failed to parse demo: eco parser missing")
 	}
 
-	return p.GetPlayers(), p.GetMapName(), p.GetLogs(), p.GetCollector(), nil
+	return eco.GetPlayers(), eco.GetMapName(), eco.GetLogs(), eco.GetCollector(), nil
 }

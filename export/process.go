@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"strings"
 
 	"github.com/csconfederation/fragg-3.0/csc"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/parser"
+	"github.com/csconfederation/fragg-3.0/rating/swing"
+
+	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
 )
 
 // Game is the demoScrape2-compatible output type returned by ProcessDemo.
@@ -23,25 +25,35 @@ var ErrNoValidRounds = csc.ErrNoValidRounds
 
 // ProcessDemo is the drop-in replacement for demoscrape2.ProcessDemo.
 //
-// It runs two independent pipelines over the same demo:
-//  1. The ported CSC pipeline (package csc), producing demoScrape2-identical
-//     fields under their original JSON names.
-//  2. eco-rating's own parser, producing the new probability-swing metrics.
+// It parses the demo once. CSC handlers own round lifecycle (integrity, knife,
+// redo-round dedup). Eco/swing handlers write round-scoped stats that are folded
+// into match totals only for rounds that survive removeInvalidRounds.
 //
-// eco-rating's metrics are merged onto the CSC game additively (never
-// overwriting a CSC field); where the two parsers compute the same concept
-// differently, the eco value is carried under a distinct eco* name. The eco
-// primary rating is surfaced as swing_rating.
+// Eco metrics are merged onto the CSC game additively (never overwriting a CSC
+// field); where the two pipelines compute the same concept differently, the eco
+// value is carried under a distinct eco* name. The eco primary rating is
+// surfaced as swing_rating.
 //
 // The error contract matches demoScrape2: a non-nil *Game is always returned,
 // ErrNoValidRounds is joined when there are no rounds, and an unexpected EOF on
 // an already-finished match leaves Game.Result == "Ended".
 func ProcessDemo(demo io.ReadCloser) (game *Game, err error) {
+	game, _, err = ProcessDemoWithEco(demo, ProcessOptions{SwingConfig: swing.DefaultConfig()})
+	return game, err
+}
+
+// ProcessOptions configures the shared CSC+eco parse.
+type ProcessOptions struct {
+	EnableLogging bool
+	KDPRModifier  bool
+	SwingConfig   swing.Config
+}
+
+// ProcessDemoWithEco runs the single-parse pipeline and also returns the eco
+// parser (players, collector, logs) for CLI/batch callers.
+func ProcessDemoWithEco(demo io.ReadCloser, opts ProcessOptions) (game *Game, eco *parser.DemoParser, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			// The ported CSC pipeline can panic on pathological demos (matching
-			// demoScrape2). Convert that into an error so the worker returns a
-			// clean 5xx instead of crashing the process.
 			if game == nil {
 				game = csc.InitGameObject()
 			}
@@ -49,75 +61,68 @@ func ProcessDemo(demo io.ReadCloser) (game *Game, err error) {
 		}
 	}()
 
-	// Buffer the demo to a temp file so it can be parsed twice without holding
-	// the whole (often hundreds of MB) stream in memory.
-	tmp, terr := os.CreateTemp("", "ecorating-demo-*.dem")
-	if terr != nil {
-		return csc.InitGameObject(), fmt.Errorf("failed to create temp demo file: %w", terr)
+	if opts.SwingConfig == (swing.Config{}) {
+		opts.SwingConfig = swing.DefaultConfig()
 	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
 
-	if _, cerr := io.Copy(tmp, demo); cerr != nil {
-		tmp.Close()
-		demo.Close()
-		return csc.InitGameObject(), fmt.Errorf("failed to buffer demo: %w", cerr)
-	}
-	tmp.Close()
-	demo.Close()
+	cfg := demoinfocs.DefaultParserConfig
+	cfg.IgnorePacketEntitiesPanic = true
+	p := demoinfocs.NewParserWithConfig(demo, cfg)
+	defer p.Close()
 
-	// Pipeline 1: CSC (authoritative for the worker contract).
-	cscFile, oerr := os.Open(tmpPath)
-	if oerr != nil {
-		return csc.InitGameObject(), fmt.Errorf("failed to reopen demo: %w", oerr)
-	}
-	game, err = csc.ProcessDemo(cscFile)
+	eco = parser.AttachToParser(p, opts.EnableLogging, opts.KDPRModifier, opts.SwingConfig)
+
+	game, err = csc.ProcessParser(p, csc.ParseHooks{
+		OnInitRound:   eco.BeginRound,
+		OnRoundWinCon: eco.FinalizeRound,
+		OnRoundCommitted: func() any {
+			return eco.SnapshotRound()
+		},
+	})
 	if game == nil {
 		game = csc.InitGameObject()
 	}
 
-	// Pipeline 2: eco-rating (additive). Failures here must not change the CSC
-	// result the worker relies on; they are logged and EcoStatsOK stays false.
-	ecoFile, oerr := os.Open(tmpPath)
-	if oerr != nil {
-		log.Printf("export: eco merge skipped: reopen demo: %v", oerr)
-	} else {
-		mergeEcoStats(game, ecoFile)
-		ecoFile.Close()
-	}
-
-	return game, err
+	mergeEcoFromParser(game, eco)
+	return game, eco, err
 }
 
-// mergeEcoStats parses the demo with eco-rating's pipeline and copies eco-only
-// metrics onto the CSC game's player maps, matched by SteamID.
-func mergeEcoStats(game *csc.Game, r io.ReadCloser) {
+// mergeEcoFromParser folds surviving eco snapshots into match totals and copies
+// eco-only metrics onto the CSC game's player maps.
+func mergeEcoFromParser(game *csc.Game, eco *parser.DemoParser) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			log.Printf("export: eco merge panic recovered: %v", rec)
 			game.EcoStatsOK = false
 		}
 	}()
-
-	p := parser.NewDemoParser(r)
-	if perr := p.Parse(); perr != nil {
-		log.Printf("export: eco parse failed: %v", perr)
+	if eco == nil {
 		return
 	}
 
-	players := p.GetPlayers()
+	snaps := make([]*parser.RoundSnapshot, 0, len(game.Rounds))
+	for _, r := range game.Rounds {
+		if r == nil {
+			continue
+		}
+		snap, ok := r.EcoSnapshot().(*parser.RoundSnapshot)
+		if ok && snap != nil {
+			snaps = append(snaps, snap)
+		}
+	}
+	eco.FoldSnapshots(snaps)
+	eco.FinalizeStats()
+
+	players := eco.GetPlayers()
 	if game.MapName == "" {
-		game.MapName = p.GetMapName()
+		game.MapName = eco.GetMapName()
 	}
 
 	mergeInto(game.TotalPlayerStats, players, applyTotalEcoStats)
 	mergeInto(game.TPlayerStats, players, applyTEcoStats)
 	mergeInto(game.CtPlayerStats, players, applyCTEcoStats)
 
-	// The merge itself is best-effort and always runs; EcoStatsOK is what
-	// downstream gates on, so a partial or divergent merge is flagged rather
-	// than reverted.
-	ok, reason := evaluateEcoStats(game, players, p.GetRoundsCounted())
+	ok, reason := evaluateEcoStats(game, players, eco.GetRoundsCounted())
 	game.EcoStatsOK = ok
 	if !ok {
 		log.Printf("export: eco stats not OK: %s", reason)
@@ -136,12 +141,10 @@ func mergeEcoStats(game *csc.Game, r io.ReadCloser) {
 //  2. Every non-bot player CSC saw was also seen by eco, on the whole-match map
 //     and on each side map they played. Unmatched players silently keep zero
 //     eco fields, which downstream would read as a genuine zero rating.
-//  3. Eco's round count agrees with CSC's post-dedup valid round count. The eco
-//     pipeline has no replay/redo-round dedup (CSC has removeInvalidRounds), so
-//     a mid-match crash and restore inflates eco's denominator and double-counts
-//     events. The observed defect is inflation (eco > csc), but any disagreement
-//     means the two pipelines aggregated different round sets, so the check is a
-//     plain inequality.
+//  3. Eco's round count agrees with CSC's post-dedup valid round count. Eco
+//     stats are folded from snapshots attached to CSC rounds, so after a
+//     successful shared parse these should match. Any disagreement still
+//     means the two pipelines aggregated different round sets.
 //
 // Bots are excluded from the coverage requirement: the eco parser deliberately
 // skips them while the CSC pipeline keeps bot rows.

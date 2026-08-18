@@ -15,6 +15,7 @@ type DataCollector struct {
 	mu            sync.Mutex
 	data          *CollectedData
 	pendingStates []string // State keys captured during round, attributed at round end
+	pendingKills  [][2]float64
 }
 
 // CollectedData holds all collected probability data.
@@ -77,6 +78,7 @@ func (dc *DataCollector) RecordRoundStart(tAlive, ctAlive int, bombPlanted bool,
 	defer dc.mu.Unlock()
 
 	dc.pendingStates = nil // Reset for new round
+	dc.pendingKills = nil
 }
 
 // RecordStateSnapshot captures the current game state for later attribution.
@@ -89,17 +91,40 @@ func (dc *DataCollector) RecordStateSnapshot(tAlive, ctAlive int, bombPlanted bo
 	dc.pendingStates = append(dc.pendingStates, key)
 }
 
-// RecordRoundEnd records the outcome of a round.
-// Attributes all pending state snapshots to the round winner.
-func (dc *DataCollector) RecordRoundEnd(
-	tAlive, ctAlive int,
-	bombPlanted bool,
-	winner common.Team,
-	mapName string,
-) {
+// PendingRound is collector data captured at round commit, flushed only if
+// the round survives CSC dedup.
+type PendingRound struct {
+	States []string
+	Kills  [][2]float64
+}
+
+// TakePending returns and clears in-round collector buffers.
+func (dc *DataCollector) TakePending() PendingRound {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
+	out := PendingRound{
+		States: append([]string(nil), dc.pendingStates...),
+		Kills:  append([][2]float64(nil), dc.pendingKills...),
+	}
+	dc.pendingStates = nil
+	dc.pendingKills = nil
+	return out
+}
 
+// CommitPending attributes a previously taken pending round to the winner.
+func (dc *DataCollector) CommitPending(pending PendingRound, tAlive, ctAlive int, bombPlanted bool, winner common.Team, mapName string) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+	dc.pendingStates = pending.States
+	dc.pendingKills = pending.Kills
+	if tAlive > 0 && ctAlive > 0 {
+		key := stateKey(tAlive, ctAlive, bombPlanted)
+		dc.pendingStates = append(dc.pendingStates, key)
+	}
+	dc.commitRoundLocked(winner, mapName)
+}
+
+func (dc *DataCollector) commitRoundLocked(winner common.Team, mapName string) {
 	dc.data.TotalRounds++
 
 	// Attribute all pending state snapshots to the winner
@@ -115,6 +140,11 @@ func (dc *DataCollector) RecordRoundEnd(
 	}
 	dc.pendingStates = nil // Clear for next round
 
+	for _, eq := range dc.pendingKills {
+		dc.recordKillLocked(eq[0], eq[1])
+	}
+	dc.pendingKills = nil
+
 	// Record map data
 	if dc.data.MapData[mapName] == nil {
 		dc.data.MapData[mapName] = &MapData{}
@@ -126,6 +156,23 @@ func (dc *DataCollector) RecordRoundEnd(
 	}
 }
 
+// RecordRoundEnd records the outcome of a round.
+// Attributes all pending state snapshots to the round winner.
+func (dc *DataCollector) RecordRoundEnd(
+	tAlive, ctAlive int,
+	bombPlanted bool,
+	winner common.Team,
+	mapName string,
+) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+	if tAlive > 0 && ctAlive > 0 {
+		key := stateKey(tAlive, ctAlive, bombPlanted)
+		dc.pendingStates = append(dc.pendingStates, key)
+	}
+	dc.commitRoundLocked(winner, mapName)
+}
+
 // RecordKill records the outcome of a kill/duel.
 // Records bidirectional data: attacker won in A_V key, defender lost in V_A key.
 // This allows computing win rates for any equipment matchup.
@@ -134,7 +181,10 @@ func (dc *DataCollector) RecordKill(
 ) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
+	dc.pendingKills = append(dc.pendingKills, [2]float64{attackerEquip, victimEquip})
+}
 
+func (dc *DataCollector) recordKillLocked(attackerEquip, victimEquip float64) {
 	dc.data.TotalKills++
 
 	attackerCat := CategorizeEquipment(attackerEquip)

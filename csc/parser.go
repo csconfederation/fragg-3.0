@@ -76,11 +76,17 @@ func InitGameObject() *Game {
 //     returned unchanged; for a finished-but-truncated match Game.Result is
 //     "Ended" so callers can still treat it as success.
 func ProcessDemo(demo io.ReadCloser) (*Game, error) {
-
-	game := InitGameObject()
-
 	p := dem.NewParser(demo)
 	defer p.Close()
+	return ProcessParser(p, ParseHooks{})
+}
+
+// ProcessParser registers CSC handlers on an existing demoinfocs parser, runs
+// ParseToEnd, then aggregates. The caller owns the parser (create/close) so a
+// second pipeline can register handlers on the same instance first.
+func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
+
+	game := InitGameObject()
 
 	//set tick rate
 	game.TickRate = 64
@@ -172,6 +178,10 @@ func ProcessDemo(demo io.ReadCloser) (*Game, error) {
 		game.PotentialRound.InitCTerroristCount = game.Flags.CtAlive
 
 		resetRoundFlags()
+
+		if hooks.OnInitRound != nil {
+			hooks.OnInitRound()
+		}
 	}
 
 	processRoundOnWinCon := func(winnerClanName string) {
@@ -193,6 +203,10 @@ func ProcessDemo(demo io.ReadCloser) (*Game, error) {
 		//go through and set our WPAlog output to the winner
 		for _, log := range game.PotentialRound.WPAlog {
 			log.Winner = game.PotentialRound.WinnerENUM - 2
+		}
+
+		if hooks.OnRoundWinCon != nil {
+			hooks.OnRoundWinCon(game.PotentialRound.WinnerENUM)
 		}
 	}
 
@@ -330,6 +344,10 @@ func ProcessDemo(demo io.ReadCloser) (*Game, error) {
 			}
 			if !invalidLurk && susLurkBlips > 3 {
 				game.PotentialRound.PlayerStats[susLurker].LurkRounds = 1
+			}
+
+			if hooks.OnRoundCommitted != nil {
+				game.PotentialRound.SetEcoSnapshot(hooks.OnRoundCommitted())
 			}
 
 			//add our valid round

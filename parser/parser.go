@@ -25,11 +25,13 @@ import (
 // DemoParser wraps the demoinfocs parser and manages match state and logging.
 // It processes CS2 demo files and extracts comprehensive player statistics.
 type DemoParser struct {
-	parser       demoinfocs.Parser
-	state        *MatchState
-	logger       ParserLogger
-	collector    *probability.DataCollector
-	kdprModifier bool
+	parser            demoinfocs.Parser
+	state             *MatchState
+	logger            ParserLogger
+	collector         *probability.DataCollector
+	kdprModifier      bool
+	externalLifecycle bool
+	lastWinner        int
 }
 
 // NewDemoParser creates a new DemoParser with logging disabled.
@@ -313,10 +315,7 @@ func (d *DemoParser) GetPlayers() map[uint64]*model.PlayerStats {
 }
 
 // GetRoundsCounted returns the number of rounds that were aggregated into the
-// player stats (warmup and knife rounds excluded). Callers use it to sanity
-// check the eco pipeline's round count against another pipeline's; the eco
-// pipeline has no replay/redo-round dedup, so a match that was restarted
-// mid-way inflates this value.
+// player stats after CSC round dedup (or after standalone RoundEnd folds).
 func (d *DemoParser) GetRoundsCounted() int {
 	return d.state.RoundsCounted
 }

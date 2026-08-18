@@ -21,10 +21,12 @@ const FORCE_NEW_STATS_UPLOAD = false
 const ENABLE_WPA_DATA_OUTPUT = false
 const BACKEND_PUSHING = true
 
-// MR is the fallback rounds-per-half used only when a demo never carries a
-// CCSUsrMsg_MatchEndConditions message (older demos, or a config this parser
-// hasn't seen). Every CS2 MatchZy demo we've observed broadcasts mp_maxrounds
-// via that message, and roundsToWin() derives the real value from it.
+// MR is rounds-per-half for every CSC match format this parser handles
+// (League/Regulation, Playoff, and Combine all share the same MR12
+// regulation shape -- 24 rounds, win at 13). CCSUsrMsg_MatchEndConditions
+// (which would in principle carry mp_maxrounds) does not appear in any real
+// CSC demo we've checked, so this is not derived from the demo; it's the
+// only value ever observed in practice. See fragg-3.0#23.
 const MR = 12
 
 const tradeCutoff = 4 // in seconds
@@ -48,19 +50,30 @@ var killValues = map[string]float64{
 	"assist":        0.15,
 }
 
-// matchIsDecided reports whether the round that just ended settled the
-// match: a normal win (score reaches roundsToWin), an overtime win, or --
-// for MR15 (Combines don't play overtime in practice; MR12 in this parser
-// never has, and MR8 already special-cased it) -- a tied finish at
-// roundsToWin-1 each side.
+// matchIsDecided reports whether the round that just ended produced an
+// UNAMBIGUOUS clinch: a normal regulation win, an overtime-block win, or (for
+// MR8 only) that format's known-final tie. It deliberately does NOT report a
+// bare regulation tie (12-12 for MR12) as decided, because whether that's the
+// match's real final state depends on whether overtime is then played --
+// which varies by match type (League/Playoff replay OT blocks until decided;
+// Combines play at most one OT block and settle for a tie if it's level too)
+// and isn't recoverable from anything in the demo itself (confirmed: no CSC
+// demo we've checked carries CCSUsrMsg_MatchEndConditions, so mp_maxrounds
+// isn't available either). See fragg-3.0#23.
 //
-// This mirrors the RoundEnd handler's three format-specific branches
-// exactly (including MR12's lack of a tie case, which is intentionally
-// preserved -- see fragg-3.0#23/#25). roundsToWin values outside {9, 13,
-// 16} (a format this parser doesn't recognize) are never decided.
+// A genuinely-final tie (MR12 at 12-12 with no OT, or an MR12 OT block that
+// itself ends level) is instead caught by the post-parse fallback in
+// ProcessParser: once the demo truly ends, IsGameLive staying true means
+// nothing here ever fired, so the last pending round is finalized then. That
+// works for every format without needing to know its OT policy.
+//
+// roundsToWin values outside {9, 13, 16} (a format this parser doesn't
+// recognize) are never decided.
 func matchIsDecided(roundsToWin, roundWinnerScore, roundLoserScore int) bool {
 	switch roundsToWin {
-	case 16: // MR15
+	case 16: // MR15 -- not currently used by any CSC match type; RoundsToWin
+		// is always 13 in practice (see MR), so this branch is unreachable.
+		// Kept in case a future format sets it.
 		if roundWinnerScore == 16 && roundLoserScore < 15 {
 			return true // normal win
 		}
@@ -68,39 +81,24 @@ func matchIsDecided(roundsToWin, roundWinnerScore, roundLoserScore int) bool {
 			overtime := ((roundWinnerScore+roundLoserScore)-30-1)/6 + 1
 			return (roundWinnerScore-15-1)/3 == overtime // OT win
 		}
-		return roundWinnerScore == 15 && roundLoserScore == 15 // tie
 	case 9: // MR8
 		if roundWinnerScore == 9 && roundLoserScore < 8 {
 			return true // normal win
 		}
 		return roundWinnerScore == 8 && roundLoserScore == 8 // tie
-	case 13: // MR12
+	case 13: // MR12 -- League, Playoff, and Combine all use this threshold.
 		if roundWinnerScore == 13 && roundLoserScore < 12 {
 			return true // normal win
 		}
 		if roundWinnerScore > 12 {
 			overtime := ((roundWinnerScore+roundLoserScore)-24-1)/6 + 1
-			return (roundWinnerScore-12-1)/3 == overtime // OT win
+			return (roundWinnerScore-12-1)/3 == overtime // OT-block win
 		}
+		// roundWinnerScore == roundLoserScore == 12 (regulation tie) or a
+		// level score partway through an OT block: not decided here. See
+		// the fallback in ProcessParser.
 	}
 	return false
-}
-
-// roundsToWin derives the round-wins-needed-to-clinch-the-match threshold
-// (matched against in the RoundEnd win-condition branches below: 13 for
-// MR12, 16 for MR15, 9 for MR8) from the server's mp_maxrounds cvar, read
-// from the demo's CCSUsrMsg_MatchEndConditions message. mp_maxrounds is
-// twice the rounds-per-half (24 for MR12, 30 for MR15), so half of it plus
-// one is the clinching score.
-//
-// maxRounds <= 0 means the demo never carried the message (or carried 0),
-// so we fall back to the historical MR12 assumption rather than produce a
-// nonsensical threshold.
-func roundsToWin(maxRounds int32) int {
-	if maxRounds <= 0 {
-		return MR + 1
-	}
-	return int(maxRounds)/2 + 1
 }
 
 func InitGameObject() *Game {
@@ -148,12 +146,6 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 
 	game := InitGameObject()
 
-	// mp_maxrounds from the demo's own CCSUsrMsg_MatchEndConditions message,
-	// captured as soon as it's seen. Read reactively (not just once at
-	// initGameStart) since we don't rely on message ordering relative to the
-	// first pistol round.
-	var mpMaxRounds int32
-
 	//set tick rate
 	game.TickRate = 64
 	log.Debug("Tick rate is", game.TickRate)
@@ -177,7 +169,7 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 		teamTemp = p.GameState().TeamCounterTerrorists()
 		game.Teams[validateTeamName(game, teamTemp.ClanName(), teamTemp.Team())] = &team{Name: validateTeamName(game, teamTemp.ClanName(), teamTemp.Team())}
 
-		game.RoundsToWin = roundsToWin(mpMaxRounds)
+		game.RoundsToWin = MR + 1
 		game.Result = ""
 
 	}
@@ -433,16 +425,6 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 
 	p.RegisterNetMessageHandler(func(m *msg.CSVCMsg_ServerInfo) {
 		game.MapName = m.GetMapName()
-	})
-
-	p.RegisterNetMessageHandler(func(m *msg.CCSUsrMsg_MatchEndConditions) {
-		mpMaxRounds = m.GetMpMaxrounds()
-		// initGameStart() may already have run with the MR12 fallback if this
-		// message arrived after the first pistol round; keep RoundsToWin in
-		// sync with the real config either way.
-		if game.Flags.HasGameStarted {
-			game.RoundsToWin = roundsToWin(mpMaxRounds)
-		}
 	})
 
 	p.RegisterEventHandler(func(e events.PlayerInfo) {
@@ -1133,6 +1115,22 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 
 	// Parse to end
 	err := p.ParseToEnd()
+
+	// The demo has now definitively ended. If nothing ever finalized the
+	// match (IsGameLive still true), the pending round was never an
+	// unambiguous clinch under matchIsDecided -- most commonly a genuine
+	// final tie (MR12 at 12-12 with no overtime played, or an overtime
+	// block that itself ended level). RoundEndOfficial doesn't fire for a
+	// demo's true last round, so this is the only remaining place to catch
+	// it. By now we know for certain no further rounds are coming, which is
+	// exactly the information matchIsDecided didn't have mid-stream -- so
+	// finalize using whatever round is currently pending, for any format,
+	// without needing to know that format's overtime policy. See
+	// fragg-3.0#23.
+	if game.Flags.IsGameLive {
+		game.WinnerClanName = game.PotentialRound.WinnerClanName
+		processRoundFinal(true)
+	}
 
 	endOfMatchProcessing(game)
 

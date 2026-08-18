@@ -48,6 +48,44 @@ var killValues = map[string]float64{
 	"assist":        0.15,
 }
 
+// matchIsDecided reports whether the round that just ended settled the
+// match: a normal win (score reaches roundsToWin), an overtime win, or --
+// for MR15 (Combines don't play overtime in practice; MR12 in this parser
+// never has, and MR8 already special-cased it) -- a tied finish at
+// roundsToWin-1 each side.
+//
+// This mirrors the RoundEnd handler's three format-specific branches
+// exactly (including MR12's lack of a tie case, which is intentionally
+// preserved -- see fragg-3.0#23/#25). roundsToWin values outside {9, 13,
+// 16} (a format this parser doesn't recognize) are never decided.
+func matchIsDecided(roundsToWin, roundWinnerScore, roundLoserScore int) bool {
+	switch roundsToWin {
+	case 16: // MR15
+		if roundWinnerScore == 16 && roundLoserScore < 15 {
+			return true // normal win
+		}
+		if roundWinnerScore > 15 {
+			overtime := ((roundWinnerScore+roundLoserScore)-30-1)/6 + 1
+			return (roundWinnerScore-15-1)/3 == overtime // OT win
+		}
+		return roundWinnerScore == 15 && roundLoserScore == 15 // tie
+	case 9: // MR8
+		if roundWinnerScore == 9 && roundLoserScore < 8 {
+			return true // normal win
+		}
+		return roundWinnerScore == 8 && roundLoserScore == 8 // tie
+	case 13: // MR12
+		if roundWinnerScore == 13 && roundLoserScore < 12 {
+			return true // normal win
+		}
+		if roundWinnerScore > 12 {
+			overtime := ((roundWinnerScore+roundLoserScore)-24-1)/6 + 1
+			return (roundWinnerScore-12-1)/3 == overtime // OT win
+		}
+	}
+	return false
+}
+
 // roundsToWin derives the round-wins-needed-to-clinch-the-match threshold
 // (matched against in the RoundEnd win-condition branches below: 13 for
 // MR12, 16 for MR15, 9 for MR8) from the server's mp_maxrounds cvar, read
@@ -628,45 +666,9 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 				log.Debug("winner Rounds", roundWinnerScore)
 				log.Debug("loser Rounds", roundLoserScore)
 
-				if game.RoundsToWin == 16 {
-					//check for normal win
-					if roundWinnerScore == 16 && roundLoserScore < 15 {
-						//normal win
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					} else if roundWinnerScore > 15 { //check for OT win
-						overtime := ((roundWinnerScore+roundLoserScore)-30-1)/6 + 1
-						//OT win
-						if (roundWinnerScore-15-1)/3 == overtime {
-							game.WinnerClanName = game.PotentialRound.WinnerClanName
-							processRoundFinal(true)
-						}
-					}
-				} else if game.RoundsToWin == 9 {
-					//check for normal win
-					if roundWinnerScore == 9 && roundLoserScore < 8 {
-						//normal win
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					} else if roundWinnerScore == 8 && roundLoserScore == 8 { //check for tie
-						//tie
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					}
-				} else if game.RoundsToWin == 13 {
-					//check for normal win
-					if roundWinnerScore == 13 && roundLoserScore < 12 {
-						//normal win
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					} else if roundWinnerScore > 12 { //check for OT win
-						overtime := ((roundWinnerScore+roundLoserScore)-24-1)/6 + 1
-						//OT win
-						if (roundWinnerScore-12-1)/3 == overtime {
-							game.WinnerClanName = game.PotentialRound.WinnerClanName
-							processRoundFinal(true)
-						}
-					}
+				if matchIsDecided(game.RoundsToWin, roundWinnerScore, roundLoserScore) {
+					game.WinnerClanName = game.PotentialRound.WinnerClanName
+					processRoundFinal(true)
 				}
 			}
 

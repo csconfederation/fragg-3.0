@@ -83,6 +83,20 @@ type RoundStats struct {
 	ProbabilitySwing   float64             // Win probability delta contribution
 	LastDeathSwing     float64             // Most recent death swing (for trade refund calculation)
 	SwingContributions []SwingContribution // Detailed swing events for this round
+
+	// Event-time counters stored on the round so match totals can be folded
+	// after CSC drops knife/incomplete/redo rounds.
+	Headshots             int
+	EcoDeathValue         float64
+	TimeToKillSum         float64
+	KillsWithTTK          int
+	LowBuyKills           int
+	DisadvantagedBuyKills int
+	ManAdvantageKills     int
+	ManDisadvantageDeaths int
+	EcoAdjustedKills      float64
+	PerfectKills          int
+	EnemiesFlashed        int
 }
 
 // SwingContribution captures a single event's impact on probability swing.

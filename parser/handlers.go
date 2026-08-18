@@ -24,14 +24,16 @@ import (
 // This is the core of the parsing logic, delegating to focused handler methods.
 func (d *DemoParser) registerHandlers() {
 	d.registerMapHandler()
-	d.registerMatchHandlers()
-	d.registerRoundLifecycleHandlers()
+	if !d.externalLifecycle {
+		d.registerMatchHandlers()
+		d.registerRoundLifecycleHandlers()
+		d.registerRoundEndHandler()
+	}
 	d.registerBombHandlers()
 	d.registerFlashHandlers()
 	d.registerKillHandler()
 	d.registerDamageHandler()
 	d.registerRoundDecisionHandlers()
-	d.registerRoundEndHandler()
 }
 
 // applyLedgerAllocations applies swing ledger allocations to round stats.
@@ -157,14 +159,7 @@ func (d *DemoParser) registerRoundLifecycleHandlers() {
 
 // handleRoundStart resets round state for a new round.
 func (d *DemoParser) handleRoundStart() {
-	d.state.Round = make(map[uint64]*model.RoundStats)
-	d.state.RoundHasKill = false
-	d.state.TradeDetector.Reset()
-	d.state.RoundDecided = false
-	d.state.RoundDecidedAt = 0
-	d.state.BombPlanted = false
-
-	// Clear any pending probability snapshots from skipped/aborted rounds
+	d.resetRoundState()
 	if d.collector != nil {
 		d.collector.RecordRoundStart(0, 0, false, "")
 	}
@@ -286,12 +281,11 @@ func (d *DemoParser) handlePlayerFlashed(e events.PlayerFlashed) {
 
 	if e.Attacker != nil && e.Player != nil {
 		roundStats := d.state.ensureRound(e.Attacker)
-		player := d.state.ensurePlayer(e.Attacker)
 		flashDuration := e.FlashDuration().Seconds()
 		if e.Attacker.Team != e.Player.Team {
 			roundStats.FlashAssists++
 			roundStats.EnemyFlashDuration += flashDuration
-			player.EnemiesFlashed++
+			roundStats.EnemiesFlashed++
 
 			// Track flash for swing attribution
 			if d.state.SwingTracker != nil {
@@ -312,22 +306,17 @@ func (d *DemoParser) handleGrenadeThrow(e events.GrenadeProjectileThrow) {
 
 	if e.Projectile != nil && e.Projectile.Thrower != nil && e.Projectile.WeaponInstance != nil {
 		roundStats := d.state.ensureRound(e.Projectile.Thrower)
-		player := d.state.ensurePlayer(e.Projectile.Thrower)
 
 		switch e.Projectile.WeaponInstance.Type {
 		case common.EqFlash:
 			roundStats.FlashesThrown++
 		case common.EqSmoke:
 			roundStats.SmokesThrown++
-			player.SmokesThrown++
 		case common.EqHE:
 			roundStats.HEsThrown++
-			player.HEsThrown++
 		case common.EqMolotov, common.EqIncendiary:
 			roundStats.MolotovsThrown++
-			player.MolotovsThrown++
 		}
-		player.TotalNadesThrown++
 	}
 }
 
@@ -347,74 +336,7 @@ func (d *DemoParser) handleFreezetimeEnd() {
 			return
 		}
 	}
-	d.state.IsKnifeRound = false
-	d.state.RoundNumber++
-
-	d.state.IsPistolRound = rating.IsPistolRound(d.state.RoundNumber)
-
-	d.state.RoundStartTime = d.currentTime()
-
-	for _, p := range participants {
-		if p.Team == common.TeamTerrorists {
-			d.state.CurrentSide = "T"
-			break
-		} else if p.Team == common.TeamCounterTerrorists {
-			d.state.CurrentSide = "CT"
-			break
-		}
-	}
-
-	d.logger.LogRoundStart(d.state.RoundNumber)
-
-	// Count players and calculate team economies for swing tracking
-	tAlive := 0
-	ctAlive := 0
-	tEquipTotal := 0
-	ctEquipTotal := 0
-
-	for _, p := range participants {
-		if p.IsBot {
-			continue
-		}
-		d.state.ensurePlayer(p)
-		roundStats := d.state.ensureRound(p)
-		roundStats.IsPistolRound = d.state.IsPistolRound
-
-		if p.Team == common.TeamTerrorists {
-			roundStats.PlayerSide = "T"
-			tAlive++
-			tEquipTotal += p.EquipmentValueCurrent()
-		} else if p.Team == common.TeamCounterTerrorists {
-			roundStats.PlayerSide = "CT"
-			ctAlive++
-			ctEquipTotal += p.EquipmentValueCurrent()
-		}
-	}
-
-	// Cap at 5 per side as safety net (CS2 is 5v5)
-	if tAlive > 5 {
-		tAlive = 5
-	}
-	if ctAlive > 5 {
-		ctAlive = 5
-	}
-
-	// Initialize swing tracker for the round
-	if d.state.SwingTracker != nil && d.state.SwingTracker.IsEnabled() {
-		startTick := d.parser.GameState().IngameTick()
-		d.state.SwingTracker.ResetRoundWithClock(d.state.RoundNumber, tAlive, ctAlive, d.state.MapName, startTick, defaultRoundTimeSeconds)
-
-		// Set team economies
-		tAvgEquip := 0.0
-		ctAvgEquip := 0.0
-		if tAlive > 0 {
-			tAvgEquip = float64(tEquipTotal) / float64(tAlive)
-		}
-		if ctAlive > 0 {
-			ctAvgEquip = float64(ctEquipTotal) / float64(ctAlive)
-		}
-		d.state.SwingTracker.SetEconomyFromValues(tAvgEquip, ctAvgEquip)
-	}
+	d.BeginRound()
 }
 
 // registerKillHandler sets up the main kill event handler.
@@ -441,7 +363,7 @@ type killContext struct {
 
 // handleKill processes a kill event, updating statistics for killer and victim.
 func (d *DemoParser) handleKill(e events.Kill) {
-	if d.parser.GameState().IsWarmupPeriod() || d.state.IsKnifeRound {
+	if d.parser.GameState().IsWarmupPeriod() || d.state.ShouldSkipEvent() {
 		return
 	}
 
@@ -512,8 +434,6 @@ func (d *DemoParser) processVictimDeath(ctx *killContext) {
 		return
 	}
 
-	victim := d.state.ensurePlayer(ctx.victim)
-	victim.Deaths++
 	victimRound := d.state.ensureRound(ctx.victim)
 	victimRound.DeathTime = ctx.timeInRound
 
@@ -540,11 +460,9 @@ func (d *DemoParser) processTradeDetection(ctx *killContext) {
 			ctx.attacker, ctx.victim, ctx.currentTick, ctx.timeInRound,
 			d.state.Players, d.state.Round)
 		if tradeResult.IsTrade {
-			attackerStats := d.state.ensurePlayer(ctx.attacker)
-			attackerStats.TradeDenials++
-			attackerStats.SavedTeammate++
 			attackerRound := d.state.ensureRound(ctx.attacker)
 			attackerRound.SavedTeammate = true
+			attackerRound.TradeDenials++
 
 			if tradeResult.TradeReallocation && d.state.SwingTracker != nil {
 				gs := d.parser.GameState()
@@ -598,9 +516,8 @@ func (d *DemoParser) recordKillForProbability(ctx *killContext) {
 
 // processKillerStats updates killer statistics.
 func (d *DemoParser) processKillerStats(ctx *killContext) {
-	attacker := d.state.ensurePlayer(ctx.attacker)
-	victim := d.state.ensurePlayer(ctx.victim)
 	round := d.state.ensureRound(ctx.attacker)
+	victimRound := d.state.ensureRound(ctx.victim)
 
 	d.logger.LogKill(d.state.RoundNumber, ctx.attacker.Name, ctx.victim.Name, ctx.attackerEquip, ctx.victimEquip, ctx.killValue)
 	d.logger.LogDeath(d.state.RoundNumber, ctx.victim.Name, ctx.attacker.Name, ctx.victimEquip, ctx.attackerEquip, ctx.deathPenalty)
@@ -615,35 +532,28 @@ func (d *DemoParser) processKillerStats(ctx *killContext) {
 	round.Kills++
 	round.GotKill = true
 	round.EconImpact += ctx.killValue
-	attacker.Kills++
-	attacker.EcoKillValue += ctx.killValue
-	attacker.EconImpact += ctx.killValue
 	if ctx.event.IsHeadshot {
-		attacker.Headshots++
+		round.Headshots++
 	}
 
-	// Calculate proper TTK (time from first damage to kill)
 	if d.state.SwingTracker != nil {
 		ttk := d.state.SwingTracker.GetTimeToKill(ctx.attacker.SteamID64, ctx.victim.SteamID64, ctx.timeInRound)
 		if ttk >= 0 {
-			attacker.TotalTimeToKill += ttk
-			attacker.KillsWithTTK++
+			round.TimeToKillSum += ttk
+			round.KillsWithTTK++
 		}
 	}
 
 	if ctx.killValue < 1.0 {
-		attacker.LowBuyKills++
+		round.LowBuyKills++
 	}
 	if ctx.killValue <= 0.85 {
-		attacker.DisadvantagedBuyKills++
+		round.DisadvantagedBuyKills++
 	}
 
-	// Track man advantage kills and man disadvantage deaths
-	// Get current alive counts (victim is already dead at this point)
 	gs := d.parser.GameState()
 	tAlive, ctAlive := d.state.CountAlivePlayers(gs.Participants().Playing())
 
-	// Reconstruct pre-kill state by adding victim back
 	var attackerAliveAfter, victimAliveAfter int
 	var attackerAliveBefore, victimAliveBefore int
 	if ctx.attacker.Team == common.TeamTerrorists {
@@ -658,32 +568,14 @@ func (d *DemoParser) processKillerStats(ctx *killContext) {
 		victimAliveBefore = tAlive + 1
 	}
 
-	// Man advantage kill: attacker's team went from equal/behind to ahead
 	if attackerAliveBefore <= victimAliveBefore && attackerAliveAfter > victimAliveAfter {
-		attacker.ManAdvantageKills++
-		if ctx.attacker.Team == common.TeamTerrorists {
-			attacker.TManAdvantageKills++
-		} else {
-			attacker.CTManAdvantageKills++
-		}
+		round.ManAdvantageKills++
 	}
-
-	// Man disadvantage death: victim's team went from equal/ahead to behind
 	if victimAliveBefore >= attackerAliveBefore && victimAliveAfter < attackerAliveAfter {
-		victim.ManDisadvantageDeaths++
-		if ctx.victim.Team == common.TeamTerrorists {
-			victim.TManDisadvantageDeaths++
-		} else {
-			victim.CTManDisadvantageDeaths++
-		}
+		victimRound.ManDisadvantageDeaths++
 	}
 
-	victim.EcoDeathValue += ctx.deathPenalty
-	if ctx.victim.Team == common.TeamTerrorists {
-		victim.TEcoDeathValue += ctx.deathPenalty
-	} else if ctx.victim.Team == common.TeamCounterTerrorists {
-		victim.CTEcoDeathValue += ctx.deathPenalty
-	}
+	victimRound.EcoDeathValue += ctx.deathPenalty
 }
 
 // processWeaponStats updates weapon-specific statistics.
@@ -692,19 +584,16 @@ func (d *DemoParser) processWeaponStats(ctx *killContext) {
 		return
 	}
 
-	attacker := d.state.ensurePlayer(ctx.attacker)
 	round := d.state.ensureRound(ctx.attacker)
 
 	switch ctx.event.Weapon.Type {
 	case common.EqAWP:
 		round.AWPKills++
 		round.AWPKill = true
-		attacker.AWPKills++
 	case common.EqKnife:
 		round.KnifeKill = true
 	case common.EqHE, common.EqMolotov, common.EqIncendiary:
 		round.UtilityKills++
-		attacker.UtilityKills++
 	}
 
 	isPistol := ctx.event.Weapon.Type >= common.EqP2000 && ctx.event.Weapon.Type <= common.EqRevolver
@@ -720,41 +609,19 @@ func (d *DemoParser) processOpeningKill(ctx *killContext) {
 		return
 	}
 
-	attacker := d.state.ensurePlayer(ctx.attacker)
-	victim := d.state.ensurePlayer(ctx.victim)
 	round := d.state.ensureRound(ctx.attacker)
 	victimRound := d.state.ensureRound(ctx.victim)
 
-	attacker.OpeningKills++
-	attacker.OpeningAttempts++
-	attacker.OpeningSuccesses++
 	round.OpeningKill = true
 	round.EntryFragger = true
 	round.InvolvedInOpening = true
 
-	// Track side-specific opening kills
-	if ctx.attacker.Team == common.TeamTerrorists {
-		attacker.TOpeningKills++
-	} else if ctx.attacker.Team == common.TeamCounterTerrorists {
-		attacker.CTOpeningKills++
-	}
-
 	if ctx.event.Weapon != nil && ctx.event.Weapon.Type == common.EqAWP {
 		round.AWPOpeningKill = true
-		attacker.AWPOpeningKills++
 	}
 
-	victim.OpeningDeaths++
-	victim.OpeningAttempts++
 	victimRound.OpeningDeath = true
 	victimRound.InvolvedInOpening = true
-
-	// Track side-specific opening deaths
-	if ctx.victim.Team == common.TeamTerrorists {
-		victim.TOpeningDeaths++
-	} else if ctx.victim.Team == common.TeamCounterTerrorists {
-		victim.CTOpeningDeaths++
-	}
 
 	d.state.RoundHasKill = true
 	d.logger.LogOpeningKill(d.state.RoundNumber, ctx.attacker.Name, ctx.victim.Name)
@@ -811,8 +678,7 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 	}
 
 	if swingResult.EcoMultiplier > 0 {
-		attacker := d.state.ensurePlayer(ctx.attacker)
-		attacker.EcoAdjustedKills += swingResult.EcoMultiplier
+		round.EcoAdjustedKills += swingResult.EcoMultiplier
 	}
 }
 
@@ -820,7 +686,6 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 func (d *DemoParser) processEcoKillFlags(ctx *killContext) {
 	round := d.state.ensureRound(ctx.attacker)
 	victimRound := d.state.ensureRound(ctx.victim)
-	attacker := d.state.ensurePlayer(ctx.attacker)
 
 	equipRatio := float64(ctx.victimEquip) / math.Max(float64(ctx.attackerEquip), 500.0)
 	if equipRatio > 2.0 {
@@ -830,7 +695,7 @@ func (d *DemoParser) processEcoKillFlags(ctx *killContext) {
 		victimRound.AntiEcoKill = true
 	}
 	if ctx.event.IsHeadshot {
-		attacker.PerfectKills++
+		round.PerfectKills++
 	}
 }
 
@@ -840,8 +705,6 @@ func (d *DemoParser) processAssist(ctx *killContext) {
 		return
 	}
 
-	assister := d.state.ensurePlayer(ctx.event.Assister)
-	assister.Assists++
 	assistRound := d.state.ensureRound(ctx.event.Assister)
 	assistRound.GotAssist = true
 	assistRound.Assists++
@@ -856,7 +719,7 @@ func (d *DemoParser) registerDamageHandler() {
 
 // handlePlayerHurt processes a damage event.
 func (d *DemoParser) handlePlayerHurt(e events.PlayerHurt) {
-	if d.parser.GameState().IsWarmupPeriod() || d.state.IsKnifeRound {
+	if d.parser.GameState().IsWarmupPeriod() || d.state.ShouldSkipEvent() {
 		return
 	}
 
@@ -867,15 +730,9 @@ func (d *DemoParser) handlePlayerHurt(e events.PlayerHurt) {
 	dmg := int(e.HealthDamageTaken)
 
 	if e.Attacker.Team != e.Player.Team {
-		ps := d.state.ensurePlayer(e.Attacker)
-		ps.Damage += dmg
-
 		roundStats := d.state.ensureRound(e.Attacker)
 		roundStats.Damage += dmg
 
-		// Track damage taken by victim
-		victim := d.state.ensurePlayer(e.Player)
-		victim.DamageTaken += dmg
 		victimRound := d.state.ensureRound(e.Player)
 		victimRound.DamageTaken += dmg
 
@@ -884,15 +741,12 @@ func (d *DemoParser) handlePlayerHurt(e events.PlayerHurt) {
 			case common.EqHE:
 				roundStats.UtilityDamage += dmg
 				roundStats.HEDamage += dmg
-				ps.HEDamage += dmg
 			case common.EqMolotov, common.EqIncendiary:
 				roundStats.UtilityDamage += dmg
 				roundStats.FireDamage += dmg
-				ps.FireDamage += dmg
 			}
 		}
 
-		// Track damage for swing attribution and TTK calculation
 		if d.state.SwingTracker != nil {
 			d.state.SwingTracker.RecordDamage(e.Attacker.SteamID64, e.Player.SteamID64, dmg, d.timeInRound())
 		}
@@ -939,42 +793,16 @@ type roundEndContext struct {
 
 // handleRoundEnd processes the end of a round, updating all player statistics.
 func (d *DemoParser) handleRoundEnd(e events.RoundEnd) {
-	if d.parser.GameState().IsWarmupPeriod() || d.state.IsKnifeRound {
+	if d.parser.GameState().IsWarmupPeriod() || d.state.IsKnifeRound || !d.state.RoundActive {
 		return
 	}
 
-	ctx := d.buildRoundEndContext(e)
-
-	d.processRoundEndTrades()
-	d.processMultiKills()
-	d.processSurvivalStats(ctx)
-	d.processClutchDetection(ctx)
-	d.processRoundEndSwing(ctx)
-	d.processProbabilitySwings(ctx)
-	d.updateSideStats()
-	d.incrementRoundsPlayed()
-	d.updateTeamScores(ctx.winnerTeam)
-	d.recordRoundEndProbability(ctx)
-
-	// Count this round only once it has been fully aggregated, so the counter
-	// always matches the number of rounds folded into the eco stats.
+	d.FinalizeRound(int(e.Winner))
+	snap := d.SnapshotRound()
+	d.foldSnapshot(snap)
 	d.state.RoundsCounted++
-
+	d.updateTeamScores(e.Winner)
 	d.logger.LogRoundEnd(d.state.RoundNumber)
-}
-
-// buildRoundEndContext creates the context for round end processing.
-func (d *DemoParser) buildRoundEndContext(e events.RoundEnd) *roundEndContext {
-	gs := d.parser.GameState()
-	roundDuration := d.timeInRound()
-	timeRemaining := math.Max(0.0, 115.0-roundDuration)
-
-	return &roundEndContext{
-		gs:            gs,
-		winnerTeam:    e.Winner,
-		roundDuration: roundDuration,
-		timeRemaining: timeRemaining,
-	}
 }
 
 // processRoundEndTrades handles pending trades at round end.
@@ -985,19 +813,9 @@ func (d *DemoParser) processRoundEndTrades() {
 
 // processMultiKills updates multi-kill statistics.
 func (d *DemoParser) processMultiKills() {
-	for steamID, roundStats := range d.state.Round {
-		player := d.state.Players[steamID]
-		if player == nil {
-			continue
-		}
-
-		if roundStats.Kills >= 1 && roundStats.Kills <= 5 {
-			player.MultiKillsRaw[roundStats.Kills]++
-			d.logger.LogMultiKill(d.state.RoundNumber, player.Name, roundStats.Kills)
-		}
-
-		if player.RoundsPlayed > 0 {
-			player.AWPKillsPerRound = float64(player.AWPKills) / float64(player.RoundsPlayed)
+	for _, roundStats := range d.state.Round {
+		if roundStats.Kills >= 2 && roundStats.Kills <= 5 {
+			d.logger.LogMultiKill(d.state.RoundNumber, "", roundStats.Kills)
 		}
 	}
 }
@@ -1005,33 +823,16 @@ func (d *DemoParser) processMultiKills() {
 // processSurvivalStats updates survival and time alive statistics.
 func (d *DemoParser) processSurvivalStats(ctx *roundEndContext) {
 	for _, p := range ctx.gs.Participants().Playing() {
-		ps := d.state.ensurePlayer(p)
 		round := d.state.ensureRound(p)
 
 		teamWon := p.Team == ctx.winnerTeam
 		round.TeamWon = teamWon
-		if teamWon {
-			ps.RoundsWon++
-		} else {
-			ps.RoundsLost++
-		}
 
 		if p.IsAlive() {
-			ps.Survival++
 			round.Survived = true
 			round.TimeAlive = ctx.roundDuration
-			ps.TotalTimeAlive += ctx.roundDuration
-
-			if !teamWon {
-				ps.SavesOnLoss++
-			}
 		} else if round.DeathTime > 0 {
 			round.TimeAlive = round.DeathTime
-			ps.TotalTimeAlive += round.DeathTime
-
-			// Track time to death for ATD calculation
-			ps.TotalDeathTime += round.DeathTime
-			ps.DeathTimeRounds++
 		}
 	}
 }
@@ -1041,19 +842,15 @@ func (d *DemoParser) processSurvivalStats(ctx *roundEndContext) {
 func (d *DemoParser) processClutchDetection(ctx *roundEndContext) {
 	for _, p := range ctx.gs.Participants().Playing() {
 		round := d.state.ensureRound(p)
-		ps := d.state.ensurePlayer(p)
 
 		aliveTeammates, _ := d.countAliveByTeam(ctx.gs.Participants().Playing(), p.Team)
 
 		if p.IsAlive() && aliveTeammates == 1 {
-			ps.LastAliveRounds++
 			round.WasLastAlive = true
 		}
 
-		// Check if player entered a clutch situation during this round
-		// ClutchEnteredSize is set when a teammate dies and this player becomes last alive
 		if round.ClutchEnteredSize > 0 {
-			d.recordClutchAttempt(ps, round, round.ClutchEnteredSize)
+			d.recordClutchAttempt(round, round.ClutchEnteredSize)
 		}
 
 		if p.IsAlive() && !round.TeamWon {
@@ -1119,44 +916,12 @@ func (d *DemoParser) checkClutchEntry(ctx *killContext) {
 }
 
 // recordClutchAttempt records a clutch attempt and its outcome.
-func (d *DemoParser) recordClutchAttempt(ps *model.PlayerStats, round *model.RoundStats, aliveEnemies int) {
+func (d *DemoParser) recordClutchAttempt(round *model.RoundStats, aliveEnemies int) {
 	round.ClutchAttempt = true
 	round.ClutchSize = aliveEnemies
 	round.ClutchKills = round.Kills
-	ps.ClutchRounds++
-
-	// Track clutch attempts by size
-	switch aliveEnemies {
-	case 1:
-		ps.Clutch1v1Attempts++
-		if round.TeamWon {
-			ps.Clutch1v1Wins++
-		}
-	case 2:
-		ps.Clutch1v2Attempts++
-		if round.TeamWon {
-			ps.Clutch1v2Wins++
-		}
-	case 3:
-		ps.Clutch1v3Attempts++
-		if round.TeamWon {
-			ps.Clutch1v3Wins++
-		}
-	case 4:
-		ps.Clutch1v4Attempts++
-		if round.TeamWon {
-			ps.Clutch1v4Wins++
-		}
-	case 5:
-		ps.Clutch1v5Attempts++
-		if round.TeamWon {
-			ps.Clutch1v5Wins++
-		}
-	}
-
 	if round.TeamWon {
 		round.ClutchWon = true
-		ps.ClutchWins++
 	}
 }
 
@@ -1184,51 +949,6 @@ func (d *DemoParser) processRoundEndSwing(ctx *roundEndContext) {
 	}
 }
 
-// processProbabilitySwings accumulates probability swing values per player.
-func (d *DemoParser) processProbabilitySwings(ctx *roundEndContext) {
-	for steamID, roundStats := range d.state.Round {
-		player := d.state.Players[steamID]
-		if player == nil {
-			continue
-		}
-
-		roundStats.MultiKillRound = roundStats.Kills
-
-		player.ProbabilitySwing += roundStats.ProbabilitySwing
-		player.RoundBreakdowns = append(player.RoundBreakdowns, model.NewRoundSwingBreakdown(d.state.RoundNumber, roundStats))
-
-		if roundStats.PlayerSide == "T" {
-			player.TProbabilitySwing += roundStats.ProbabilitySwing
-		} else if roundStats.PlayerSide == "CT" {
-			player.CTProbabilitySwing += roundStats.ProbabilitySwing
-		}
-	}
-}
-
-// updateSideStats applies side-specific statistics using SideStatsUpdater.
-func (d *DemoParser) updateSideStats() {
-	for steamID, roundStats := range d.state.Round {
-		player := d.state.Players[steamID]
-		if player == nil {
-			continue
-		}
-
-		updater := NewSideStatsUpdater(player, roundStats)
-		updater.UpdateCommonRoundStats()
-		updater.UpdateSideStats()
-	}
-}
-
-// incrementRoundsPlayed increments rounds played for players who participated
-// in the current round (present in d.state.Round), not the match-lifetime roster.
-func (d *DemoParser) incrementRoundsPlayed() {
-	for steamID := range d.state.Round {
-		if p, ok := d.state.Players[steamID]; ok {
-			p.RoundsPlayed++
-		}
-	}
-}
-
 // updateTeamScores updates team scores based on round winner.
 func (d *DemoParser) updateTeamScores(winnerTeam common.Team) {
 	if winnerTeam == common.TeamTerrorists {
@@ -1244,24 +964,4 @@ func (d *DemoParser) updateTeamScores(winnerTeam common.Team) {
 			d.state.EnemyScore++
 		}
 	}
-}
-
-// recordRoundEndProbability records round outcome for probability collection.
-func (d *DemoParser) recordRoundEndProbability(ctx *roundEndContext) {
-	if d.collector == nil {
-		return
-	}
-
-	tAlive, ctAlive := d.state.CountAlivePlayers(ctx.gs.Participants().Playing())
-
-	// Only snapshot the final state for non-elimination endings (time expiry,
-	// bomb scenarios with survivors on both sides). Elimination rounds are fully
-	// captured by kill snapshots. The RoundEnd event can fire with unreliable
-	// player alive states (engine resetting for next round), producing false
-	// Xv0 or 0vX snapshots.
-	if tAlive > 0 && ctAlive > 0 {
-		d.collector.RecordStateSnapshot(tAlive, ctAlive, d.state.BombPlanted)
-	}
-
-	d.collector.RecordRoundEnd(tAlive, ctAlive, d.state.BombPlanted, ctx.winnerTeam, d.state.MapName)
 }

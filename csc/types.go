@@ -157,6 +157,27 @@ type round struct {
 
 	WPAlog        []*wpalog `json:"WPAlog"`
 	BombStartTick int       `json:"bombStartTick"`
+
+	// ecoSnapshot is the eco/swing round bag captured at commit time. It is
+	// not part of the demoScrape2 JSON contract; removeInvalidRounds keeps it
+	// attached to surviving rounds via pointer identity.
+	ecoSnapshot any `json:"-"`
+}
+
+// SetEcoSnapshot stores a round-scoped eco snapshot (typically
+// *parser.RoundSnapshot). The value is omitted from JSON.
+func (r *round) SetEcoSnapshot(v any) {
+	if r != nil {
+		r.ecoSnapshot = v
+	}
+}
+
+// EcoSnapshot returns the eco snapshot stored at commit, or nil.
+func (r *round) EcoSnapshot() any {
+	if r == nil {
+		return nil
+	}
+	return r.ecoSnapshot
 }
 
 type wpalog struct {

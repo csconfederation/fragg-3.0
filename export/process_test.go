@@ -183,7 +183,7 @@ func TestEvaluateEcoStatsRoundDivergence(t *testing.T) {
 	game := goodGame(24, 1)
 	eco := map[uint64]*model.PlayerStats{1: ecoPlayer()}
 
-	// A restarted match replays rounds: eco counts them all, CSC dedupes.
+	// A restarted match that somehow still disagrees after fold is untrustworthy.
 	ok, reason := evaluateEcoStats(game, eco, 30)
 	if ok {
 		t.Fatal("inflated eco round count must not be flagged OK")

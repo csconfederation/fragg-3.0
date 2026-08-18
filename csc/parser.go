@@ -20,6 +20,13 @@ const printDebugLog = true
 const FORCE_NEW_STATS_UPLOAD = false
 const ENABLE_WPA_DATA_OUTPUT = false
 const BACKEND_PUSHING = true
+
+// MR is rounds-per-half for every CSC match format this parser handles
+// (League/Regulation, Playoff, and Combine all share the same MR12
+// regulation shape -- 24 rounds, win at 13). CCSUsrMsg_MatchEndConditions
+// (which would in principle carry mp_maxrounds) does not appear in any real
+// CSC demo we've checked, so this is not derived from the demo; it's the
+// only value ever observed in practice. See fragg-3.0#23.
 const MR = 12
 
 const tradeCutoff = 4 // in seconds
@@ -41,6 +48,95 @@ var killValues = map[string]float64{
 	"trade":         0.3,
 	"flashAssist":   0.2,
 	"assist":        0.15,
+}
+
+// matchIsDecided reports whether the round that just ended produced an
+// UNAMBIGUOUS clinch: a normal regulation win or an overtime-block win. It
+// deliberately does NOT report a bare regulation tie (e.g. 12-12 for MR12)
+// as decided, because whether that's the match's real final state depends
+// on whether overtime is then played -- which varies by match type
+// (League/Playoff and the 1v1/MR8 config both replay OT halves until
+// decided per their server configs; Combines play at most one OT block and
+// settle for a tie if it's level too) and isn't recoverable from anything
+// in the demo itself (confirmed: no CSC demo we've checked carries
+// CCSUsrMsg_MatchEndConditions, so mp_maxrounds isn't available either).
+// See fragg-3.0#23.
+//
+// A genuinely-final tie (regulation ends level with no OT, or an OT block
+// that itself ends level) is instead caught by the post-parse fallback in
+// ProcessParser: once the demo truly ends, IsGameLive staying true means
+// nothing here ever fired, so the last pending round is finalized then. That
+// works for every format without needing to know its OT policy.
+//
+// roundsToWin values outside {9, 13, 16} (a format this parser doesn't
+// recognize) are never decided.
+func matchIsDecided(roundsToWin, roundWinnerScore, roundLoserScore int) bool {
+	switch roundsToWin {
+	case 16: // MR15 -- not currently used by any CSC match type; RoundsToWin
+		// is always 13 in practice (see MR), so this branch is unreachable.
+		// Kept in case a future format sets it.
+		if roundWinnerScore == 16 && roundLoserScore < 15 {
+			return true // normal win
+		}
+		if roundWinnerScore > 15 {
+			overtime := ((roundWinnerScore+roundLoserScore)-30-1)/6 + 1
+			return (roundWinnerScore-15-1)/3 == overtime // OT win
+		}
+	case 9: // MR8 (1v1) -- also unreachable today (see MR). No tie case here,
+		// same reasoning as case 13: csc-configs' 1v1 config sets
+		// mp_overtime_enable=1 with mp_overtime_limit=0 (unlimited OT
+		// halves), so an 8-8 tie is no more automatically final than MR12's
+		// 12-12 is. (No OT-win formula either -- unlike MR12/MR15, this
+		// hasn't been exercised against a real 1v1 demo, so it's left as a
+		// gap rather than guessed at; see fragg-3.0#25 review.)
+		if roundWinnerScore == 9 && roundLoserScore < 8 {
+			return true // normal win
+		}
+	case 13: // MR12 -- League, Playoff, and Combine all use this threshold.
+		if roundWinnerScore == 13 && roundLoserScore < 12 {
+			return true // normal win
+		}
+		if roundWinnerScore > 12 {
+			overtime := ((roundWinnerScore+roundLoserScore)-24-1)/6 + 1
+			return (roundWinnerScore-12-1)/3 == overtime // OT-block win
+		}
+		// roundWinnerScore == roundLoserScore == 12 (regulation tie) or a
+		// level score partway through an OT block: not decided here. See
+		// the fallback in ProcessParser.
+	}
+	return false
+}
+
+// shouldFinalizeViaFallback reports whether ProcessParser's post-parse
+// fallback should treat the currently-pending round as the match's genuine,
+// previously-uncommitted final round, once the demo has definitively ended.
+// Each parameter maps to one guard, all of which must hold:
+//
+//   - isGameLive: false means some other path (an unambiguous clinch via
+//     matchIsDecided, or an earlier fallback finalize) already ended the
+//     match; never re-finalize.
+//   - alreadyCommitted (PotentialRound.IntegrityCheck): true means
+//     RoundEndOfficial already committed this exact round through the
+//     normal path. Re-finalizing it would double-run processRoundFinal's
+//     per-round stat accumulation (ImpactPoints, clutches, multikills, the
+//     OnRoundCommitted hook) on the same PlayerStats objects a second time
+//     -- PotentialRound isn't replaced until the next RoundStart, so if a
+//     demo cuts off in the gap between one round's official commit and the
+//     next round's start, the fallback would otherwise reprocess it.
+//   - roundEndFired (RoundIntegrityStart == RoundIntegrityEnd): false means
+//     the pending round never actually concluded -- RoundStart fired but no
+//     RoundEnd yet. A demo cut off mid-round must remain unfinished, not be
+//     accepted as a complete match.
+//   - ctScore/tScore: only an exact tie is trusted as a genuine final state
+//     here. matchIsDecided already catches every clinch this parser
+//     recognizes, so any other score reaching this point -- asymmetric,
+//     not a clinch -- can only mean the match was still legitimately in
+//     progress when the demo ended; treating it as final would silently
+//     accept a truncated match. A level score also means there's no match
+//     winner, so callers must not copy the pending round's own winner into
+//     the match-level result.
+func shouldFinalizeViaFallback(isGameLive, alreadyCommitted, roundEndFired bool, ctScore, tScore int) bool {
+	return isGameLive && !alreadyCommitted && roundEndFired && ctScore == tScore
 }
 
 func InitGameObject() *Game {
@@ -111,7 +207,6 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 		teamTemp = p.GameState().TeamCounterTerrorists()
 		game.Teams[validateTeamName(game, teamTemp.ClanName(), teamTemp.Team())] = &team{Name: validateTeamName(game, teamTemp.ClanName(), teamTemp.Team())}
 
-		//only handling normal length matches
 		game.RoundsToWin = MR + 1
 		game.Result = ""
 
@@ -591,45 +686,9 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 				log.Debug("winner Rounds", roundWinnerScore)
 				log.Debug("loser Rounds", roundLoserScore)
 
-				if game.RoundsToWin == 16 {
-					//check for normal win
-					if roundWinnerScore == 16 && roundLoserScore < 15 {
-						//normal win
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					} else if roundWinnerScore > 15 { //check for OT win
-						overtime := ((roundWinnerScore+roundLoserScore)-30-1)/6 + 1
-						//OT win
-						if (roundWinnerScore-15-1)/3 == overtime {
-							game.WinnerClanName = game.PotentialRound.WinnerClanName
-							processRoundFinal(true)
-						}
-					}
-				} else if game.RoundsToWin == 9 {
-					//check for normal win
-					if roundWinnerScore == 9 && roundLoserScore < 8 {
-						//normal win
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					} else if roundWinnerScore == 8 && roundLoserScore == 8 { //check for tie
-						//tie
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					}
-				} else if game.RoundsToWin == 13 {
-					//check for normal win
-					if roundWinnerScore == 13 && roundLoserScore < 12 {
-						//normal win
-						game.WinnerClanName = game.PotentialRound.WinnerClanName
-						processRoundFinal(true)
-					} else if roundWinnerScore > 12 { //check for OT win
-						overtime := ((roundWinnerScore+roundLoserScore)-24-1)/6 + 1
-						//OT win
-						if (roundWinnerScore-12-1)/3 == overtime {
-							game.WinnerClanName = game.PotentialRound.WinnerClanName
-							processRoundFinal(true)
-						}
-					}
+				if matchIsDecided(game.RoundsToWin, roundWinnerScore, roundLoserScore) {
+					game.WinnerClanName = game.PotentialRound.WinnerClanName
+					processRoundFinal(true)
 				}
 			}
 
@@ -1094,6 +1153,31 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 
 	// Parse to end
 	err := p.ParseToEnd()
+
+	// The demo has now definitively ended. If nothing ever finalized the
+	// match (IsGameLive still true), the pending round was never an
+	// unambiguous clinch under matchIsDecided -- most commonly a genuine
+	// final tie (regulation ends level with no overtime played, or an
+	// overtime block that itself ended level). RoundEndOfficial doesn't
+	// fire for a demo's true last round, so this is the only remaining
+	// place to catch it -- but IsGameLive alone doesn't distinguish that
+	// from a demo that's simply truncated (mid-round, or cut off in the
+	// gap after a normal round commits but before the next one starts), so
+	// shouldFinalizeViaFallback additionally requires proof the pending
+	// round genuinely concluded, was never already committed, and ended
+	// level (the only shape an unrecognized-but-real final state can take
+	// -- see that function). See fragg-3.0#23 and the fragg-3.0#25 review.
+	if shouldFinalizeViaFallback(
+		game.Flags.IsGameLive,
+		game.PotentialRound.IntegrityCheck,
+		game.Flags.RoundIntegrityStart == game.Flags.RoundIntegrityEnd,
+		p.GameState().TeamCounterTerrorists().Score(),
+		p.GameState().TeamTerrorists().Score(),
+	) {
+		// A level score has no match winner -- leave WinnerClanName unset
+		// rather than crediting whoever happened to win this last round.
+		processRoundFinal(true)
+	}
 
 	endOfMatchProcessing(game)
 

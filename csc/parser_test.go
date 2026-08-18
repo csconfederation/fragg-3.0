@@ -58,14 +58,15 @@ func TestMatchIsDecidedMR12Wins(t *testing.T) {
 	}
 }
 
-// TestMatchIsDecidedMR8Tie protects MR8's existing tie case (pre-existing,
-// not touched by this fix) from regressing while matchIsDecided was
-// extracted from the inline RoundEnd handler. Unlike MR12/MR15, MR8
-// (knife/short configs) has no overtime, so a bare tie there really is
-// always final and is safe to decide eagerly.
-func TestMatchIsDecidedMR8Tie(t *testing.T) {
-	if !matchIsDecided(9, 8, 8) {
-		t.Fatal("8-8 under MR8 (roundsToWin=9) must be decided (a tie) -- MR8 has no overtime")
+// TestMatchIsDecidedMR8NoTieCase mirrors the MR12 fix: csc-configs' 1v1
+// config (gamemode_competitive_server.cfg) sets mp_overtime_enable=1 with
+// mp_overtime_limit=0 -- unlimited overtime halves -- so an 8-8 tie is no
+// more automatically final than MR12's 12-12 is. An earlier version of this
+// test asserted the opposite ("MR8 has no overtime"); that was wrong and,
+// per review, is worth pinning down explicitly rather than just deleting.
+func TestMatchIsDecidedMR8NoTieCase(t *testing.T) {
+	if matchIsDecided(9, 8, 8) {
+		t.Fatal("8-8 under MR8 (roundsToWin=9) must not be eagerly decided -- the 1v1 config allows unlimited overtime, same as MR12")
 	}
 	if !matchIsDecided(9, 9, 7) {
 		t.Fatal("9-7 under MR8 must be a normal win")
@@ -80,5 +81,51 @@ func TestMatchIsDecidedUnknownFormat(t *testing.T) {
 	}
 	if matchIsDecided(20, 20, 18) {
 		t.Fatal("an unrecognized roundsToWin must never be treated as decided")
+	}
+}
+
+// TestShouldFinalizeViaFallback covers the four guards from the fragg-3.0#25
+// review: a genuine, complete, level, previously-uncommitted final round is
+// the only case that finalizes. Each other test flips exactly one guard to
+// confirm it alone is enough to block finalizing -- these map directly to
+// the review's four scenarios (truncated match, double-processing, mid-round
+// EOF) plus the tie-detection case itself.
+func TestShouldFinalizeViaFallback(t *testing.T) {
+	tests := []struct {
+		name             string
+		isGameLive       bool
+		alreadyCommitted bool
+		roundEndFired    bool
+		ctScore, tScore  int
+		want             bool
+	}{
+		{
+			name: "genuine level final round -- the fix's actual target", isGameLive: true,
+			alreadyCommitted: false, roundEndFired: true, ctScore: 15, tScore: 15, want: true,
+		},
+		{
+			name: "already decided elsewhere -- match already ended, never re-finalize", isGameLive: false,
+			alreadyCommitted: false, roundEndFired: true, ctScore: 15, tScore: 15, want: false,
+		},
+		{
+			name: "already committed via RoundEndOfficial -- would double-process the same round", isGameLive: true,
+			alreadyCommitted: true, roundEndFired: true, ctScore: 15, tScore: 15, want: false,
+		},
+		{
+			name: "round never concluded -- demo cut off mid-round, not mid-match-boundary", isGameLive: true,
+			alreadyCommitted: false, roundEndFired: false, ctScore: 15, tScore: 15, want: false,
+		},
+		{
+			name: "asymmetric score -- an unclinched, non-level score can only mean a truncated match", isGameLive: true,
+			alreadyCommitted: false, roundEndFired: true, ctScore: 13, tScore: 12, want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldFinalizeViaFallback(tt.isGameLive, tt.alreadyCommitted, tt.roundEndFired, tt.ctScore, tt.tScore); got != tt.want {
+				t.Fatalf("shouldFinalizeViaFallback(%v, %v, %v, %d, %d) = %v, want %v",
+					tt.isGameLive, tt.alreadyCommitted, tt.roundEndFired, tt.ctScore, tt.tScore, got, tt.want)
+			}
+		})
 	}
 }

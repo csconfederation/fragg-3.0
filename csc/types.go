@@ -28,7 +28,7 @@ type Game struct {
 	MapName                  string                  `json:"mapName"`
 	TickRate                 int                     `json:"tickRate"`
 	TickLength               int                     `json:"tickLength"`
-	RoundsToWin              int                     `json:"roundsToWin"` //30 or 16
+	RoundsToWin              int                     `json:"roundsToWin"` // 9, 13, or 16 -- rounds needed to clinch the match (MR8/MR12/MR15)
 	TotalPlayerStats         map[uint64]*playerStats `json:"totalPlayerStats"`
 	CtPlayerStats            map[uint64]*playerStats `json:"ctPlayerStats"`
 	TPlayerStats             map[uint64]*playerStats `json:"TPlayerStats"`

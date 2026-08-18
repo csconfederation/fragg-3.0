@@ -20,6 +20,11 @@ const printDebugLog = true
 const FORCE_NEW_STATS_UPLOAD = false
 const ENABLE_WPA_DATA_OUTPUT = false
 const BACKEND_PUSHING = true
+
+// MR is the fallback rounds-per-half used only when a demo never carries a
+// CCSUsrMsg_MatchEndConditions message (older demos, or a config this parser
+// hasn't seen). Every CS2 MatchZy demo we've observed broadcasts mp_maxrounds
+// via that message, and roundsToWin() derives the real value from it.
 const MR = 12
 
 const tradeCutoff = 4 // in seconds
@@ -41,6 +46,23 @@ var killValues = map[string]float64{
 	"trade":         0.3,
 	"flashAssist":   0.2,
 	"assist":        0.15,
+}
+
+// roundsToWin derives the round-wins-needed-to-clinch-the-match threshold
+// (matched against in the RoundEnd win-condition branches below: 13 for
+// MR12, 16 for MR15, 9 for MR8) from the server's mp_maxrounds cvar, read
+// from the demo's CCSUsrMsg_MatchEndConditions message. mp_maxrounds is
+// twice the rounds-per-half (24 for MR12, 30 for MR15), so half of it plus
+// one is the clinching score.
+//
+// maxRounds <= 0 means the demo never carried the message (or carried 0),
+// so we fall back to the historical MR12 assumption rather than produce a
+// nonsensical threshold.
+func roundsToWin(maxRounds int32) int {
+	if maxRounds <= 0 {
+		return MR + 1
+	}
+	return int(maxRounds)/2 + 1
 }
 
 func InitGameObject() *Game {
@@ -88,6 +110,12 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 
 	game := InitGameObject()
 
+	// mp_maxrounds from the demo's own CCSUsrMsg_MatchEndConditions message,
+	// captured as soon as it's seen. Read reactively (not just once at
+	// initGameStart) since we don't rely on message ordering relative to the
+	// first pistol round.
+	var mpMaxRounds int32
+
 	//set tick rate
 	game.TickRate = 64
 	log.Debug("Tick rate is", game.TickRate)
@@ -111,8 +139,7 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 		teamTemp = p.GameState().TeamCounterTerrorists()
 		game.Teams[validateTeamName(game, teamTemp.ClanName(), teamTemp.Team())] = &team{Name: validateTeamName(game, teamTemp.ClanName(), teamTemp.Team())}
 
-		//only handling normal length matches
-		game.RoundsToWin = MR + 1
+		game.RoundsToWin = roundsToWin(mpMaxRounds)
 		game.Result = ""
 
 	}
@@ -368,6 +395,16 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 
 	p.RegisterNetMessageHandler(func(m *msg.CSVCMsg_ServerInfo) {
 		game.MapName = m.GetMapName()
+	})
+
+	p.RegisterNetMessageHandler(func(m *msg.CCSUsrMsg_MatchEndConditions) {
+		mpMaxRounds = m.GetMpMaxrounds()
+		// initGameStart() may already have run with the MR12 fallback if this
+		// message arrived after the first pistol round; keep RoundsToWin in
+		// sync with the real config either way.
+		if game.Flags.HasGameStarted {
+			game.RoundsToWin = roundsToWin(mpMaxRounds)
+		}
 	})
 
 	p.RegisterEventHandler(func(e events.PlayerInfo) {

@@ -114,7 +114,10 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 	})
 
 	err := p.ParseToEnd(ctx)
-	return terminal(err, ctx.Err() != nil), sinkErr
+	term := terminal(err, ctx.Err() != nil)
+	term.End = fact.Snapshot{Tick: tick(), RoundsPlayed: gs.TotalRoundsPlayed(),
+		T: team(gs.TeamTerrorists()), CT: team(gs.TeamCounterTerrorists())}
+	return term, sinkErr
 }
 
 // terminal classifies the parse error. A parser error found before a stop keeps its kind; the

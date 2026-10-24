@@ -166,9 +166,11 @@ const (
 	Failed                              // any other error
 )
 
-// Terminal is how the demo stream ended. Err is the underlying error, nil when Clean.
+// Terminal is how the demo stream ended. Err is the underlying error, nil when Clean. End is the
+// game state after the last frame (no players).
 type Terminal struct {
 	Kind  TerminalKind
 	Frame int // the frame that failed to decode, for Decode
 	Err   error
+	End   Snapshot
 }

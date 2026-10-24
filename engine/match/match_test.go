@@ -2,6 +2,7 @@ package match
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -306,6 +307,35 @@ func TestPartial(t *testing.T) {
 	// No 800/800 open, so the match never goes live: the oracle needs a pistol round to start.
 	want(t, res, err, NoRounds, 0)
 
+	// The same restore going live (pistol money at the first open): rounds 5..13 commit.
+	s = newSim()
+	s.played, s.score["Alpha"] = 4, 4
+	s.money = 800
+	for i := 0; i < 9; i++ {
+		if i == 8 {
+			s.open()
+			s.end("Alpha", false)
+			s.gameEnded()
+			break
+		}
+		s.play("Alpha")
+	}
+	res, err = s.run(t, fact.Terminal{Kind: fact.Clean})
+	want(t, res, err, Partial, 9)
+	if !strings.Contains(res.Detail, "first committed round is 5") || res.Scores["Alpha"] != 13 {
+		t.Errorf("detail %q scores %v", res.Detail, res.Scores)
+	}
+
+	// Rounds 1..13 commit, but the game's score counts a round the demo doesn't hold.
+	s = newSim()
+	s.score["Bravo"] = 1
+	regulation(s, 0)
+	res, err = s.run(t, fact.Terminal{Kind: fact.Clean})
+	want(t, res, err, Partial, 13)
+	if !strings.Contains(res.Detail, "scores sum to 14, but 13 rounds committed") {
+		t.Errorf("detail %q", res.Detail)
+	}
+
 	// A round that fails integrity leaves a gap.
 	s = newSim()
 	for i := 0; i < 13; i++ {
@@ -354,6 +384,109 @@ func TestScoreNormalization(t *testing.T) {
 	}
 }
 
+func TestLateScoreUpdated(t *testing.T) {
+	// The score update arrives after the round end: the round end counts the win, the update sets
+	// the same score, so nothing is counted twice.
+	s := newSim()
+	for i := 0; i < 13; i++ {
+		s.open()
+		s.tick += 1000
+		s.played++
+		tClan, _ := s.sides(s.played)
+		s.score["Alpha"]++
+		s.add(fact.RoundEnd{Tick: s.tick, RoundsPlayed: s.played, Winner: s.team("Alpha", tClan).Side,
+			WinnerTeam: s.team("Alpha", tClan), LoserTeam: s.team("Bravo", tClan)},
+			fact.ScoreUpdated{Tick: s.tick, Team: s.team("Alpha", tClan), Opponent: s.team("Bravo", tClan)})
+		if i < 12 {
+			s.add(fact.RoundEndOfficial{Tick: s.tick + 1, RoundsPlayed: s.played})
+		}
+	}
+	res, err := s.run(t, fact.Terminal{Kind: fact.Clean})
+	want(t, res, err, Ended, 13)
+	if res.Scores["Alpha"] != 13 || res.Scores["Bravo"] != 0 {
+		t.Errorf("scores %v", res.Scores)
+	}
+}
+
+func TestWinnerMustBeARoundTeam(t *testing.T) {
+	s := newSim()
+	s.play("Alpha")
+	s.open()
+	s.tick += 1000
+	s.played++
+	// The game names a winner that isn't either team of this round (but is in the match's map).
+	s.add(fact.RoundEnd{Tick: s.tick, RoundsPlayed: s.played, Winner: fact.SideT,
+		WinnerTeam: fact.Team{Side: fact.SideT, Clan: "Alpha"}, LoserTeam: fact.Team{Side: fact.SideCT, Clan: "Bravo"}},
+		fact.RoundEndOfficial{Tick: s.tick + 1, RoundsPlayed: s.played})
+	m := New()
+	var err error
+	for _, f := range s.facts[:len(s.facts)-2] {
+		if err = m.Fact(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.potential.sideClans[fact.SideT] = "StartedT" // the round opened with an empty clan name
+	for _, f := range s.facts[len(s.facts)-2:] {
+		err = m.Fact(f)
+	}
+	var inv *InvariantError
+	if !errors.As(err, &inv) || !strings.Contains(inv.Reason, "isn't one of its teams") {
+		t.Errorf("error %v", err)
+	}
+}
+
+func TestInvariantWinsOverTruncation(t *testing.T) {
+	s := newSim()
+	for i := 0; i < 5; i++ {
+		s.play("Alpha")
+	}
+	s.played = 2
+	s.play("Bravo")
+	_, err := s.run(t, fact.Terminal{Kind: fact.Truncated, Err: errors.New("eof")})
+	var inv *InvariantError
+	if !errors.As(err, &inv) {
+		t.Errorf("error %v, want the invariant", err)
+	}
+}
+
+func TestReconnectReplacesListedRecord(t *testing.T) {
+	m := New()
+	m.reconnectedOracle[1] = true
+	s := fact.Snapshot{Players: []fact.Player{
+		{Steam64: 1, Side: fact.SideT, Listed: true, Money: 800},
+		{Steam64: 2, Side: fact.SideT, Listed: true, Money: 900},
+		{Steam64: 1, Side: fact.SideT, Listed: false, Money: 1000}, // the new record after a reconnect
+		{Steam64: 3, Side: fact.SideCT, Listed: true},
+	}}
+	got := m.members(s, fact.SideT)
+	if len(got) != 2 || got[0].Steam64 != 2 || got[1].Steam64 != 1 || got[1].Money != 1000 {
+		t.Errorf("members %+v", got)
+	}
+	m.connectedAfterStart[2] = true
+	if got := m.members(s, fact.SideT); len(got) != 1 || got[0].Steam64 != 1 {
+		t.Errorf("members after a late connect %+v", got)
+	}
+}
+
+func TestPlayerInfoMarksLateConnect(t *testing.T) {
+	s := newSim()
+	s.open()
+	m := New()
+	for _, f := range append(s.facts, fact.PlayerInfo{Found: true, Resolved: 3}) {
+		if err := m.Fact(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !m.connectedAfterStart[3] || !m.reconnectedOracle[3] {
+		t.Errorf("late connect %v reconnected %v", m.connectedAfterStart, m.reconnectedOracle)
+	}
+	// Until the next round opens, a late connect is left out of both member sources.
+	got := m.members(s.snapshot(1), fact.SideT)
+	if len(got) != 4 || slices.ContainsFunc(got, func(p fact.Player) bool { return p.Steam64 == 3 }) {
+		t.Errorf("members %+v", got)
+	}
+}
+
 func TestRoundRegressionIsInvariant(t *testing.T) {
 	s := newSim()
 	for i := 0; i < 5; i++ {
@@ -384,10 +517,9 @@ func TestGameEndedWithoutOurEndIsInvariant(t *testing.T) {
 func TestEarlyOpen(t *testing.T) {
 	// The round opens at a frame in the window; with no freeze end, that round commits.
 	s := newSim()
-	s.played = 0
+	s.tick = 102
 	snap := s.snapshot(1)
 	s.add(fact.RoundStart{Tick: 100}, fact.Frame{Snapshot: fact.Snapshot{Tick: 101}}, fact.Frame{Snapshot: snap})
-	s.tick = 200
 	s.end("Alpha", true)
 	m := New()
 	for _, f := range s.facts {
@@ -398,6 +530,24 @@ func TestEarlyOpen(t *testing.T) {
 	if len(m.rounds) != 1 || m.rounds[0].StartTick != snap.Tick || !m.rounds[0].Pistol {
 		t.Fatalf("rounds %+v", m.rounds)
 	}
+	// A freeze end after the early open reopens the round; that one commits.
+	s = newSim()
+	s.tick = 102
+	early := s.snapshot(1)
+	s.add(fact.RoundStart{Tick: 100}, fact.Frame{Snapshot: early})
+	s.tick = 400
+	s.add(fact.FreezeEnd{Snapshot: s.snapshot(1)})
+	s.end("Alpha", true)
+	m = New()
+	for _, f := range s.facts {
+		if err := m.Fact(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(m.rounds) != 1 || m.rounds[0].StartTick != 400 {
+		t.Fatalf("rounds %+v", m.rounds)
+	}
+
 	// A frame after the window doesn't open.
 	m = New()
 	late := s.snapshot(1)

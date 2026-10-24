@@ -375,6 +375,10 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 	m.integrityOfficial = roundsPlayed
 	if m.integrityStart == m.integrityEnd && m.integrityEnd == m.integrityOfficial && !m.potential.committed {
 		r := m.potential
+		if r.WinnerClan != r.sideClans[fact.SideT] && r.WinnerClan != r.sideClans[fact.SideCT] {
+			// The oracle panics here (TeamStats[WinnerClanName] is nil).
+			return m.fail(tick, "round %d winner %q isn't one of its teams %v", r.Num, r.WinnerClan, r.sideClans)
+		}
 		if n := len(m.rounds); n > 0 && r.Num <= m.rounds[n-1].Num {
 			return m.fail(tick, "round %d committed after round %d (no in-demo redo path, D12)", r.Num, m.rounds[n-1].Num)
 		}
@@ -396,10 +400,11 @@ func (m *Match) teamName(tick int, clan string, side fact.Side) (string, error) 
 		if !strings.HasPrefix(clan, "[") {
 			return clan, nil
 		}
-		_, name, ok := strings.Cut(clan, "] ")
-		if !ok {
+		parts := strings.Split(clan, "] ")
+		if len(parts) < 2 {
 			return "", m.fail(tick, "clan %q has a tag but no name", clan)
 		}
+		name := parts[1]     // the oracle's split: "[t] A] B" is "A"
 		if len(clan) == 31 { // truncated by the game: match a known team that contains it
 			for _, team := range slices.Sorted(maps.Keys(m.teams)) {
 				if strings.Contains(team, name) {

@@ -29,13 +29,9 @@ var update = flag.Bool("update", false, "rewrite testdata/ci/golden from the cur
 
 const (
 	ciDir = "testdata/ci"
-	// Two parses of the same demo on demoinfocs v5 differ by float summation order (up to ~1e-14).
+	// Two parses of the same demo differ by float summation order (v6: up to ~1e-13).
 	floatTolerance = 1e-9
 )
-
-// unstableKeys vary between two v5 parses of the same demo far beyond float noise, so only their
-// presence and type are compared (Core-planning #299, corpus determinism report).
-var unstableKeys = map[string]bool{"distanceToTeammates": true}
 
 type ciManifest struct {
 	Bucket string   `json:"bucket"`
@@ -258,10 +254,6 @@ func diffJSON(path string, want, got any, diffs *[]string) {
 				*diffs = append(*diffs, fmt.Sprintf("%s.%s: unexpected key", path, k))
 			case !gok:
 				*diffs = append(*diffs, fmt.Sprintf("%s.%s: missing key", path, k))
-			case unstableKeys[k]:
-				if fmt.Sprintf("%T", wv) != fmt.Sprintf("%T", gv) {
-					*diffs = append(*diffs, fmt.Sprintf("%s.%s: want %T, got %T", path, k, wv, gv))
-				}
 			default:
 				diffJSON(path+"."+k, wv, gv, diffs)
 			}

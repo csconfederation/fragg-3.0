@@ -250,8 +250,7 @@ FRAGG_CI_DEMOS=/tmp/ci-demos go test ./export -run TestCIDemos
 FRAGG_CI_DEMOS=/tmp/ci-demos go test ./export -run TestCIDemos -update   # after an intended output change
 ```
 
-Floats compare within 1e-9. `distanceToTeammates` isn't compared, because it varies between runs on
-demoinfocs v5.
+Floats compare within 1e-9 (two runs differ only by float summation order).
 
 ---
 

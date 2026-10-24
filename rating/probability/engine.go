@@ -1,6 +1,6 @@
 package probability
 
-import "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+import "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 
 // Engine calculates win probabilities based on game state.
 type Engine struct {

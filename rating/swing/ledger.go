@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 // SwingReason identifies why swing was allocated to a player.

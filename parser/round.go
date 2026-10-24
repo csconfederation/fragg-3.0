@@ -13,7 +13,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 // MatchState holds all state information during demo parsing.

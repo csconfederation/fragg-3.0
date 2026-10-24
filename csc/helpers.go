@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	dem "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	dem "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 type Dictionary map[string]interface{}
@@ -19,7 +19,7 @@ func contains(players []*common.Player, player *common.Player) bool {
 	return false
 }
 
-func getTeamMembers(team *common.TeamState, game *Game, p dem.Parser) []*common.Player {
+func getTeamMembers(team *common.TeamState, game *Game, p *dem.Parser) []*common.Player {
 	players := team.Members()
 	allPlayers := p.GameState().Participants().All()
 	// Filter players by the Team from the team state
@@ -71,7 +71,7 @@ func getTeamMembers(team *common.TeamState, game *Game, p dem.Parser) []*common.
 	return teamPlayers
 }
 
-func isDuringExpectedRound(game *Game, p dem.Parser) bool {
+func isDuringExpectedRound(game *Game, p *dem.Parser) bool {
 	isPreWinCon := int(game.PotentialRound.RoundNum) == p.GameState().TotalRoundsPlayed()+1
 	isAfterWinCon := int(game.PotentialRound.RoundNum) == p.GameState().TotalRoundsPlayed() && game.Flags.PostWinCon
 	return isPreWinCon || isAfterWinCon
@@ -133,7 +133,7 @@ func validateTeamName(game *Game, teamName string, teamNum common.Team) string {
 	}
 }
 
-func calculateTeamEquipmentValue(game *Game, team *common.TeamState, p dem.Parser) int {
+func calculateTeamEquipmentValue(game *Game, team *common.TeamState, p *dem.Parser) int {
 	equipment := 0
 	for _, teamMember := range getTeamMembers(team, game, p) {
 		if teamMember.IsAlive() && game.PotentialRound.PlayerStats[teamMember.SteamID64].Health > 0 {
@@ -144,7 +144,7 @@ func calculateTeamEquipmentValue(game *Game, team *common.TeamState, p dem.Parse
 }
 
 // works for grenades, needs to be modified for other types
-func calculateTeamEquipmentNum(game *Game, team *common.TeamState, equipmentENUM int, p dem.Parser) int {
+func calculateTeamEquipmentNum(game *Game, team *common.TeamState, equipmentENUM int, p *dem.Parser) int {
 	equipment := 0
 	for _, teamMember := range getTeamMembers(team, game, p) {
 		if teamMember.IsAlive() && game.PotentialRound.PlayerStats[teamMember.SteamID64].Health > 0 {
@@ -155,7 +155,7 @@ func calculateTeamEquipmentNum(game *Game, team *common.TeamState, equipmentENUM
 	return equipment
 }
 
-func closestCTDisttoBomb(game *Game, team *common.TeamState, bomb *common.Bomb, p dem.Parser) int {
+func closestCTDisttoBomb(game *Game, team *common.TeamState, bomb *common.Bomb, p *dem.Parser) int {
 	var distance = 999999
 	for _, teamMember := range getTeamMembers(team, game, p) {
 		if teamMember.IsAlive() && game.PotentialRound.PlayerStats[teamMember.SteamID64].Health > 0 {
@@ -167,7 +167,7 @@ func closestCTDisttoBomb(game *Game, team *common.TeamState, bomb *common.Bomb, 
 	return distance
 }
 
-func numOfKits(game *Game, team *common.TeamState, p dem.Parser) int {
+func numOfKits(game *Game, team *common.TeamState, p *dem.Parser) int {
 	kits := 0
 	for _, teamMember := range getTeamMembers(team, game, p) {
 		if teamMember.IsAlive() && game.PotentialRound.PlayerStats[teamMember.SteamID64].Health > 0 {
@@ -179,7 +179,7 @@ func numOfKits(game *Game, team *common.TeamState, p dem.Parser) int {
 	return kits
 }
 
-func playersWithArmor(game *Game, team *common.TeamState, p dem.Parser) int {
+func playersWithArmor(game *Game, team *common.TeamState, p *dem.Parser) int {
 	armor := 0
 	for _, teamMember := range getTeamMembers(team, game, p) {
 		if teamMember.IsAlive() && game.PotentialRound.PlayerStats[teamMember.SteamID64].Health > 0 {

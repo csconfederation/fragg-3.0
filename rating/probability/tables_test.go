@@ -3,7 +3,7 @@ package probability
 import (
 	"testing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 func TestEnforceMonotonicityPeerReviewTransitions(t *testing.T) {

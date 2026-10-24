@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -386,7 +387,7 @@ func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.Export
 		if err != nil {
 			log.Fatalf("Failed to open demo: %v", err)
 		}
-		game, perr := export.ProcessDemo(demo)
+		game, perr := export.ProcessDemo(context.Background(), demo)
 		if perr != nil && !errors.Is(perr, export.ErrNoValidRounds) && (game == nil || game.Result != "Ended") {
 			log.Fatalf("Failed to parse demo: %v", perr)
 		}
@@ -404,7 +405,7 @@ func parseSingleDemo(demoPath string, cfg *config.Config, exporter export.Export
 		log.Fatalf("Failed to open demo: %v", err)
 	}
 
-	_, eco, perr := export.ProcessDemoWithEco(demo, export.ProcessOptions{
+	_, eco, perr := export.ProcessDemoWithEco(context.Background(), demo, export.ProcessOptions{
 		EnableLogging: cfg.EnableLogging,
 		KDPRModifier:  cfg.KDPRModifier,
 		SwingConfig:   cfg.SwingConfig(),
@@ -440,7 +441,7 @@ func getTotalRounds(players map[uint64]*model.PlayerStats) int {
 // parseDemoFromStdin reads demo data from stdin and outputs CSC-compatible JSON.
 // This is designed for integration with demo-worker, which can pipe demo data directly.
 func parseDemoFromStdin(cfg *config.Config) {
-	game, perr := export.ProcessDemo(os.Stdin)
+	game, perr := export.ProcessDemo(context.Background(), os.Stdin)
 	if perr != nil && !errors.Is(perr, export.ErrNoValidRounds) && (game == nil || game.Result != "Ended") {
 		// Output error as JSON for demo-worker compatibility
 		fmt.Fprintf(os.Stderr, "{\"error\": \"%s\"}\n", perr.Error())
@@ -478,7 +479,7 @@ func parseDemoWithLogs(demoPath string, enableLogging bool, kdprModifier bool, s
 		return nil, "", "", nil, fmt.Errorf("failed to open demo: %w", err)
 	}
 
-	_, eco, perr := export.ProcessDemoWithEco(demo, export.ProcessOptions{
+	_, eco, perr := export.ProcessDemoWithEco(context.Background(), demo, export.ProcessOptions{
 		EnableLogging: enableLogging,
 		KDPRModifier:  kdprModifier,
 		SwingConfig:   swingCfg,

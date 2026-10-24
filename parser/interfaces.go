@@ -9,6 +9,8 @@
 package parser
 
 import (
+	"context"
+
 	"github.com/csconfederation/fragg-3.0/model"
 )
 
@@ -17,7 +19,7 @@ import (
 type DemoParserInterface interface {
 	// Parse processes the demo file and computes all statistics.
 	// Returns an error if parsing fails.
-	Parse() error
+	Parse(ctx context.Context) error
 
 	// GetPlayers returns the map of all player statistics keyed by Steam ID.
 	GetPlayers() map[uint64]*model.PlayerStats

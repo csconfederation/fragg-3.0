@@ -3,6 +3,7 @@ package export
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -92,7 +93,7 @@ func TestCIDemos(t *testing.T) {
 				t.Skip(d.Skip)
 			}
 			data := loadCIDemo(t, dir, d, byName)
-			game, perr := ProcessDemo(io.NopCloser(bytes.NewReader(data)))
+			game, perr := ProcessDemo(context.Background(), io.NopCloser(bytes.NewReader(data)))
 
 			if got := errKind(perr); got != d.Want.Err {
 				t.Errorf("error = %q, want %q (err: %v)", got, d.Want.Err, perr)

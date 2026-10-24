@@ -1,6 +1,7 @@
 package export
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -11,7 +12,8 @@ import (
 	"github.com/csconfederation/fragg-3.0/parser"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/option"
 )
 
 // Game is the demoScrape2-compatible output type returned by ProcessDemo.
@@ -37,8 +39,8 @@ var ErrNoValidRounds = csc.ErrNoValidRounds
 // The error contract matches demoScrape2: a non-nil *Game is always returned,
 // ErrNoValidRounds is joined when there are no rounds, and an unexpected EOF on
 // an already-finished match leaves Game.Result == "Ended".
-func ProcessDemo(demo io.ReadCloser) (game *Game, err error) {
-	game, _, err = ProcessDemoWithEco(demo, ProcessOptions{SwingConfig: swing.DefaultConfig()})
+func ProcessDemo(ctx context.Context, demo io.ReadCloser) (game *Game, err error) {
+	game, _, err = ProcessDemoWithEco(ctx, demo, ProcessOptions{SwingConfig: swing.DefaultConfig()})
 	return game, err
 }
 
@@ -51,13 +53,19 @@ type ProcessOptions struct {
 
 // ProcessDemoWithEco runs the single-parse pipeline and also returns the eco
 // parser (players, collector, logs) for CLI/batch callers.
-func ProcessDemoWithEco(demo io.ReadCloser, opts ProcessOptions) (game *Game, eco *parser.DemoParser, err error) {
+func ProcessDemoWithEco(ctx context.Context, demo io.ReadCloser, opts ProcessOptions) (game *Game, eco *parser.DemoParser, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if game == nil {
 				game = csc.InitGameObject()
 			}
-			err = fmt.Errorf("panic during demo processing: %v", r)
+			// A handler panic arrives as *demoinfocs.PanicError; wrap it so
+			// callers can errors.As it.
+			if e, ok := r.(error); ok {
+				err = fmt.Errorf("panic during demo processing: %w", e)
+			} else {
+				err = fmt.Errorf("panic during demo processing: %v", r)
+			}
 		}
 	}()
 
@@ -65,14 +73,14 @@ func ProcessDemoWithEco(demo io.ReadCloser, opts ProcessOptions) (game *Game, ec
 		opts.SwingConfig = swing.DefaultConfig()
 	}
 
-	cfg := demoinfocs.DefaultParserConfig
-	cfg.IgnorePacketEntitiesPanic = true
-	p := demoinfocs.NewParserWithConfig(demo, cfg)
+	p := demoinfocs.NewParser(demo,
+		option.IgnorePacketEntitiesPanic(true),
+		option.UserCmdParsing(option.UserCmdParsingDisabled))
 	defer p.Close()
 
 	eco = parser.AttachToParser(p, opts.EnableLogging, opts.KDPRModifier, opts.SwingConfig)
 
-	game, err = csc.ProcessParser(p, csc.ParseHooks{
+	game, err = csc.ProcessParser(ctx, p, csc.ParseHooks{
 		OnInitRound:   eco.BeginRound,
 		OnRoundWinCon: eco.FinalizeRound,
 		OnRoundCommitted: func() any {

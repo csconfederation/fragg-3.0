@@ -126,11 +126,15 @@ func errKind(err error) string {
 	switch {
 	case err == nil:
 		return ""
-	case strings.Contains(err.Error(), "ErrInvalidFileType"):
+	case errors.Is(err, ErrInvalidFileType):
 		return "ErrInvalidFileType"
+	case errors.As(err, new(*PanicError)):
+		return "PanicError"
+	case errors.Is(err, ErrDecodeFailed):
+		return "ErrDecodeFailed"
 	case errors.Is(err, ErrNoValidRounds):
 		return "ErrNoValidRounds"
-	case strings.Contains(err.Error(), "ErrUnexpectedEndOfDemo"):
+	case errors.Is(err, ErrUnexpectedEndOfDemo):
 		return "ErrUnexpectedEndOfDemo"
 	default:
 		return "other"

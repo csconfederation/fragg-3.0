@@ -17,8 +17,6 @@ jobs:
   test:
     # GitHub-hosted, not self-hosted: this repo is public, so fork PRs run here.
     runs-on: ubuntu-latest
-    env:
-      FRAGG_CI_DEMOS: ${{ github.workspace }}/../ci-demos
     steps:
       - uses: actions/checkout@v7
 
@@ -30,9 +28,12 @@ jobs:
         run: go vet ./...
 
       # Keyed by the demo hashes, so editing expectations in demos.json doesn't refetch ~560 MB.
+      # actions/cache rejects paths containing '..', so the demos live in RUNNER_TEMP.
       - name: Demo set key
         id: demos
-        run: echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' export/testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "FRAGG_CI_DEMOS=$RUNNER_TEMP/ci-demos" >> "$GITHUB_ENV"
+          echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' export/testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v6
         with:

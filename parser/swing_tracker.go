@@ -5,7 +5,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 // SwingTracker manages round state and swing calculation during parsing.

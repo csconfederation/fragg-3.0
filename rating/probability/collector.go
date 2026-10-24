@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 // DataCollector collects probability data from demo parsing.

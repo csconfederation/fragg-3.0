@@ -9,6 +9,7 @@
 package parser
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -19,13 +20,14 @@ import (
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/option"
 )
 
 // DemoParser wraps the demoinfocs parser and manages match state and logging.
 // It processes CS2 demo files and extracts comprehensive player statistics.
 type DemoParser struct {
-	parser            demoinfocs.Parser
+	parser            *demoinfocs.Parser
 	state             *MatchState
 	logger            ParserLogger
 	collector         *probability.DataCollector
@@ -52,9 +54,9 @@ func NewDemoParserWithOptions(r io.Reader, enableLogging bool, kdprModifier bool
 
 // NewDemoParserWithSwingConfig creates a DemoParser with full swing configuration.
 func NewDemoParserWithSwingConfig(r io.Reader, enableLogging bool, kdprModifier bool, swingCfg swing.Config) *DemoParser {
-	cfg := demoinfocs.DefaultParserConfig
-	cfg.IgnorePacketEntitiesPanic = true
-	p := demoinfocs.NewParserWithConfig(r, cfg)
+	p := demoinfocs.NewParser(r,
+		option.IgnorePacketEntitiesPanic(true),
+		option.UserCmdParsing(option.UserCmdParsingDisabled))
 	state := NewMatchStateWithConfig(swingCfg)
 
 	dp := &DemoParser{
@@ -109,8 +111,8 @@ func (d *DemoParser) ClearPlayerFilter() {
 // and the final eco-rating for each player.
 // Returns an error if parsing fails. Truncated demos (ErrUnexpectedEndOfDemo)
 // are handled gracefully — stats collected up to the truncation point are kept.
-func (d *DemoParser) Parse() error {
-	if err := d.parser.ParseToEnd(); err != nil {
+func (d *DemoParser) Parse(ctx context.Context) error {
+	if err := d.parser.ParseToEnd(ctx); err != nil {
 		if errors.Is(err, demoinfocs.ErrUnexpectedEndOfDemo) {
 			log.Printf("Warning: demo truncated (unexpected EOF), using partial data")
 		} else {

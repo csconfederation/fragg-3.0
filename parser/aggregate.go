@@ -8,8 +8,8 @@ import (
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 // RoundSnapshot is a deep copy of one round's eco stats, captured when CSC
@@ -28,7 +28,7 @@ type RoundSnapshot struct {
 // AttachToParser registers eco event handlers on an existing demoinfocs parser.
 // Round lifecycle is not registered: the caller drives BeginRound / FinalizeRound
 // / SnapshotRound from CSC hooks.
-func AttachToParser(p demoinfocs.Parser, enableLogging, kdprModifier bool, swingCfg swing.Config) *DemoParser {
+func AttachToParser(p *demoinfocs.Parser, enableLogging, kdprModifier bool, swingCfg swing.Config) *DemoParser {
 	state := NewMatchStateWithConfig(swingCfg)
 	dp := &DemoParser{
 		parser:            p,

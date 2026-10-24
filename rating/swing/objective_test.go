@@ -6,7 +6,7 @@ import (
 
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 func TestAllocateObjectiveEventPlantSharing(t *testing.T) {

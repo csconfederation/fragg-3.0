@@ -1,15 +1,16 @@
 package csc
 
 import (
+	"context"
 	"errors"
-	"io"
 	"math"
 	"strconv"
 
-	dem "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
-	common "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
-	events "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/events"
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/msg"
+	"github.com/csconfederation/fragg-3.0/internal/damage"
+	dem "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs"
+	common "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	events "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/events"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/msg"
 )
 
 const DEBUG = false
@@ -161,7 +162,13 @@ func InitGameObject() *Game {
 	return &g
 }
 
-// ProcessDemo parses a demo stream and returns a demoScrape2-compatible Game.
+// errMissingPlayerStats stops parsing on a broken invariant. v6 re-panics a
+// handler panic on the caller, so cancel instead (Core-planning#300).
+var errMissingPlayerStats = errors.New("we have a connected player who is not nil but no playerstats")
+
+// ProcessParser registers CSC handlers on an existing demoinfocs parser, runs
+// ParseToEnd, then aggregates. The caller owns the parser (create/close) so a
+// second pipeline can register handlers on the same instance first.
 //
 // Contract (mirrors demoScrape2 v0.3.2 for the demo worker classifier):
 //   - The returned *Game is always non-nil.
@@ -171,16 +178,9 @@ func InitGameObject() *Game {
 //   - Otherwise the raw ParseToEnd error (e.g. ErrUnexpectedEndOfDemo) is
 //     returned unchanged; for a finished-but-truncated match Game.Result is
 //     "Ended" so callers can still treat it as success.
-func ProcessDemo(demo io.ReadCloser) (*Game, error) {
-	p := dem.NewParser(demo)
-	defer p.Close()
-	return ProcessParser(p, ParseHooks{})
-}
-
-// ProcessParser registers CSC handlers on an existing demoinfocs parser, runs
-// ParseToEnd, then aggregates. The caller owns the parser (create/close) so a
-// second pipeline can register handlers on the same instance first.
-func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
+func ProcessParser(ctx context.Context, p *dem.Parser, hooks ParseHooks) (*Game, error) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 
 	game := InitGameObject()
 
@@ -998,26 +998,27 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 			}
 			validDmg := e.Player != nil && game.PotentialRound.PlayerStats[e.Player.SteamID64] != nil && (equipment != 404 || !isRoundFinalInHalf(game.PotentialRound.RoundNum))
 			if validDmg {
-				game.PotentialRound.PlayerStats[e.Player.SteamID64].DamageTaken += e.HealthDamageTaken
+				game.PotentialRound.PlayerStats[e.Player.SteamID64].DamageTaken += damage.Taken(e)
 			} else if e.Player != nil && e.Player.IsConnected && !(equipment == 404 && isRoundFinalInHalf(game.PotentialRound.RoundNum)) {
 				//blow up if we aren't in freeze time
 				if !p.GameState().IsFreezetimePeriod() {
-					panic("We have a connected player who is not nil but no playerstats!")
+					cancel(errMissingPlayerStats)
+					return
 				}
 			}
 			if e.Player != nil && game.PotentialRound.PlayerStats[e.Player.SteamID64] != nil && e.Attacker != nil && e.Player.Team != e.Attacker.Team {
-				game.PotentialRound.PlayerStats[e.Attacker.SteamID64].Damage += e.HealthDamageTaken
+				game.PotentialRound.PlayerStats[e.Attacker.SteamID64].Damage += damage.Taken(e)
 
 				//add to damage list for supp damage calc
-				game.PotentialRound.PlayerStats[e.Player.SteamID64].DamageList[e.Attacker.SteamID64] += e.HealthDamageTaken
+				game.PotentialRound.PlayerStats[e.Player.SteamID64].DamageList[e.Attacker.SteamID64] += damage.Taken(e)
 
 				if equipment >= 500 && equipment <= 506 {
-					game.PotentialRound.PlayerStats[e.Attacker.SteamID64].UtilDmg += e.HealthDamageTaken
+					game.PotentialRound.PlayerStats[e.Attacker.SteamID64].UtilDmg += damage.Taken(e)
 					if equipment == 506 {
-						game.PotentialRound.PlayerStats[e.Attacker.SteamID64].NadeDmg += e.HealthDamageTaken
+						game.PotentialRound.PlayerStats[e.Attacker.SteamID64].NadeDmg += damage.Taken(e)
 					}
 					if equipment == 502 || equipment == 503 {
-						game.PotentialRound.PlayerStats[e.Attacker.SteamID64].InfernoDmg += e.HealthDamageTaken
+						game.PotentialRound.PlayerStats[e.Attacker.SteamID64].InfernoDmg += damage.Taken(e)
 					}
 				}
 			}
@@ -1152,7 +1153,7 @@ func ProcessParser(p dem.Parser, hooks ParseHooks) (*Game, error) {
 	})
 
 	// Parse to end
-	err := p.ParseToEnd()
+	err := p.ParseToEnd(ctx)
 
 	// The demo has now definitively ended. If nothing ever finalized the
 	// match (IsGameLive still true), the pending round was never an

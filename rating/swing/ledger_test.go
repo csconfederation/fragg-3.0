@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 func TestValidateRoundSwingLedgerZeroSum(t *testing.T) {

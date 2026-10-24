@@ -1,6 +1,6 @@
 package swing
 
-import "github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+import "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 
 // KillEvent represents a kill during the round.
 type KillEvent struct {

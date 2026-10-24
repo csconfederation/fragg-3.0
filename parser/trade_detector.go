@@ -5,7 +5,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/rating"
 	"math"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 // pendingTrade tracks a potential trade opportunity after a kill.

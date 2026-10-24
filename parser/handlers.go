@@ -9,15 +9,16 @@
 package parser
 
 import (
+	"github.com/csconfederation/fragg-3.0/internal/damage"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 	"math"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs"
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/events"
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/msg"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/events"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/msg"
 )
 
 // registerHandlers sets up all event handlers for demo parsing.
@@ -56,7 +57,7 @@ func (d *DemoParser) applyLedgerAllocations(allocs []swing.PlayerSwingAllocation
 	}
 }
 
-func (d *DemoParser) buildPlayerRoundContext(gs demoinfocs.GameState) map[uint64]swing.PlayerRoundContext {
+func (d *DemoParser) buildPlayerRoundContext(gs *demoinfocs.GameState) map[uint64]swing.PlayerRoundContext {
 	alive := make(map[uint64]bool)
 	for _, p := range gs.Participants().Playing() {
 		if p != nil && !p.IsBot {
@@ -97,7 +98,7 @@ func (d *DemoParser) buildPlayerRoundContext(gs demoinfocs.GameState) map[uint64
 	return players
 }
 
-func (d *DemoParser) getLosingSideTeammates(victim *common.Player, gs demoinfocs.GameState) []uint64 {
+func (d *DemoParser) getLosingSideTeammates(victim *common.Player, gs *demoinfocs.GameState) []uint64 {
 	if victim == nil {
 		return nil
 	}
@@ -113,7 +114,7 @@ func (d *DemoParser) getLosingSideTeammates(victim *common.Player, gs demoinfocs
 	return teammates
 }
 
-func (d *DemoParser) getTeammateIDs(side common.Team, excludeID uint64, gs demoinfocs.GameState) []uint64 {
+func (d *DemoParser) getTeammateIDs(side common.Team, excludeID uint64, gs *demoinfocs.GameState) []uint64 {
 	ids := make([]uint64, 0)
 	for _, p := range gs.Participants().Playing() {
 		if p == nil || p.IsBot {
@@ -727,7 +728,7 @@ func (d *DemoParser) handlePlayerHurt(e events.PlayerHurt) {
 		return
 	}
 
-	dmg := int(e.HealthDamageTaken)
+	dmg := damage.Taken(e)
 
 	if e.Attacker.Team != e.Player.Team {
 		roundStats := d.state.ensureRound(e.Attacker)
@@ -785,7 +786,7 @@ func (d *DemoParser) registerRoundEndHandler() {
 
 // roundEndContext holds context for round end processing.
 type roundEndContext struct {
-	gs            demoinfocs.GameState
+	gs            *demoinfocs.GameState
 	winnerTeam    common.Team
 	roundDuration float64
 	timeRemaining float64

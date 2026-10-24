@@ -3,7 +3,7 @@ package swing
 import (
 	"math"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
 )
 
 // ResidualInput holds round-end context for residual swing allocation.

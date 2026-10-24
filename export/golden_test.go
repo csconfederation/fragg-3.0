@@ -32,8 +32,8 @@ const (
 	floatTolerance = 1e-9
 )
 
-// unstableKeys vary between two v5 parses of the same demo far beyond float noise, so they
-// aren't compared (Core-planning #299, corpus determinism report).
+// unstableKeys vary between two v5 parses of the same demo far beyond float noise, so only their
+// presence and type are compared (Core-planning #299, corpus determinism report).
 var unstableKeys = map[string]bool{"distanceToTeammates": true}
 
 type ciManifest struct {
@@ -246,9 +246,6 @@ func diffJSON(path string, want, got any, diffs *[]string) {
 		}
 		sort.Strings(sorted)
 		for _, k := range sorted {
-			if unstableKeys[k] {
-				continue
-			}
 			wv, wok := w[k]
 			gv, gok := g[k]
 			switch {
@@ -256,6 +253,10 @@ func diffJSON(path string, want, got any, diffs *[]string) {
 				*diffs = append(*diffs, fmt.Sprintf("%s.%s: unexpected key", path, k))
 			case !gok:
 				*diffs = append(*diffs, fmt.Sprintf("%s.%s: missing key", path, k))
+			case unstableKeys[k]:
+				if fmt.Sprintf("%T", wv) != fmt.Sprintf("%T", gv) {
+					*diffs = append(*diffs, fmt.Sprintf("%s.%s: want %T, got %T", path, k, wv, gv))
+				}
 			default:
 				diffJSON(path+"."+k, wv, gv, diffs)
 			}

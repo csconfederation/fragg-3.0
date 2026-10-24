@@ -17,6 +17,9 @@ import (
 type printer struct{ enc *json.Encoder }
 
 func (p printer) Fact(f fact.Fact) error {
+	if fr, ok := f.(fact.Frame); ok { // Sample is a function; print the frame's clock only
+		return p.enc.Encode(map[string]any{"Frame": struct{ Tick, Frame int }{fr.Tick, fr.Frame}})
+	}
 	return p.enc.Encode(map[string]any{strings.TrimPrefix(fmt.Sprintf("%T", f), "fact."): f})
 }
 

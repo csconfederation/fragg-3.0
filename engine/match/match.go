@@ -144,7 +144,7 @@ func (m *Match) Fact(f fact.Fact) error {
 		m.roundStartedAt = f.Tick
 	case fact.Frame:
 		if m.roundStartedAt > 0 && m.roundStartedAt+fact.RoundStartWindow > f.Tick && !m.haveInit {
-			return m.open(f.Snapshot, false)
+			return m.open(f.Sample(), false)
 		}
 	case fact.FreezeEnd:
 		return m.open(f.Snapshot, true)

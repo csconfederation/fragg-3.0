@@ -87,11 +87,11 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 		emit(fact.TeamChange{Tick: tick(), Player: player(e.Player, false), NewSide: fact.Side(e.NewTeam), NewTeam: team(e.NewTeamState)})
 	})
 	p.RegisterEventHandler(func(e events.PlayerInfo) {
-		var resolved uint64
+		f := fact.PlayerInfo{Tick: tick(), XUID: e.Info.XUID}
 		if pl := gs.Participants().AllByUserID()[e.Index]; pl != nil {
-			resolved = pl.SteamID64
+			f.Found, f.Resolved = true, pl.SteamID64
 		}
-		emit(fact.PlayerInfo{Tick: tick(), XUID: e.Info.XUID, Resolved: resolved})
+		emit(f)
 	})
 	p.RegisterEventHandler(func(e events.PlayerConnect) {
 		if e.Player != nil {

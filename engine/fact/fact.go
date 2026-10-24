@@ -97,12 +97,13 @@ type TeamChange struct {
 	NewTeam Team
 }
 
-// PlayerInfo is a userinfo update. XUID is the Steam64 the update carries; Resolved is the
-// player the oracle looks up for it (the participant in that userinfo slot, 0 if none), which can
-// still be the slot's previous occupant. Identical re-sends aren't reported.
+// PlayerInfo is a userinfo update. XUID is the Steam64 the update carries. Found and Resolved are
+// the player the oracle looks up for it (the participant in that userinfo slot), which can still
+// be the slot's previous occupant; a bot resolves to 0. Identical re-sends aren't reported.
 type PlayerInfo struct {
 	Tick     int
 	XUID     uint64
+	Found    bool
 	Resolved uint64
 }
 

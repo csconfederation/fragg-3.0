@@ -120,6 +120,11 @@ func (s *sim) run(t *testing.T, term fact.Terminal) (*Result, error) {
 	return m.Finish(term)
 }
 
+// frame is a Frame whose sample is s.
+func frame(s fact.Snapshot) fact.Frame {
+	return fact.Frame{Tick: s.Tick, Frame: s.Frame, Sample: func() fact.Snapshot { return s }}
+}
+
 func nums(rs []*Round) []int {
 	var out []int
 	for _, r := range rs {
@@ -519,7 +524,7 @@ func TestEarlyOpen(t *testing.T) {
 	s := newSim()
 	s.tick = 102
 	snap := s.snapshot(1)
-	s.add(fact.RoundStart{Tick: 100}, fact.Frame{Snapshot: fact.Snapshot{Tick: 101}}, fact.Frame{Snapshot: snap})
+	s.add(fact.RoundStart{Tick: 100}, frame(fact.Snapshot{Tick: 101}), frame(snap))
 	s.end("Alpha", true)
 	m := New()
 	for _, f := range s.facts {
@@ -534,7 +539,7 @@ func TestEarlyOpen(t *testing.T) {
 	s = newSim()
 	s.tick = 102
 	early := s.snapshot(1)
-	s.add(fact.RoundStart{Tick: 100}, fact.Frame{Snapshot: early})
+	s.add(fact.RoundStart{Tick: 100}, frame(early))
 	s.tick = 400
 	s.add(fact.FreezeEnd{Snapshot: s.snapshot(1)})
 	s.end("Alpha", true)
@@ -552,7 +557,7 @@ func TestEarlyOpen(t *testing.T) {
 	m = New()
 	late := s.snapshot(1)
 	late.Tick = 100 + fact.RoundStartWindow
-	for _, f := range []fact.Fact{fact.RoundStart{Tick: 100}, fact.Frame{Snapshot: late}} {
+	for _, f := range []fact.Fact{fact.RoundStart{Tick: 100}, frame(late)} {
 		_ = m.Fact(f)
 	}
 	if m.isGameLive {

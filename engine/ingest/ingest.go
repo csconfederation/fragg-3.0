@@ -39,7 +39,7 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 	}
 	gs := p.GameState()
 	tick := gs.IngameTick
-	roundStartTick := -1
+	snap := func() fact.Snapshot { return snapshot(p) }
 
 	p.RegisterNetMessageHandler(func(m *msg.CDemoFileHeader) {
 		emit(fact.Header{ServerName: m.GetServerName()})
@@ -48,25 +48,21 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 		emit(fact.ServerInfo{Map: m.GetMapName()})
 	})
 	p.RegisterEventHandler(func(events.RoundStart) {
-		roundStartTick = tick()
-		emit(fact.RoundStart{Tick: roundStartTick, RoundsPlayed: gs.TotalRoundsPlayed()})
+		emit(fact.RoundStart{Tick: tick(), RoundsPlayed: gs.TotalRoundsPlayed()})
 	})
 	p.RegisterEventHandler(func(events.FrameDone) {
-		if roundStartTick >= 0 && tick() < roundStartTick+fact.RoundStartWindow {
-			emit(fact.Frame{Snapshot: snapshot(gs)})
-		}
+		emit(fact.Frame{Tick: tick(), Frame: p.CurrentFrame(), Sample: snap})
 	})
 	p.RegisterEventHandler(func(events.RoundFreezetimeEnd) {
-		emit(fact.FreezeEnd{Snapshot: snapshot(gs)})
+		emit(fact.FreezeEnd{Snapshot: snap()})
 	})
 	p.RegisterEventHandler(func(e events.RoundEnd) {
 		emit(fact.RoundEnd{
-			Tick:         tick(),
-			RoundsPlayed: gs.TotalRoundsPlayed(),
-			Winner:       fact.Side(e.Winner),
-			Reason:       int(e.Reason),
-			WinnerTeam:   team(e.WinnerState),
-			LoserTeam:    team(e.LoserState),
+			Snapshot:   snap(),
+			Winner:     fact.Side(e.Winner),
+			Reason:     int(e.Reason),
+			WinnerTeam: team(e.WinnerState),
+			LoserTeam:  team(e.LoserState),
 		})
 	})
 	p.RegisterEventHandler(func(e events.ScoreUpdated) {
@@ -78,7 +74,44 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 		emit(fact.ScoreUpdated{Tick: tick(), Team: t, Opponent: team(e.TeamState.Opponent)})
 	})
 	p.RegisterEventHandler(func(events.RoundEndOfficial) {
-		emit(fact.RoundEndOfficial{Tick: tick(), RoundsPlayed: gs.TotalRoundsPlayed()})
+		emit(fact.RoundEndOfficial{Snapshot: snap()})
+	})
+	p.RegisterEventHandler(func(e events.Kill) {
+		f := fact.Kill{Snapshot: snap(), Killer: actor(e.Killer), Victim: actor(e.Victim), Assister: actor(e.Assister),
+			Weapon: equipment(e.Weapon), Headshot: e.IsHeadshot, AssistedFlash: e.AssistedFlash}
+		if f.Victim != nil {
+			for _, w := range e.Victim.Weapons() {
+				if w != nil {
+					f.Victim.Weapons = append(f.Victim.Weapons, int(w.Type))
+				}
+			}
+		}
+		emit(f)
+	})
+	p.RegisterEventHandler(func(e events.PlayerHurt) {
+		emit(fact.Hurt{Snapshot: snap(), Player: actor(e.Player), Attacker: actor(e.Attacker),
+			Weapon: equipment(e.Weapon), HealthDamageTaken: e.HealthDamageTaken})
+	})
+	p.RegisterEventHandler(func(e events.PlayerFlashed) {
+		emit(fact.Flashed{Tick: tick(), Player: actor(e.Player), Attacker: actor(e.Attacker),
+			Duration: e.FlashDuration().Seconds()})
+	})
+	p.RegisterEventHandler(func(e events.BombPlanted) {
+		emit(fact.BombPlanted{Snapshot: snap(), Player: actor(e.Player)})
+	})
+	p.RegisterEventHandler(func(e events.BombDefused) {
+		emit(fact.BombDefused{Snapshot: snap(), Player: actor(e.Player)})
+	})
+	p.RegisterEventHandler(func(e events.BombExplode) {
+		emit(fact.BombExplode{Snapshot: snap(), Player: actor(e.Player)})
+	})
+	p.RegisterEventHandler(func(e events.GrenadeProjectileThrow) {
+		f := fact.GrenadeThrow{Tick: tick()}
+		if e.Projectile != nil {
+			f.Thrower = actor(e.Projectile.Thrower)
+			f.Weapon = equipment(e.Projectile.WeaponInstance)
+		}
+		emit(f)
 	})
 	p.RegisterEventHandler(func(e events.PlayerTeamChange) {
 		if e.Player == nil {
@@ -100,7 +133,7 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 	})
 	p.RegisterEventHandler(func(e events.PlayerDisconnected) {
 		if e.Player != nil {
-			emit(fact.Disconnect{Snapshot: snapshot(gs), Steam64: e.Player.SteamID64})
+			emit(fact.Disconnect{Snapshot: snap(), Steam64: e.Player.SteamID64})
 		}
 	})
 	p.RegisterEventHandler(func(events.Footstep) {
@@ -115,8 +148,7 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 
 	err := p.ParseToEnd(ctx)
 	term := terminal(err, ctx.Err() != nil)
-	term.End = fact.Snapshot{Tick: tick(), RoundsPlayed: gs.TotalRoundsPlayed(),
-		T: team(gs.TeamTerrorists()), CT: team(gs.TeamCounterTerrorists())}
+	term.End = snap()
 	return term, sinkErr
 }
 
@@ -148,35 +180,57 @@ func team(ts *common.TeamState) fact.Team {
 }
 
 func player(pl *common.Player, listed bool) fact.Player {
-	return fact.Player{
-		Steam64:   pl.SteamID64,
-		Name:      pl.Name,
-		Side:      fact.Side(pl.Team),
-		IsBot:     pl.IsBot,
-		Alive:     pl.IsAlive(),
-		Connected: pl.IsConnected,
-		Listed:    listed,
-		Money:     pl.Money(),
-		Spent:     pl.MoneySpentThisRound(),
+	pos := pl.Position()
+	f := fact.Player{
+		Steam64:       pl.SteamID64,
+		Name:          pl.Name,
+		Side:          fact.Side(pl.Team),
+		IsBot:         pl.IsBot,
+		Alive:         pl.IsAlive(),
+		Connected:     pl.IsConnected,
+		Listed:        listed,
+		Money:         pl.Money(),
+		Spent:         pl.MoneySpentThisRound(),
+		EquipValue:    pl.EquipmentValueCurrent(),
+		Pos:           [3]float64{pos.X, pos.Y, pos.Z},
+		FlashDuration: float64(pl.FlashDuration),
 	}
+	if pl.TeamState != nil {
+		f.TeamStateID = pl.TeamState.ID()
+	}
+	return f
+}
+
+// actor is an event's player, nil when the event has none.
+func actor(pl *common.Player) *fact.Player {
+	if pl == nil {
+		return nil
+	}
+	f := player(pl, false)
+	return &f
+}
+
+// equipment is an event's weapon type, nil when the event has none.
+func equipment(e *common.Equipment) *int {
+	if e == nil {
+		return nil
+	}
+	t := int(e.Type)
+	return &t
 }
 
 // snapshot reads every T and CT participant record, in the game's participant order, marking the
-// records the team member lists hold.
-func snapshot(gs *dem.GameState) fact.Snapshot {
+// records the team member lists hold (which are also the game's Playing records).
+func snapshot(p *dem.Parser) fact.Snapshot {
+	gs := p.GameState()
 	t, ct := gs.TeamTerrorists(), gs.TeamCounterTerrorists()
-	listed := map[*common.Player]bool{}
-	for _, ts := range []*common.TeamState{t, ct} {
-		for _, m := range ts.Members() {
-			if m.Team == ts.Team() {
-				listed[m] = true
-			}
-		}
-	}
-	s := fact.Snapshot{Tick: gs.IngameTick(), RoundsPlayed: gs.TotalRoundsPlayed(), T: team(t), CT: team(ct)}
+	s := fact.Snapshot{Tick: gs.IngameTick(), Frame: p.CurrentFrame(), RoundsPlayed: gs.TotalRoundsPlayed(),
+		Warmup: gs.IsWarmupPeriod(), FreezeTime: gs.IsFreezetimePeriod(), T: team(t), CT: team(ct)}
 	for _, pl := range gs.Participants().All() {
 		if pl.Team == common.TeamTerrorists || pl.Team == common.TeamCounterTerrorists {
-			s.Players = append(s.Players, player(pl, listed[pl]))
+			// TeamState.Members() and Participants().Playing() keep the records ByUserID keeps:
+			// connected, with an entity.
+			s.Players = append(s.Players, player(pl, pl.IsConnected && pl.Entity != nil))
 		}
 	}
 	return s

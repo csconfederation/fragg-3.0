@@ -23,9 +23,16 @@ type Player struct {
 	Connected bool
 	// Listed means the game's team member list holds this record (the oracle's first source of
 	// team members; the second is every participant, for reconnects).
-	Listed bool
-	Money  int
-	Spent  int // this round
+	Listed      bool
+	Money       int
+	Spent       int // this round
+	TeamStateID int // the ID of the player's team state (the oracle compares killer and victim by it)
+	EquipValue  int // current equipment value
+	Pos         [3]float64
+	// FlashDuration is the player's current flash blindness (seconds), the entity field.
+	FlashDuration float64
+	// Weapons holds the equipment types the player carries; set for kill victims only.
+	Weapons []int
 }
 
 // Team is one team as observed at the fact's tick.
@@ -41,7 +48,10 @@ type Team struct {
 // new record, and the oracle keeps the last one.
 type Snapshot struct {
 	Tick         int
+	Frame        int // the parser's frame number, which the eco pipeline uses as its clock
 	RoundsPlayed int
+	Warmup       bool
+	FreezeTime   bool
 	T, CT        Team
 	Players      []Player
 }
@@ -59,9 +69,14 @@ type ServerInfo struct{ Map string }
 // RoundStart is the game's round start.
 type RoundStart struct{ Tick, RoundsPlayed int }
 
-// Frame is a frame end within RoundStartWindow ticks of a RoundStart, for the oracle's early
-// round open.
-type Frame struct{ Snapshot }
+// Frame is the end of every frame. Sample reads the full snapshot at this frame and is valid only
+// during the Fact call: most frames are never sampled (the oracle's early round open reads frames
+// within RoundStartWindow ticks of a RoundStart, its lurk sampler one frame every 4 s), and
+// reading every frame would cost about 18% of the parse.
+type Frame struct {
+	Tick, Frame int
+	Sample      func() Snapshot
+}
 
 // RoundStartWindow is the oracle's early-open window: 1 s at its fixed 64 tick rate.
 const RoundStartWindow = 64
@@ -72,11 +87,11 @@ type FreezeEnd struct{ Snapshot }
 // RoundEnd is the game's round end. Winner is SideSpectator or lower for a draw, when the teams
 // are zero values.
 type RoundEnd struct {
-	Tick, RoundsPlayed int
-	Winner             Side
-	Reason             int
-	WinnerTeam         Team
-	LoserTeam          Team
+	Snapshot
+	Winner     Side
+	Reason     int
+	WinnerTeam Team
+	LoserTeam  Team
 }
 
 // ScoreUpdated is a team's score change; Opponent is read at the same time.
@@ -87,7 +102,53 @@ type ScoreUpdated struct {
 }
 
 // RoundEndOfficial is the game's official round end (not sent for a demo's last round).
-type RoundEndOfficial struct{ Tick, RoundsPlayed int }
+type RoundEndOfficial struct{ Snapshot }
+
+// Kill is a death. Actors are nil when absent (world damage, a corrupt demo); Weapon is nil when
+// the event has none.
+type Kill struct {
+	Snapshot
+	Killer, Victim, Assister *Player
+	Weapon                   *int
+	Headshot                 bool
+	AssistedFlash            bool
+}
+
+// Hurt is damage taken. Attacker is nil for world damage.
+type Hurt struct {
+	Snapshot
+	Player, Attacker  *Player
+	Weapon            *int
+	HealthDamageTaken int // the HP the game removed (D1)
+}
+
+// Flashed is a player blinded by a flashbang; Duration is the event's blind time (seconds).
+type Flashed struct {
+	Tick             int
+	Player, Attacker *Player
+	Duration         float64
+}
+
+// BombPlanted, BombDefused and BombExplode are bomb events; Player is nil when absent.
+type BombPlanted struct {
+	Snapshot
+	Player *Player
+}
+type BombDefused struct {
+	Snapshot
+	Player *Player
+}
+type BombExplode struct {
+	Snapshot
+	Player *Player
+}
+
+// GrenadeThrow is a grenade leaving a player's hand.
+type GrenadeThrow struct {
+	Tick    int
+	Thrower *Player
+	Weapon  *int
+}
 
 // TeamChange is a player moving to NewTeam, which is read at the event.
 type TeamChange struct {
@@ -148,6 +209,13 @@ func (Disconnect) fact()       {}
 func (Footstep) fact()         {}
 func (GamePhase) fact()        {}
 func (WinPanelMatch) fact()    {}
+func (Kill) fact()             {}
+func (Hurt) fact()             {}
+func (Flashed) fact()          {}
+func (BombPlanted) fact()      {}
+func (BombDefused) fact()      {}
+func (BombExplode) fact()      {}
+func (GrenadeThrow) fact()     {}
 
 // Sink receives facts in order. A non-nil error stops the parse; the ingest returns it.
 type Sink interface {
@@ -167,7 +235,7 @@ const (
 )
 
 // Terminal is how the demo stream ended. Err is the underlying error, nil when Clean. End is the
-// game state after the last frame (no players).
+// game state after the last frame.
 type Terminal struct {
 	Kind  TerminalKind
 	Frame int // the frame that failed to decode, for Decode

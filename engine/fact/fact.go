@@ -97,8 +97,17 @@ type TeamChange struct {
 	NewTeam Team
 }
 
-// PlayerInfo is a player's info update (a connect or reconnect).
+// PlayerInfo is a userinfo update. XUID is the Steam64 the update carries; Resolved is the
+// player the oracle looks up for it (the participant in that userinfo slot, 0 if none), which can
+// still be the slot's previous occupant. Identical re-sends aren't reported.
 type PlayerInfo struct {
+	Tick     int
+	XUID     uint64
+	Resolved uint64
+}
+
+// Connect is a player's controller connecting (including a reconnect).
+type Connect struct {
 	Tick    int
 	Steam64 uint64
 }
@@ -109,7 +118,8 @@ type Disconnect struct {
 	Steam64 uint64
 }
 
-// Footstep marks movement; the oracle uses it to tell that a round is in play. At most one per tick.
+// Footstep marks movement; the oracle uses it to tell that a round is in play. CS2 demos rarely
+// carry the game event.
 type Footstep struct{ Tick int }
 
 // GamePhase is a game phase change (5 is game ended). It can arrive before the RoundEnd of the
@@ -132,6 +142,7 @@ func (ScoreUpdated) fact()     {}
 func (RoundEndOfficial) fact() {}
 func (TeamChange) fact()       {}
 func (PlayerInfo) fact()       {}
+func (Connect) fact()          {}
 func (Disconnect) fact()       {}
 func (Footstep) fact()         {}
 func (GamePhase) fact()        {}

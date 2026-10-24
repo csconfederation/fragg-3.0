@@ -39,7 +39,7 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 	}
 	gs := p.GameState()
 	tick := gs.IngameTick
-	roundStartTick, lastFootstep := -1, -1
+	roundStartTick := -1
 
 	p.RegisterNetMessageHandler(func(m *msg.CDemoFileHeader) {
 		emit(fact.Header{ServerName: m.GetServerName()})
@@ -87,8 +87,15 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 		emit(fact.TeamChange{Tick: tick(), Player: player(e.Player, false), NewSide: fact.Side(e.NewTeam), NewTeam: team(e.NewTeamState)})
 	})
 	p.RegisterEventHandler(func(e events.PlayerInfo) {
-		if e.Info.XUID != 0 {
-			emit(fact.PlayerInfo{Tick: tick(), Steam64: e.Info.XUID})
+		var resolved uint64
+		if pl := gs.Participants().AllByUserID()[e.Index]; pl != nil {
+			resolved = pl.SteamID64
+		}
+		emit(fact.PlayerInfo{Tick: tick(), XUID: e.Info.XUID, Resolved: resolved})
+	})
+	p.RegisterEventHandler(func(e events.PlayerConnect) {
+		if e.Player != nil {
+			emit(fact.Connect{Tick: tick(), Steam64: e.Player.SteamID64})
 		}
 	})
 	p.RegisterEventHandler(func(e events.PlayerDisconnected) {
@@ -97,10 +104,7 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 		}
 	})
 	p.RegisterEventHandler(func(events.Footstep) {
-		if t := tick(); t != lastFootstep {
-			lastFootstep = t
-			emit(fact.Footstep{Tick: t})
-		}
+		emit(fact.Footstep{Tick: tick()})
 	})
 	p.RegisterEventHandler(func(e events.GamePhaseChanged) {
 		emit(fact.GamePhase{Tick: tick(), Phase: int(e.NewGamePhase)})
@@ -110,22 +114,24 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 	})
 
 	err := p.ParseToEnd(ctx)
-	return terminal(err, sinkErr), sinkErr
+	return terminal(err, ctx.Err() != nil), sinkErr
 }
 
-func terminal(err, sinkErr error) fact.Terminal {
+// terminal classifies the parse error. A parser error found before a stop keeps its kind; the
+// sink's own error is returned separately.
+func terminal(err error, stopped bool) fact.Terminal {
 	var de *dem.DecodeError
 	switch {
 	case err == nil:
 		return fact.Terminal{Kind: fact.Clean}
-	case sinkErr != nil || errors.Is(err, context.Canceled):
-		return fact.Terminal{Kind: fact.Stopped, Err: err}
 	case errors.Is(err, dem.ErrInvalidFileType):
 		return fact.Terminal{Kind: fact.InvalidFileType, Err: err}
 	case errors.As(err, &de):
 		return fact.Terminal{Kind: fact.Decode, Frame: de.Frame, Err: err}
 	case errors.Is(err, dem.ErrUnexpectedEndOfDemo):
 		return fact.Terminal{Kind: fact.Truncated, Err: err}
+	case stopped:
+		return fact.Terminal{Kind: fact.Stopped, Err: err}
 	default:
 		return fact.Terminal{Kind: fact.Failed, Err: err}
 	}

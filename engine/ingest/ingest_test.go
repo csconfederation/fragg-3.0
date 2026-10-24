@@ -107,6 +107,7 @@ func TestRunTerminals(t *testing.T) {
 		want fact.TerminalKind
 	}{
 		{"truncated", demo[:len(demo)/2], fact.Truncated},
+		{"corrupt", corrupt(demo), fact.Decode},
 		{"zeros", make([]byte, 1<<20), fact.InvalidFileType},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -115,6 +116,25 @@ func TestRunTerminals(t *testing.T) {
 				t.Errorf("terminal %+v, sink error %v; want kind %d", term, err, tc.want)
 			}
 		})
+	}
+}
+
+// corrupt is the CI corrupt-mid transform: 64 KiB of 0xFF at 60% of the file.
+func corrupt(demo []byte) []byte {
+	b := bytes.Clone(demo)
+	at := len(b) * 6 / 10
+	for i := at; i < at+65536; i++ {
+		b[i] = 0xFF
+	}
+	return b
+}
+
+func TestRunDeadlineIsStopped(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
+	term, err := Run(ctx, bytes.NewReader(ciDemo(t, "mid9984-cache")), &recorder{})
+	if err != nil || term.Kind != fact.Stopped {
+		t.Errorf("terminal %+v, sink error %v; want Stopped", term, err)
 	}
 }
 

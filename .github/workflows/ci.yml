@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, parser-v6]
+  push:
+    branches: [main, parser-v6]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # GitHub-hosted, not self-hosted: this repo is public, so fork PRs run here.
+    runs-on: ubuntu-latest
+    env:
+      FRAGG_CI_DEMOS: ${{ github.workspace }}/../ci-demos
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      # Keyed by the demo hashes, so editing expectations in demos.json doesn't refetch ~560 MB.
+      - name: Demo set key
+        id: demos
+        run: echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' export/testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.FRAGG_CI_DEMOS }}
+          key: ${{ steps.demos.outputs.key }}
+          restore-keys: ci-demos-
+
+      - name: Fetch CI demos
+        run: scripts/fetch-ci-demos.sh "$FRAGG_CI_DEMOS"
+
+      - name: go test
+        run: go test -count=1 -timeout 30m ./...

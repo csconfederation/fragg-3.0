@@ -239,9 +239,10 @@ Kill value adjusted for equipment advantage. Killing a rifle player with a pisto
 
 ## Tests
 
-`go test ./...` runs the unit tests. CI also runs `TestCIDemos`, which parses a small demo set and
-compares each payload with `export/testdata/ci/golden/`. The demos are listed by sha256 in
-`export/testdata/ci/demos.json` and live in the public `cscdemos` bucket under `ci/`.
+`go test ./...` runs the unit tests; CI runs them on every PR. `TestCIDemos` parses a small demo set
+and compares each payload with `export/testdata/ci/golden/`. To limit bucket traffic, CI runs it only
+on a merge to `main` or a manual run (Actions → CI → Run workflow, any branch). The demos are listed
+by sha256 in `export/testdata/ci/demos.json` and live in the public `cscdemos` bucket under `ci/`.
 
 ```bash
 scripts/fetch-ci-demos.sh /tmp/ci-demos

@@ -136,8 +136,11 @@ func matchIsDecided(roundsToWin, roundWinnerScore, roundLoserScore int) bool {
 //     accept a truncated match. A level score also means there's no match
 //     winner, so callers must not copy the pending round's own winner into
 //     the match-level result.
-func shouldFinalizeViaFallback(isGameLive, alreadyCommitted, roundEndFired bool, ctScore, tScore int) bool {
-	return isGameLive && !alreadyCommitted && roundEndFired && ctScore == tScore
+//   - decodeFailed: the demo broke rather than ended, so the pending round
+//     may not be the last. The worker returns 200 for a decode failure only
+//     after the match ended (Core-planning#300).
+func shouldFinalizeViaFallback(isGameLive, alreadyCommitted, roundEndFired, decodeFailed bool, ctScore, tScore int) bool {
+	return isGameLive && !alreadyCommitted && roundEndFired && !decodeFailed && ctScore == tScore
 }
 
 func InitGameObject() *Game {
@@ -1172,6 +1175,7 @@ func ProcessParser(ctx context.Context, p *dem.Parser, hooks ParseHooks) (*Game,
 		game.Flags.IsGameLive,
 		game.PotentialRound.IntegrityCheck,
 		game.Flags.RoundIntegrityStart == game.Flags.RoundIntegrityEnd,
+		errors.Is(err, dem.ErrDecodeFailed),
 		p.GameState().TeamCounterTerrorists().Score(),
 		p.GameState().TeamTerrorists().Score(),
 	) {

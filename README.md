@@ -11,6 +11,7 @@ A CS2 demo parser that calculates advanced player performance ratings based on p
 - [Adding New Stats](#adding-new-stats)
 - [Rating System](#rating-system)
 - [Key Concepts](#key-concepts)
+- [Tests](#tests)
 
 ---
 
@@ -233,6 +234,24 @@ Win probability delta from player actions. A kill that moves win probability fro
 
 ### Economic Impact
 Kill value adjusted for equipment advantage. Killing a rifle player with a pistol is worth 1.8x; killing a pistol player with a rifle is worth 0.7x.
+
+---
+
+## Tests
+
+`go test ./...` runs the unit tests; CI runs them on every PR. `TestCIDemos` parses a small demo set
+and compares each payload with `export/testdata/ci/golden/`. To limit bucket traffic, CI runs it only
+on a merge to `main` or a manual run (Actions → CI → Run workflow, any branch). The demos are listed
+by sha256 in `export/testdata/ci/demos.json` and live in the public `cscdemos` bucket under `ci/`.
+
+```bash
+scripts/fetch-ci-demos.sh /tmp/ci-demos
+FRAGG_CI_DEMOS=/tmp/ci-demos go test ./export -run TestCIDemos
+FRAGG_CI_DEMOS=/tmp/ci-demos go test ./export -run TestCIDemos -update   # after an intended output change
+```
+
+Floats compare within 1e-9. `distanceToTeammates` isn't compared, because it varies between runs on
+demoinfocs v5.
 
 ---
 

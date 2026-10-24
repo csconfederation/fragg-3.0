@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, parser-v6]
+  push:
+    branches: [main, parser-v6]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# GitHub-hosted, not self-hosted: this repo is public, so fork PRs run here.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      # TestCIDemos skips here: FRAGG_CI_DEMOS isn't set.
+      - name: go test
+        run: go test -count=1 ./...
+
+  # Parses the demo set (~560 MB), so it runs only on a merge to main or a manual run, to keep
+  # bucket traffic down. Other branches restore main's demo cache.
+  golden:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # Keyed by the demo hashes, so editing expectations in demos.json doesn't refetch the demos.
+      # actions/cache rejects paths containing '..', so the demos live in RUNNER_TEMP.
+      - name: Demo set key
+        id: demos
+        run: |
+          echo "FRAGG_CI_DEMOS=$RUNNER_TEMP/ci-demos" >> "$GITHUB_ENV"
+          echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' export/testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.FRAGG_CI_DEMOS }}
+          key: ${{ steps.demos.outputs.key }}
+          restore-keys: ci-demos-
+
+      - name: Fetch CI demos
+        run: scripts/fetch-ci-demos.sh "$FRAGG_CI_DEMOS"
+
+      - name: Golden payloads
+        run: go test -count=1 -timeout 30m -run TestCIDemos ./export

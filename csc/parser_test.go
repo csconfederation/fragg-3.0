@@ -96,6 +96,7 @@ func TestShouldFinalizeViaFallback(t *testing.T) {
 		isGameLive       bool
 		alreadyCommitted bool
 		roundEndFired    bool
+		decodeFailed     bool
 		ctScore, tScore  int
 		want             bool
 	}{
@@ -119,12 +120,16 @@ func TestShouldFinalizeViaFallback(t *testing.T) {
 			name: "asymmetric score -- an unclinched, non-level score can only mean a truncated match", isGameLive: true,
 			alreadyCommitted: false, roundEndFired: true, ctScore: 13, tScore: 12, want: false,
 		},
+		{
+			name: "decode failure -- the demo broke at a level score, the match may continue", isGameLive: true,
+			alreadyCommitted: false, roundEndFired: true, decodeFailed: true, ctScore: 14, tScore: 14, want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := shouldFinalizeViaFallback(tt.isGameLive, tt.alreadyCommitted, tt.roundEndFired, tt.ctScore, tt.tScore); got != tt.want {
-				t.Fatalf("shouldFinalizeViaFallback(%v, %v, %v, %d, %d) = %v, want %v",
-					tt.isGameLive, tt.alreadyCommitted, tt.roundEndFired, tt.ctScore, tt.tScore, got, tt.want)
+			if got := shouldFinalizeViaFallback(tt.isGameLive, tt.alreadyCommitted, tt.roundEndFired, tt.decodeFailed, tt.ctScore, tt.tScore); got != tt.want {
+				t.Fatalf("shouldFinalizeViaFallback(%v, %v, %v, %v, %d, %d) = %v, want %v",
+					tt.isGameLive, tt.alreadyCommitted, tt.roundEndFired, tt.decodeFailed, tt.ctScore, tt.tScore, got, tt.want)
 			}
 		})
 	}

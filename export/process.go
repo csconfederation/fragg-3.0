@@ -25,6 +25,17 @@ type Game = csc.Game
 // classify an unprocessable-but-not-broken demo as HTTP 422.
 var ErrNoValidRounds = csc.ErrNoValidRounds
 
+// demoinfocs errors, re-exported so the worker classifies with errors.Is/As
+// without importing demoinfocs (Core-planning#300).
+var (
+	ErrInvalidFileType     = demoinfocs.ErrInvalidFileType
+	ErrUnexpectedEndOfDemo = demoinfocs.ErrUnexpectedEndOfDemo
+	ErrDecodeFailed        = demoinfocs.ErrDecodeFailed
+)
+
+// PanicError is a handler panic (our bug); ProcessDemo returns it wrapped.
+type PanicError = demoinfocs.PanicError
+
 // ProcessDemo is the drop-in replacement for demoscrape2.ProcessDemo.
 //
 // It parses the demo once. CSC handlers own round lifecycle (integrity, knife,

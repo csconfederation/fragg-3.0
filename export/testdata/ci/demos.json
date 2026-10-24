@@ -70,8 +70,8 @@
       "source": "mid9984-cache",
       "transform": {"kind": "fill", "fraction": 0.6, "bytes": 65536, "value": 255},
       "demSha256": "726b27f3e269854e3c9f299b617d1ff8a5b66cbbe09b5cfec2cfdbef9fc940bd",
-      "covers": "64 KiB of 0xFF mid-file",
-      "skip": "demoinfocs v5 grows without bound on this input (OOM-killed at 896m); enable on v6"
+      "covers": "64 KiB of 0xFF mid-file: v6 stops with a decode error (worker 500); v5 was OOM-killed at 896m",
+      "want": {"err": "ErrDecodeFailed", "result": "", "encodes": true}
     },
     {
       "name": "not-a-demo",

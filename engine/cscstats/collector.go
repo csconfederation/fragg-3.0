@@ -408,6 +408,14 @@ func distance(a, b [3]float64) float64 {
 	return math.Sqrt(x*x + y*y + z*z)
 }
 
+// bombIgnored is the oracle's filter on bomb kills and damage in a half's final round, where a bomb
+// can explode after the round was won by elimination. D10: the bomb still counts when it ends the
+// round, or when the round is undecided (v5 delivered the bomb's kills before the explosion).
+func (c *Collector) bombIgnored(weapon int) bool {
+	return weapon == eqBomb && isRoundFinalInHalf(c.potential.RoundNum) && c.flags.PostWinCon &&
+		!c.potential.EndDueToBombEvent
+}
+
 func (c *Collector) hurt(f fact.Hurt) error {
 	pr := c.potential
 	pS := pr.PlayerStats
@@ -415,7 +423,7 @@ func (c *Collector) hurt(f fact.Hurt) error {
 	if f.Weapon != nil {
 		equipment = *f.Weapon
 	}
-	bombAtHalf := equipment == eqBomb && isRoundFinalInHalf(pr.RoundNum)
+	bombAtHalf := c.bombIgnored(equipment)
 	switch {
 	case f.Player != nil && pS[f.Player.Steam64] != nil && !bombAtHalf:
 		pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
@@ -510,7 +518,7 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 	killerExists := killer != nil && pS[killer.Steam64] != nil
 	victimExists := victim != nil && pS[victim.Steam64] != nil
 	assisterExists := assister != nil && pS[assister.Steam64] != nil
-	if *f.Weapon == eqBomb && isRoundFinalInHalf(pr.RoundNum) {
+	if c.bombIgnored(*f.Weapon) {
 		killerExists, victimExists, assisterExists = false, false, false
 	}
 

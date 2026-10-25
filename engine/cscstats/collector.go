@@ -341,12 +341,12 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact) error {
 	case fact.Disconnect:
 		c.flags.TAlive, c.flags.CtAlive = 0, 0
 		for _, p := range m.Members(f.Snapshot, fact.SideT) {
-			if p.Alive {
+			if alive(c.potential.PlayerStats, p) {
 				c.flags.TAlive++
 			}
 		}
 		for _, p := range m.Members(f.Snapshot, fact.SideCT) {
-			if p.Alive {
+			if alive(c.potential.PlayerStats, p) {
 				c.flags.CtAlive++
 			}
 		}
@@ -477,12 +477,18 @@ func enemies(a, b *fact.Player) (bool, error) {
 	return *a.TeamStateID != *b.TeamStateID, nil
 }
 
-// survivor is the last member alive at the start of the tick with no death this round: entity
-// state is applied after the tick's events, so it still shows earlier victims of the tick alive.
+// alive is p alive at the start of the tick with no death this round: entity state is applied
+// after the tick's events, so it still shows earlier victims of the tick alive.
+func alive(pS map[uint64]*playerStats, p fact.Player) bool {
+	ps := pS[p.Steam64]
+	return p.Alive && (ps == nil || ps.Deaths == 0)
+}
+
+// survivor is the last alive member with stats.
 func survivor(pS map[uint64]*playerStats, members []fact.Player) uint64 {
 	var id uint64
 	for _, p := range members {
-		if ps := pS[p.Steam64]; ps != nil && ps.Deaths == 0 && p.Alive {
+		if pS[p.Steam64] != nil && alive(pS, p) {
 			id = p.Steam64
 		}
 	}

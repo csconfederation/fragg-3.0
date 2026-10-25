@@ -295,6 +295,9 @@ func (c *Collector) Fact(f fact.Fact) error {
 		if !f.Warmup && c.roundActive {
 			c.kill(f)
 		}
+		if c.roundActive && f.Victim != nil {
+			c.dead[f.Victim.Steam64] = true // suicides and team kills too, which kill skips
+		}
 		if c.roundActive && !c.roundDecided {
 			if t, ct := countAlive(playing(f.Snapshot)); t == 0 || ct == 0 {
 				c.roundDecided, c.roundDecidedAt = true, c.timeInRound(f.Frame)
@@ -410,7 +413,6 @@ func (c *Collector) kill(f fact.Kill) {
 		if f.Weapon == nil || *f.Weapon != eqBomb {
 			c.clutchEntry(victim, ps)
 		}
-		c.dead[victim.Steam64] = true
 		for _, w := range victim.Weapons {
 			if w == eqAWP {
 				vr.HadAWP, vr.LostAWP = true, true

@@ -221,7 +221,7 @@ func (c *Collector) Commit() *Round {
 }
 
 // Players folds the committed rounds into match totals and derives the ratings (the oracle's
-// FoldSnapshots and FinalizeStats).
+// FoldSnapshots and FinalizeStats). engine/fold calls it once.
 func (c *Collector) Players(rounds []*Round) map[uint64]*model.PlayerStats {
 	for _, r := range rounds {
 		for id, rs := range r.stats {

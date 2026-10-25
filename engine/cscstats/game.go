@@ -2,8 +2,8 @@ package cscstats
 
 import "github.com/csconfederation/fragg-3.0/engine/match"
 
-// Game builds the oracle's payload from the match result: the committed rounds' CSC stats, then
-// the oracle's end-of-match aggregation.
+// Game builds the oracle's payload from the match result with the committed rounds' CSC stats;
+// engine/fold aggregates them.
 func (c *Collector) Game(res *match.Result) *Game {
 	g := &Game{
 		Rounds:                   make([]*round, 0, len(res.Rounds)),
@@ -26,6 +26,5 @@ func (c *Collector) Game(res *match.Result) *Game {
 	for _, r := range res.Rounds {
 		g.Rounds = append(g.Rounds, c.rounds[r])
 	}
-	endOfMatchProcessing(g)
 	return g
 }

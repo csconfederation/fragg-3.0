@@ -18,3 +18,15 @@ func TestSideIsTOrCT(t *testing.T) {
 		t.Fatalf("err %v; want an invariant error at the round's end", err)
 	}
 }
+
+// atd averages time to death over the rounds a player died in (D20).
+func TestAtdIsPerDeath(t *testing.T) {
+	rows := map[uint64]*cscstats.PlayerStats{
+		1: {Rounds: 4, Deaths: 2, TicksAlive: 64 * 30 * 2}, // died twice at 30 s, survived twice
+		2: {Rounds: 4, TicksAlive: 0},                      // never died
+	}
+	derive(rows, 64)
+	if rows[1].Atd != 30 || rows[2].Atd != 0 {
+		t.Errorf("atd %d, %d; want 30, 0", rows[1].Atd, rows[2].Atd)
+	}
+}

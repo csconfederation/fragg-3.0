@@ -95,7 +95,7 @@ type Result struct {
 
 // Collector computes stats over the lifecycle. Match calls each phase after updating its own
 // state, at the point the oracle's CSC pipeline does, and passes each stat fact (kill, hurt,
-// flash, bomb, grenade, frame, disconnect) after it has seen the fact itself.
+// flash, bomb, grenade, frame, disconnect, server info) after it has seen the fact itself.
 type Collector interface {
 	Open(m *Match, r *Round, s fact.Snapshot, pistol bool) error
 	// RoundEnd is every round end while the match is live, before the win is processed.
@@ -194,6 +194,7 @@ func (m *Match) Fact(f fact.Fact) error {
 		m.serverName = f.ServerName
 	case fact.ServerInfo:
 		m.mapName = f.Map
+		return m.collect(f)
 	case fact.RoundStart:
 		m.roundStartedAt = f.Tick
 	case fact.Frame:

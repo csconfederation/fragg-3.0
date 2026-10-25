@@ -6,7 +6,7 @@ import (
 
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 // PlayerRoundContext holds per-player round data used for allocation scoring.
 type PlayerRoundContext struct {
 	SteamID       uint64
-	Side          common.Team
+	Side          fact.Side
 	Alive         bool
 	Damage        int
 	Kills         int
@@ -288,7 +288,7 @@ func (a *PoolAllocator) buildKillSwingResult(rawSwing, killerEcoWeight float64) 
 // AllocateTradeReallocation redistributes victim death penalty when a trade occurs.
 func (a *PoolAllocator) AllocateTradeReallocation(
 	victimID uint64,
-	victimSide common.Team,
+	victimSide fact.Side,
 	originalVictimPenalty float64,
 	teammateIDs []uint64,
 ) []PlayerSwingAllocation {
@@ -334,8 +334,8 @@ func (a *PoolAllocator) AllocateTradeReallocation(
 // ObjectiveAllocationInput holds context for bomb plant/defuse sharing.
 type ObjectiveAllocationInput struct {
 	PrimaryID     uint64
-	PrimarySide   common.Team
-	OpposingSide  common.Team
+	PrimarySide   fact.Side
+	OpposingSide  fact.Side
 	TimeInRound   float64
 	Players       map[uint64]PlayerRoundContext
 	PrimaryShare  float64
@@ -346,7 +346,7 @@ type ObjectiveAllocationInput struct {
 // AllocateObjectiveEvent distributes plant or defuse swing across both teams.
 func (a *PoolAllocator) AllocateObjectiveEvent(
 	state *probability.RoundState,
-	primarySide common.Team,
+	primarySide fact.Side,
 	calcDelta func(*probability.RoundState) float64,
 	applyState func(*probability.RoundState),
 	input ObjectiveAllocationInput,

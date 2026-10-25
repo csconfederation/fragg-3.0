@@ -1,4 +1,4 @@
-package parser
+package eco
 
 import (
 	"github.com/csconfederation/fragg-3.0/rating/swing"

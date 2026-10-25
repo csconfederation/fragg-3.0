@@ -6,7 +6,7 @@ import (
 
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 func TestAllocateKillEventZeroSum(t *testing.T) {
@@ -18,8 +18,8 @@ func TestAllocateKillEventZeroSum(t *testing.T) {
 	kill := &KillEvent{
 		KillerID:            100,
 		VictimID:            200,
-		KillerSide:          common.TeamTerrorists,
-		VictimSide:          common.TeamCounterTerrorists,
+		KillerSide:          fact.SideT,
+		VictimSide:          fact.SideCT,
 		KillerEquip:         5000,
 		VictimEquip:         5000,
 		TotalDamageToVictim: 100,
@@ -55,8 +55,8 @@ func TestAllocateKillEventExitFragIgnored(t *testing.T) {
 	kill := &KillEvent{
 		KillerID:   100,
 		VictimID:   200,
-		KillerSide: common.TeamTerrorists,
-		VictimSide: common.TeamCounterTerrorists,
+		KillerSide: fact.SideT,
+		VictimSide: fact.SideCT,
 	}
 
 	event, result := allocator.AllocateKillEvent(state, KillAllocationInput{
@@ -77,8 +77,8 @@ func TestAllocateKillEventHealthReductionRedistributes(t *testing.T) {
 	kill := &KillEvent{
 		KillerID:    100,
 		VictimID:    200,
-		KillerSide:  common.TeamTerrorists,
-		VictimSide:  common.TeamCounterTerrorists,
+		KillerSide:  fact.SideT,
+		VictimSide:  fact.SideCT,
 		KillerEquip: 5000,
 		VictimEquip: 5000,
 	}
@@ -108,7 +108,7 @@ func TestAllocateTradeReallocation(t *testing.T) {
 	engine := probability.NewDefaultEngine()
 	allocator := NewPoolAllocator(engine, DefaultConfig())
 
-	allocs := allocator.AllocateTradeReallocation(200, common.TeamCounterTerrorists, -0.08, []uint64{201, 202})
+	allocs := allocator.AllocateTradeReallocation(200, fact.SideCT, -0.08, []uint64{201, 202})
 	total := sumAllocs(allocs)
 	if math.Abs(total) > 0.005 {
 		t.Fatalf("trade reallocation should be zero-sum, total=%f", total)

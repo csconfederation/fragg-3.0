@@ -1,11 +1,11 @@
-package parser
+package eco
 
 import (
 	"github.com/csconfederation/fragg-3.0/rating"
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 // SwingTracker manages round state and swing calculation during parsing.
@@ -26,7 +26,7 @@ type SwingTracker struct {
 }
 
 const (
-	defaultRoundTimeSeconds = 115.0
+	DefaultRoundTimeSeconds = 115.0
 	defaultBombTimerSeconds = 40.0
 )
 
@@ -41,7 +41,7 @@ func NewSwingTrackerWithConfig(cfg swing.Config) *SwingTracker {
 		cfg:              cfg,
 		enabled:          true,
 		tickRate:         float64(rating.TickRate),
-		defaultRoundTime: defaultRoundTimeSeconds,
+		defaultRoundTime: DefaultRoundTimeSeconds,
 		bombTimer:        defaultBombTimerSeconds,
 	}
 }
@@ -135,7 +135,7 @@ type KillResult struct {
 // RecordKill records a kill event and returns swing allocations.
 func (st *SwingTracker) RecordKill(
 	killerID, victimID uint64,
-	killerSide, victimSide common.Team,
+	killerSide, victimSide fact.Side,
 	killerEquip, victimEquip float64,
 	timeInRound float64,
 	isTradeKill, isHeadshot bool,
@@ -221,7 +221,7 @@ func (st *SwingTracker) exitFragScale(roundDecided bool) float64 {
 // ApplyTradeReallocation redistributes death penalty when a trade occurs.
 func (st *SwingTracker) ApplyTradeReallocation(
 	victimID uint64,
-	victimSide common.Team,
+	victimSide fact.Side,
 	originalVictimPenalty float64,
 	teammateIDs []uint64,
 ) []swing.PlayerSwingAllocation {
@@ -250,8 +250,8 @@ func (st *SwingTracker) RecordBombPlant(
 
 	input := swing.ObjectiveAllocationInput{
 		PrimaryID:     planterID,
-		PrimarySide:   common.TeamTerrorists,
-		OpposingSide:  common.TeamCounterTerrorists,
+		PrimarySide:   fact.SideT,
+		OpposingSide:  fact.SideCT,
 		TimeInRound:   timeInRound,
 		Players:       players,
 		PrimaryShare:  st.cfg.PlantPlanterShare,
@@ -260,7 +260,7 @@ func (st *SwingTracker) RecordBombPlant(
 	}
 	event, _ := st.allocator.AllocateObjectiveEvent(
 		st.roundState,
-		common.TeamTerrorists,
+		fact.SideT,
 		st.engine.CalculateBombPlantSwing,
 		func(s *probability.RoundState) {
 			s.SetBombPlanted()
@@ -288,8 +288,8 @@ func (st *SwingTracker) RecordBombDefuse(
 
 	input := swing.ObjectiveAllocationInput{
 		PrimaryID:     defuserID,
-		PrimarySide:   common.TeamCounterTerrorists,
-		OpposingSide:  common.TeamTerrorists,
+		PrimarySide:   fact.SideCT,
+		OpposingSide:  fact.SideT,
 		TimeInRound:   timeInRound,
 		Players:       players,
 		PrimaryShare:  st.cfg.DefuseDefuserShare,
@@ -298,7 +298,7 @@ func (st *SwingTracker) RecordBombDefuse(
 	}
 	event, _ := st.allocator.AllocateObjectiveEvent(
 		st.roundState,
-		common.TeamCounterTerrorists,
+		fact.SideCT,
 		st.engine.CalculateBombDefuseSwing,
 		func(s *probability.RoundState) { s.SetBombDefused() },
 		input,
@@ -309,7 +309,7 @@ func (st *SwingTracker) RecordBombDefuse(
 }
 
 // ApplyRoundResidual applies end-of-round residual swing if enabled.
-func (st *SwingTracker) ApplyRoundResidual(winner common.Team, players map[uint64]swing.PlayerRoundContext, maxDamage int) []swing.PlayerSwingAllocation {
+func (st *SwingTracker) ApplyRoundResidual(winner fact.Side, players map[uint64]swing.PlayerRoundContext, maxDamage int) []swing.PlayerSwingAllocation {
 	if !st.enabled || st.ledger == nil {
 		return nil
 	}
@@ -331,7 +331,7 @@ func (st *SwingTracker) FinalizeRound() []string {
 }
 
 // GetCurrentWinProbability returns the current win probability for a side.
-func (st *SwingTracker) GetCurrentWinProbability(side common.Team) float64 {
+func (st *SwingTracker) GetCurrentWinProbability(side fact.Side) float64 {
 	if !st.enabled || st.roundState == nil {
 		return 0.5
 	}

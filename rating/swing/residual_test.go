@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 func TestApplyRoundResidualSaveAfterAdvantage(t *testing.T) {
@@ -12,14 +12,14 @@ func TestApplyRoundResidualSaveAfterAdvantage(t *testing.T) {
 	ledger := NewRoundSwingLedger(1)
 
 	players := map[uint64]PlayerRoundContext{
-		100: {SteamID: 100, Side: common.TeamTerrorists, Alive: true, PositiveSwing: 0.10, Kills: 2},
-		101: {SteamID: 101, Side: common.TeamTerrorists, Alive: true, PositiveSwing: 0.08, Kills: 1},
-		200: {SteamID: 200, Side: common.TeamCounterTerrorists, Alive: true, NegativeSwing: 0.05},
-		201: {SteamID: 201, Side: common.TeamCounterTerrorists, Alive: true, NegativeSwing: 0.02},
+		100: {SteamID: 100, Side: fact.SideT, Alive: true, PositiveSwing: 0.10, Kills: 2},
+		101: {SteamID: 101, Side: fact.SideT, Alive: true, PositiveSwing: 0.08, Kills: 1},
+		200: {SteamID: 200, Side: fact.SideCT, Alive: true, NegativeSwing: 0.05},
+		201: {SteamID: 201, Side: fact.SideCT, Alive: true, NegativeSwing: 0.02},
 	}
 
 	allocs := ApplyRoundResidual(ledger, ResidualInput{
-		Winner:           common.TeamTerrorists,
+		Winner:           fact.SideT,
 		CurrentWinProb:   0.82,
 		Players:          players,
 		MaxDamageInRound: 200,
@@ -63,7 +63,7 @@ func TestApplyRoundResidualDisabled(t *testing.T) {
 	ledger := NewRoundSwingLedger(1)
 
 	allocs := ApplyRoundResidual(ledger, ResidualInput{
-		Winner:         common.TeamTerrorists,
+		Winner:         fact.SideT,
 		CurrentWinProb: 0.82,
 	}, cfg)
 

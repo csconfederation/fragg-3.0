@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 // DataCollector collects probability data from demo parsing.
@@ -112,7 +112,7 @@ func (dc *DataCollector) TakePending() PendingRound {
 }
 
 // CommitPending attributes a previously taken pending round to the winner.
-func (dc *DataCollector) CommitPending(pending PendingRound, tAlive, ctAlive int, bombPlanted bool, winner common.Team, mapName string) {
+func (dc *DataCollector) CommitPending(pending PendingRound, tAlive, ctAlive int, bombPlanted bool, winner fact.Side, mapName string) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 	dc.pendingStates = pending.States
@@ -124,7 +124,7 @@ func (dc *DataCollector) CommitPending(pending PendingRound, tAlive, ctAlive int
 	dc.commitRoundLocked(winner, mapName)
 }
 
-func (dc *DataCollector) commitRoundLocked(winner common.Team, mapName string) {
+func (dc *DataCollector) commitRoundLocked(winner fact.Side, mapName string) {
 	dc.data.TotalRounds++
 
 	// Attribute all pending state snapshots to the winner
@@ -132,7 +132,7 @@ func (dc *DataCollector) commitRoundLocked(winner common.Team, mapName string) {
 		if dc.data.StateOutcomes[key] == nil {
 			dc.data.StateOutcomes[key] = &StateOutcomeData{}
 		}
-		if winner == common.TeamTerrorists {
+		if winner == fact.SideT {
 			dc.data.StateOutcomes[key].TWins++
 		} else {
 			dc.data.StateOutcomes[key].CTWins++
@@ -149,7 +149,7 @@ func (dc *DataCollector) commitRoundLocked(winner common.Team, mapName string) {
 	if dc.data.MapData[mapName] == nil {
 		dc.data.MapData[mapName] = &MapData{}
 	}
-	if winner == common.TeamTerrorists {
+	if winner == fact.SideT {
 		dc.data.MapData[mapName].TWins++
 	} else {
 		dc.data.MapData[mapName].CTWins++
@@ -161,7 +161,7 @@ func (dc *DataCollector) commitRoundLocked(winner common.Team, mapName string) {
 func (dc *DataCollector) RecordRoundEnd(
 	tAlive, ctAlive int,
 	bombPlanted bool,
-	winner common.Team,
+	winner fact.Side,
 	mapName string,
 ) {
 	dc.mu.Lock()

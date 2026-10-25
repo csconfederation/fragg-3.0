@@ -1,14 +1,14 @@
 package swing
 
-import "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+import "github.com/csconfederation/fragg-3.0/engine/fact"
 
 // KillEvent represents a kill during the round.
 type KillEvent struct {
 	TimeInRound         float64
 	KillerID            uint64
 	VictimID            uint64
-	KillerSide          common.Team
-	VictimSide          common.Team
+	KillerSide          fact.Side
+	VictimSide          fact.Side
 	KillerEquip         float64
 	VictimEquip         float64
 	IsTradeKill         bool

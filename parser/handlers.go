@@ -9,6 +9,7 @@
 package parser
 
 import (
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/internal/damage"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating"
@@ -84,7 +85,7 @@ func (d *DemoParser) buildPlayerRoundContext(gs *demoinfocs.GameState) map[uint6
 
 		players[steamID] = swing.PlayerRoundContext{
 			SteamID:       steamID,
-			Side:          side,
+			Side:          fact.Side(side),
 			Alive:         alive[steamID],
 			Damage:        roundStats.Damage,
 			Kills:         roundStats.Kills,
@@ -470,7 +471,7 @@ func (d *DemoParser) processTradeDetection(ctx *killContext) {
 				teammateIDs := d.getTeammateIDs(ctx.attacker.Team, tradeResult.TradedPlayerID, gs)
 				allocs := d.state.SwingTracker.ApplyTradeReallocation(
 					tradeResult.TradedPlayerID,
-					ctx.attacker.Team,
+					fact.Side(ctx.attacker.Team),
 					tradeResult.OriginalDeathPenalty,
 					teammateIDs,
 				)
@@ -646,7 +647,7 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 
 	killResult := d.state.SwingTracker.RecordKill(
 		ctx.attacker.SteamID64, ctx.victim.SteamID64,
-		ctx.attacker.Team, ctx.victim.Team,
+		fact.Side(ctx.attacker.Team), fact.Side(ctx.victim.Team),
 		float64(ctx.attackerEquip), float64(ctx.victimEquip),
 		ctx.timeInRound,
 		ctx.isTradeKill, ctx.event.IsHeadshot,
@@ -670,7 +671,7 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 		for _, beneficiaryID := range killResult.SurvivalBeneficiaries {
 			survivalAllocs = append(survivalAllocs, swing.PlayerSwingAllocation{
 				SteamID: beneficiaryID,
-				Side:    ctx.attacker.Team,
+				Side:    fact.Side(ctx.attacker.Team),
 				Amount:  killResult.SurvivalCreditPerPlayer,
 				Reason:  swing.SwingReasonSurvivalCredit,
 			})
@@ -940,7 +941,7 @@ func (d *DemoParser) processRoundEndSwing(ctx *roundEndContext) {
 	}
 
 	players := d.buildPlayerRoundContext(ctx.gs)
-	residualAllocs := d.state.SwingTracker.ApplyRoundResidual(ctx.winnerTeam, players, maxDamage)
+	residualAllocs := d.state.SwingTracker.ApplyRoundResidual(fact.Side(ctx.winnerTeam), players, maxDamage)
 	d.applyLedgerAllocations(residualAllocs, ctx.roundDuration, "")
 
 	if warnings := d.state.SwingTracker.FinalizeRound(); len(warnings) > 0 {

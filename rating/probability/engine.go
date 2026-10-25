@@ -1,6 +1,6 @@
 package probability
 
-import "github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+import "github.com/csconfederation/fragg-3.0/engine/fact"
 
 // Engine calculates win probabilities based on game state.
 type Engine struct {
@@ -18,10 +18,10 @@ func NewDefaultEngine() *Engine {
 }
 
 // GetWinProbability returns the probability that the specified side wins the round.
-func (e *Engine) GetWinProbability(state *RoundState, side common.Team) float64 {
+func (e *Engine) GetWinProbability(state *RoundState, side fact.Side) float64 {
 	// Defuse is a terminal CT win — skip table/economy/time adjustments.
 	if state.BombDefused {
-		if side == common.TeamCounterTerrorists {
+		if side == fact.SideCT {
 			return 1.0
 		}
 		return 0.0
@@ -42,7 +42,7 @@ func (e *Engine) GetWinProbability(state *RoundState, side common.Team) float64 
 	// Clamp to valid range
 	tWinProb = clamp(tWinProb, 0.01, 0.99)
 
-	if side == common.TeamTerrorists {
+	if side == fact.SideT {
 		return tWinProb
 	}
 	return 1.0 - tWinProb
@@ -129,8 +129,8 @@ func (e *Engine) CalculateBombPlantSwing(stateBefore *RoundState) float64 {
 	stateAfter := stateBefore.Clone()
 	stateAfter.SetBombPlanted()
 
-	probBefore := e.GetWinProbability(stateBefore, common.TeamTerrorists)
-	probAfter := e.GetWinProbability(stateAfter, common.TeamTerrorists)
+	probBefore := e.GetWinProbability(stateBefore, fact.SideT)
+	probAfter := e.GetWinProbability(stateAfter, fact.SideT)
 
 	return probAfter - probBefore
 }
@@ -140,8 +140,8 @@ func (e *Engine) CalculateBombDefuseSwing(stateBefore *RoundState) float64 {
 	stateAfter := stateBefore.Clone()
 	stateAfter.SetBombDefused()
 
-	probBefore := e.GetWinProbability(stateBefore, common.TeamCounterTerrorists)
-	probAfter := e.GetWinProbability(stateAfter, common.TeamCounterTerrorists)
+	probBefore := e.GetWinProbability(stateBefore, fact.SideCT)
+	probAfter := e.GetWinProbability(stateAfter, fact.SideCT)
 
 	return probAfter - probBefore
 }

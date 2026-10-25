@@ -1,5 +1,5 @@
-// Command payload runs the engine (ingest, match, CSC stats) over a demo and writes the oracle-
-// shaped payload, gzipped, for the parity check. It prints one JSON status line.
+// Command payload runs the engine over a demo and writes the payload, gzipped, for the parity
+// check. It prints one JSON status line.
 //
 //	go run ./engine/cmd/payload DEMO.dem OUT.json.gz
 package main
@@ -11,9 +11,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/csconfederation/fragg-3.0/engine/cscstats"
-	"github.com/csconfederation/fragg-3.0/engine/ingest"
-	"github.com/csconfederation/fragg-3.0/engine/match"
+	"github.com/csconfederation/fragg-3.0/engine/payload"
 )
 
 func main() {
@@ -29,16 +27,13 @@ func main() {
 		return
 	}
 	defer f.Close()
-	stats := cscstats.New()
-	m := match.New(stats)
-	term, _ := ingest.Run(context.Background(), f, m)
-	res, err := m.Finish(term)
+	game, res, err := payload.Run(context.Background(), f)
 	if err != nil {
 		status["error"] = err.Error()
 		return
 	}
 	status["outcome"] = res.Outcome.String()
-	b, err := json.Marshal(stats.Game(res))
+	b, err := json.Marshal(game)
 	if err != nil {
 		status["error"] = "encode: " + err.Error()
 		return

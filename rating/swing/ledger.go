@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 // SwingReason identifies why swing was allocated to a player.
@@ -40,7 +40,7 @@ const (
 // PlayerSwingAllocation records a single swing credit or debit.
 type PlayerSwingAllocation struct {
 	SteamID uint64
-	Side    common.Team
+	Side    fact.Side
 	Amount  float64
 	Reason  SwingReason
 }
@@ -50,8 +50,8 @@ type SwingLedgerEvent struct {
 	Tick int
 	Type SwingEventType
 
-	BenefitingSide common.Team
-	HurtSide       common.Team
+	BenefitingSide fact.Side
+	HurtSide       fact.Side
 
 	RawDelta      float64
 	PositivePool  float64
@@ -72,8 +72,8 @@ type RoundSwingLedger struct {
 	PositiveTotal float64
 	NegativeTotal float64
 
-	TeamPositive map[common.Team]float64
-	TeamNegative map[common.Team]float64
+	TeamPositive map[fact.Side]float64
+	TeamNegative map[fact.Side]float64
 
 	PlayerSwing map[uint64]float64
 
@@ -87,8 +87,8 @@ func NewRoundSwingLedger(roundNumber int) *RoundSwingLedger {
 	return &RoundSwingLedger{
 		RoundNumber:  roundNumber,
 		Events:       make([]SwingLedgerEvent, 0),
-		TeamPositive: make(map[common.Team]float64),
-		TeamNegative: make(map[common.Team]float64),
+		TeamPositive: make(map[fact.Side]float64),
+		TeamNegative: make(map[fact.Side]float64),
 		PlayerSwing:  make(map[uint64]float64),
 	}
 }

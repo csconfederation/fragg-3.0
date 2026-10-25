@@ -3,7 +3,7 @@ package probability
 import (
 	"testing"
 
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 func TestEnforceMonotonicityPeerReviewTransitions(t *testing.T) {
@@ -57,8 +57,8 @@ func TestBombDefusedWinProbability(t *testing.T) {
 	state.SetBombPlanted()
 	state.SetBombDefused()
 
-	tProb := engine.GetWinProbability(state, common.TeamTerrorists)
-	ctProb := engine.GetWinProbability(state, common.TeamCounterTerrorists)
+	tProb := engine.GetWinProbability(state, fact.SideT)
+	ctProb := engine.GetWinProbability(state, fact.SideCT)
 	if tProb > 0.02 {
 		t.Fatalf("defused T WP = %f, want ~0", tProb)
 	}

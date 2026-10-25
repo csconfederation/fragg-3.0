@@ -1,7 +1,7 @@
-package parser
+package eco
 
 import (
-	"github.com/markus-wa/demoinfocs-golang/v6/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 // The slot persists until neutralized by a teammate's death or the creator dies.
 type AdvantageSlot struct {
 	PlayerID uint64
-	Side     common.Team
+	Side     fact.Side
 }
 
 // AdvantageTracker tracks man advantages created by kills within a round.
@@ -46,7 +46,7 @@ func (at *AdvantageTracker) Reset() {
 // RecordKill adds an advantage slot for the killer's team.
 // Returns the list of alive advantage creators on the killer's team
 // (excluding the killer themselves) who should receive survival credit.
-func (at *AdvantageTracker) RecordKill(killerID uint64, killerSide common.Team) []uint64 {
+func (at *AdvantageTracker) RecordKill(killerID uint64, killerSide fact.Side) []uint64 {
 	// Collect alive advantage creators on the killer's team BEFORE adding the new slot.
 	// These players created prior advantages that are still active — the new kill
 	// happened while their advantage persisted, so they earn survival credit.
@@ -72,7 +72,7 @@ func (at *AdvantageTracker) RecordKill(killerID uint64, killerSide common.Team) 
 // RecordDeath consumes the oldest advantage slot on the victim's team.
 // When a player dies, the enemy team neutralizes one man advantage.
 // Also removes any slots owned by the dying player (they can't benefit from survival anymore).
-func (at *AdvantageTracker) RecordDeath(victimID uint64, victimSide common.Team) {
+func (at *AdvantageTracker) RecordDeath(victimID uint64, victimSide fact.Side) {
 	// Remove the oldest advantage slot on the victim's team (enemy neutralized it)
 	slots := at.getSlots(victimSide)
 	if len(slots) > 0 {
@@ -85,16 +85,16 @@ func (at *AdvantageTracker) RecordDeath(victimID uint64, victimSide common.Team)
 }
 
 // getSlots returns the advantage slots for a team.
-func (at *AdvantageTracker) getSlots(side common.Team) []AdvantageSlot {
-	if side == common.TeamTerrorists {
+func (at *AdvantageTracker) getSlots(side fact.Side) []AdvantageSlot {
+	if side == fact.SideT {
 		return at.tSlots
 	}
 	return at.ctSlots
 }
 
 // setSlots sets the advantage slots for a team.
-func (at *AdvantageTracker) setSlots(side common.Team, slots []AdvantageSlot) {
-	if side == common.TeamTerrorists {
+func (at *AdvantageTracker) setSlots(side fact.Side, slots []AdvantageSlot) {
+	if side == fact.SideT {
 		at.tSlots = slots
 	} else {
 		at.ctSlots = slots
@@ -102,8 +102,8 @@ func (at *AdvantageTracker) setSlots(side common.Team, slots []AdvantageSlot) {
 }
 
 // addSlot adds an advantage slot for a team.
-func (at *AdvantageTracker) addSlot(side common.Team, slot AdvantageSlot) {
-	if side == common.TeamTerrorists {
+func (at *AdvantageTracker) addSlot(side fact.Side, slot AdvantageSlot) {
+	if side == fact.SideT {
 		at.tSlots = append(at.tSlots, slot)
 	} else {
 		at.ctSlots = append(at.ctSlots, slot)
@@ -111,7 +111,7 @@ func (at *AdvantageTracker) addSlot(side common.Team, slot AdvantageSlot) {
 }
 
 // removePlayerSlots removes all slots owned by a specific player.
-func (at *AdvantageTracker) removePlayerSlots(playerID uint64, side common.Team) {
+func (at *AdvantageTracker) removePlayerSlots(playerID uint64, side fact.Side) {
 	slots := at.getSlots(side)
 	filtered := make([]AdvantageSlot, 0, len(slots))
 	for _, slot := range slots {

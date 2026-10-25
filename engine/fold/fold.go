@@ -5,6 +5,7 @@
 package fold
 
 import (
+	"fmt"
 	"maps"
 	"math"
 	"slices"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/csconfederation/fragg-3.0/engine/cscstats"
 	"github.com/csconfederation/fragg-3.0/engine/eco"
+	"github.com/csconfederation/fragg-3.0/engine/match"
 )
 
 const (
@@ -21,17 +23,22 @@ const (
 )
 
 // Game folds g's committed rounds and the matching eco rounds into g's player and team stats.
-func Game(g *cscstats.Game, e *eco.Collector, ecoRounds []*eco.Round) {
+func Game(g *cscstats.Game, e *eco.Collector, ecoRounds []*eco.Round) error {
 	g.TotalPlayerStats = map[uint64]*cscstats.PlayerStats{}
 	g.TPlayerStats = map[uint64]*cscstats.PlayerStats{}
 	g.CtPlayerStats = map[uint64]*cscstats.PlayerStats{}
 	g.TotalTeamStats = map[string]*cscstats.TeamStats{}
 	g.TotalWPAlog = []*cscstats.WPALog{}
 	if len(g.Rounds) == 0 {
-		return
+		return nil
 	}
 	g.EcoStatsOK = true // one model: eco covers every committed round and player
 	for _, r := range g.Rounds {
+		for _, p := range r.PlayerStats {
+			if p.Side != sideT && p.Side != sideCT {
+				return &match.InvariantError{Tick: r.EndingTick, Reason: fmt.Sprintf("round %d: player %s has side %d", r.RoundNum, p.SteamID, p.Side)}
+			}
+		}
 		enrich(r)
 	}
 	accumulate(g)
@@ -41,6 +48,7 @@ func Game(g *cscstats.Game, e *eco.Collector, ecoRounds []*eco.Round) {
 	rate(g)
 	project(g)
 	mergeEco(g, e.Players(ecoRounds))
+	return nil
 }
 
 // enrich computes a round's team win and impact points, its winning team's damage, and each

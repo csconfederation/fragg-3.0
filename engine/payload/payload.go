@@ -28,7 +28,9 @@ func Run(ctx context.Context, r io.Reader) (*cscstats.Game, *match.Result, error
 	for _, r := range res.Rounds {
 		rounds = append(rounds, s.rounds[r])
 	}
-	fold.Game(game, s.eco, rounds)
+	if err := fold.Game(game, s.eco, rounds); err != nil {
+		return nil, nil, err
+	}
 	return game, res, nil
 }
 
@@ -67,7 +69,11 @@ func (s *stats) Commit(m *match.Match, r *match.Round, tick int) error {
 }
 
 func (s *stats) Join(m *match.Match, r *match.Round, mem match.Member) error {
-	return s.csc.Join(m, r, mem)
+	if err := s.csc.Join(m, r, mem); err != nil {
+		return err
+	}
+	s.eco.Join(mem.Steam64, mem.Name, mem.IsBot, mem.Side, mem.Clan)
+	return nil
 }
 
 func (s *stats) Fact(m *match.Match, f fact.Fact) error {

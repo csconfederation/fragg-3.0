@@ -34,7 +34,7 @@ type Collector struct {
 	swing          *SwingTracker
 	roundHasKill   bool
 	isPistolRound  bool
-	roundNumber    int // eco's own count of opens, as in the oracle
+	roundNumber    int // eco's own count of opens, as in the oracle; labels only, not in the payload
 	roundActive    bool
 	mapName        string
 	roundStartTime float64
@@ -110,8 +110,9 @@ func countAlive(ps []fact.Player) (t, ct int) {
 	return min(t, 5), min(ct, 5)
 }
 
-// Open is the oracle's BeginRound, called on every round open.
-func (c *Collector) Open(s fact.Snapshot) {
+// Open is the oracle's BeginRound, called on every round open. pistol is the match's pistol round
+// (both teams at $800): D13, where the oracle used IsPistolRound on eco's open count.
+func (c *Collector) Open(s fact.Snapshot, pistol bool) {
 	c.round = map[uint64]*model.RoundStats{}
 	c.dead = map[uint64]bool{}
 	c.roundHasKill = false
@@ -120,7 +121,7 @@ func (c *Collector) Open(s fact.Snapshot) {
 	c.bombPlanted = false
 	c.roundActive = true
 	c.roundNumber++
-	c.isPistolRound = rating.IsPistolRound(c.roundNumber)
+	c.isPistolRound = pistol
 	c.roundStartTime = float64(s.Frame) / float64(rating.TickRate)
 
 	tAlive, ctAlive, tEquip, ctEquip := 0, 0, 0, 0

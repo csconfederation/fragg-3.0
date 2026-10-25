@@ -1,4 +1,4 @@
-package parser
+package eco
 
 import (
 	"github.com/csconfederation/fragg-3.0/rating"
@@ -26,7 +26,7 @@ type SwingTracker struct {
 }
 
 const (
-	defaultRoundTimeSeconds = 115.0
+	DefaultRoundTimeSeconds = 115.0
 	defaultBombTimerSeconds = 40.0
 )
 
@@ -41,7 +41,7 @@ func NewSwingTrackerWithConfig(cfg swing.Config) *SwingTracker {
 		cfg:              cfg,
 		enabled:          true,
 		tickRate:         float64(rating.TickRate),
-		defaultRoundTime: defaultRoundTimeSeconds,
+		defaultRoundTime: DefaultRoundTimeSeconds,
 		bombTimer:        defaultBombTimerSeconds,
 	}
 }

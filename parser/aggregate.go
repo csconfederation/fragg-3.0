@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 
+	"github.com/csconfederation/fragg-3.0/engine/eco"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating"
@@ -106,7 +107,7 @@ func (d *DemoParser) BeginRound() {
 
 	if d.state.SwingTracker != nil && d.state.SwingTracker.IsEnabled() {
 		startTick := gs.IngameTick()
-		d.state.SwingTracker.ResetRoundWithClock(d.state.RoundNumber, tAlive, ctAlive, d.state.MapName, startTick, defaultRoundTimeSeconds)
+		d.state.SwingTracker.ResetRoundWithClock(d.state.RoundNumber, tAlive, ctAlive, d.state.MapName, startTick, eco.DefaultRoundTimeSeconds)
 
 		tAvgEquip := 0.0
 		ctAvgEquip := 0.0
@@ -228,8 +229,8 @@ func (d *DemoParser) foldSnapshot(snap *RoundSnapshot) {
 			continue
 		}
 		player := d.playerForFold(steamID)
-		foldRoundIntoPlayer(player, roundStats, snap.RoundNumber)
-		updater := NewSideStatsUpdater(player, roundStats)
+		eco.FoldRound(player, roundStats, snap.RoundNumber)
+		updater := eco.NewSideStatsUpdater(player, roundStats)
 		updater.UpdateCommonRoundStats()
 		updater.UpdateSideStats()
 		player.RoundsPlayed++
@@ -246,150 +247,4 @@ func (d *DemoParser) playerForFold(steamID uint64) *model.PlayerStats {
 	p := &model.PlayerStats{SteamID: fmt.Sprintf("%d", steamID)}
 	d.state.Players[steamID] = p
 	return p
-}
-
-func foldRoundIntoPlayer(player *model.PlayerStats, round *model.RoundStats, roundNumber int) {
-	player.Kills += round.Kills
-	player.Assists += round.Assists
-	player.Damage += round.Damage
-	player.DamageTaken += round.DamageTaken
-	player.EcoKillValue += round.EconImpact
-	player.EconImpact += round.EconImpact
-	player.EcoDeathValue += round.EcoDeathValue
-	player.Headshots += round.Headshots
-	player.TotalTimeToKill += round.TimeToKillSum
-	player.KillsWithTTK += round.KillsWithTTK
-	player.LowBuyKills += round.LowBuyKills
-	player.DisadvantagedBuyKills += round.DisadvantagedBuyKills
-	player.ManAdvantageKills += round.ManAdvantageKills
-	player.ManDisadvantageDeaths += round.ManDisadvantageDeaths
-	player.EcoAdjustedKills += round.EcoAdjustedKills
-	player.PerfectKills += round.PerfectKills
-	player.EnemiesFlashed += round.EnemiesFlashed
-	player.TradeDenials += round.TradeDenials
-	player.AWPKills += round.AWPKills
-	player.HEDamage += round.HEDamage
-	player.FireDamage += round.FireDamage
-	player.SmokesThrown += round.SmokesThrown
-	player.HEsThrown += round.HEsThrown
-	player.MolotovsThrown += round.MolotovsThrown
-	player.TotalNadesThrown += round.SmokesThrown + round.HEsThrown + round.MolotovsThrown + round.FlashesThrown
-
-	if round.DeathTime > 0 {
-		player.Deaths++
-		player.TotalTimeAlive += round.DeathTime
-		player.TotalDeathTime += round.DeathTime
-		player.DeathTimeRounds++
-	} else if round.Survived {
-		player.Survival++
-		player.TotalTimeAlive += round.TimeAlive
-	}
-
-	if round.TeamWon {
-		player.RoundsWon++
-	} else {
-		player.RoundsLost++
-		if round.Survived {
-			player.SavesOnLoss++
-		}
-	}
-
-	if round.WasLastAlive {
-		player.LastAliveRounds++
-	}
-
-	if round.OpeningKill {
-		player.OpeningKills++
-		player.OpeningAttempts++
-		player.OpeningSuccesses++
-		if round.PlayerSide == "T" {
-			player.TOpeningKills++
-		} else if round.PlayerSide == "CT" {
-			player.CTOpeningKills++
-		}
-	}
-	if round.OpeningDeath {
-		player.OpeningDeaths++
-		player.OpeningAttempts++
-		if round.PlayerSide == "T" {
-			player.TOpeningDeaths++
-		} else if round.PlayerSide == "CT" {
-			player.CTOpeningDeaths++
-		}
-	}
-
-	if round.Traded {
-		player.TradedDeaths++
-	}
-	if round.OpeningDeath && round.Traded {
-		player.OpeningDeathsTraded++
-	}
-	if round.SavedTeammate {
-		player.SavedTeammate++
-	}
-	if round.AWPOpeningKill {
-		player.AWPOpeningKills++
-	}
-	player.UtilityKills += round.UtilityKills
-
-	if round.Kills >= 1 && round.Kills <= 5 {
-		player.MultiKillsRaw[round.Kills]++
-	}
-
-	if round.ClutchEnteredSize > 0 || round.ClutchAttempt {
-		size := round.ClutchEnteredSize
-		if size == 0 {
-			size = round.ClutchSize
-		}
-		player.ClutchRounds++
-		switch size {
-		case 1:
-			player.Clutch1v1Attempts++
-			if round.TeamWon {
-				player.Clutch1v1Wins++
-			}
-		case 2:
-			player.Clutch1v2Attempts++
-			if round.TeamWon {
-				player.Clutch1v2Wins++
-			}
-		case 3:
-			player.Clutch1v3Attempts++
-			if round.TeamWon {
-				player.Clutch1v3Wins++
-			}
-		case 4:
-			player.Clutch1v4Attempts++
-			if round.TeamWon {
-				player.Clutch1v4Wins++
-			}
-		case 5:
-			player.Clutch1v5Attempts++
-			if round.TeamWon {
-				player.Clutch1v5Wins++
-			}
-		}
-		if round.TeamWon {
-			player.ClutchWins++
-		}
-	}
-
-	if round.PlayerSide == "T" {
-		player.TEcoDeathValue += round.EcoDeathValue
-		player.TManAdvantageKills += round.ManAdvantageKills
-		player.TManDisadvantageDeaths += round.ManDisadvantageDeaths
-	} else if round.PlayerSide == "CT" {
-		player.CTEcoDeathValue += round.EcoDeathValue
-		player.CTManAdvantageKills += round.ManAdvantageKills
-		player.CTManDisadvantageDeaths += round.ManDisadvantageDeaths
-	}
-
-	round.MultiKillRound = round.Kills
-	player.ProbabilitySwing += round.ProbabilitySwing
-	player.RoundBreakdowns = append(player.RoundBreakdowns, model.NewRoundSwingBreakdown(roundNumber, round))
-	if round.PlayerSide == "T" {
-		player.TProbabilitySwing += round.ProbabilitySwing
-	} else if round.PlayerSide == "CT" {
-		player.CTProbabilitySwing += round.ProbabilitySwing
-	}
 }

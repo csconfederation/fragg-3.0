@@ -10,6 +10,7 @@ package parser
 
 import (
 	"fmt"
+	"github.com/csconfederation/fragg-3.0/engine/eco"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
@@ -22,7 +23,7 @@ type MatchState struct {
 	Players       map[uint64]*model.PlayerStats
 	Round         map[uint64]*model.RoundStats
 	TradeDetector *TradeDetector
-	SwingTracker  *SwingTracker
+	SwingTracker  *eco.SwingTracker
 	RoundHasKill  bool
 	MatchStarted  bool
 	IsKnifeRound  bool
@@ -51,7 +52,7 @@ func NewMatchStateWithConfig(swingCfg swing.Config) *MatchState {
 		Players:       make(map[uint64]*model.PlayerStats),
 		Round:         make(map[uint64]*model.RoundStats),
 		TradeDetector: NewTradeDetector(),
-		SwingTracker:  NewSwingTrackerWithConfig(swingCfg),
+		SwingTracker:  eco.NewSwingTrackerWithConfig(swingCfg),
 	}
 }
 

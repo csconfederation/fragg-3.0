@@ -1,12 +1,4 @@
-// =============================================================================
-// DISCLAIMER: Comments in this file were generated with AI assistance to help
-// users find and understand code for reference while building FraGG 3.0.
-// =============================================================================
-
-// Package parser provides CS2 demo file parsing functionality.
-// This file provides helper functions for updating side-specific statistics
-// (T-side and CT-side) to eliminate code duplication.
-package parser
+package eco
 
 import (
 	"github.com/csconfederation/fragg-3.0/model"

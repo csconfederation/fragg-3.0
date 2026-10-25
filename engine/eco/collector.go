@@ -90,7 +90,7 @@ func (c *Collector) ensurePlayer(p fact.Player, s fact.Snapshot) {
 
 func (c *Collector) ensureRound(steam uint64) *model.RoundStats {
 	if _, ok := c.round[steam]; !ok {
-		c.round[steam] = &model.RoundStats{}
+		c.round[steam] = &model.RoundStats{IsPistolRound: c.isPistolRound} // late records too (D13)
 	}
 	return c.round[steam]
 }
@@ -132,7 +132,6 @@ func (c *Collector) Open(s fact.Snapshot, num int) {
 		}
 		c.ensurePlayer(p, s)
 		rs := c.ensureRound(p.Steam64)
-		rs.IsPistolRound = c.isPistolRound
 		if p.Side == fact.SideT {
 			rs.PlayerSide = "T"
 			tAlive++

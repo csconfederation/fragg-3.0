@@ -84,8 +84,9 @@ func TestCIGoldens(t *testing.T) {
 	}
 }
 
-// TestNaNStillFailsToEncode pins the oracle's mid8364 behavior until the NaN guards land.
-func TestNaNStillFailsToEncode(t *testing.T) {
+// TestNoKillLobbyEncodes: mid8364, a test lobby with no kills, made the oracle's rating 0/0
+// (corpus finding 1). json.Marshal rejects NaN and Inf, so encoding proves there are none.
+func TestNoKillLobbyEncodes(t *testing.T) {
 	dir := os.Getenv("FRAGG_CI_DEMOS")
 	if dir == "" {
 		t.Skip("FRAGG_CI_DEMOS not set; run scripts/fetch-ci-demos.sh")
@@ -98,8 +99,8 @@ func TestNaNStillFailsToEncode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := json.Marshal(game); err == nil || !strings.Contains(err.Error(), "NaN") {
-		t.Fatalf("encode error = %v, want NaN", err)
+	if _, err := json.Marshal(game); err != nil {
+		t.Fatal(err)
 	}
 }
 

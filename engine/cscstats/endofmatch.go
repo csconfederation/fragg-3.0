@@ -300,16 +300,16 @@ func calculateDerivedFields(game *Game) {
 		playerWPR := player.WinPoints / float64(player.Rounds)
 
 		if player.TeamsWinPoints != 0 {
-			player.ImpactRating = (0.1 * float64(openingFactor)) + (0.6 * (playerIPR / impactRoundAvg)) + (0.3 * (playerWPR / (player.TeamsWinPoints / float64(player.WinPointsNormalizer))))
+			player.ImpactRating = (0.1 * float64(openingFactor)) + (0.6 * ratio(playerIPR, impactRoundAvg)) + (0.3 * (playerWPR / (player.TeamsWinPoints / float64(player.WinPointsNormalizer))))
 		} else {
-			player.ImpactRating = (0.1 * float64(openingFactor)) + (0.6 * (playerIPR / impactRoundAvg))
+			player.ImpactRating = (0.1 * float64(openingFactor)) + (0.6 * ratio(playerIPR, impactRoundAvg))
 		}
 		playerDR := float64(player.Deaths) / float64(player.Rounds)
 		playerRatingDeathComponent := 0.07 * (deathRoundAvg / playerDR)
 		if player.Deaths == 0 || playerRatingDeathComponent > 0.21 {
 			playerRatingDeathComponent = 0.21
 		}
-		player.Rating = (0.3 * player.ImpactRating) + (0.35 * (player.KR / killRoundAvg)) + playerRatingDeathComponent + (0.08 * (player.Kast / kastRoundAvg)) + (0.2 * (player.Adr / adrAvg))
+		player.Rating = (0.3 * player.ImpactRating) + (0.35 * ratio(player.KR, killRoundAvg)) + playerRatingDeathComponent + (0.08 * ratio(player.Kast, kastRoundAvg)) + (0.2 * ratio(player.Adr, adrAvg))
 
 		//ctRating
 		if player.CtRounds > 0 {
@@ -318,16 +318,16 @@ func calculateDerivedFields(game *Game) {
 			playerWPR = player.CtWinPoints / float64(player.CtRounds)
 
 			if player.CtTeamsWinPoints != 0 {
-				player.CtImpactRating = (0.1 * float64(openingFactor)) + (0.6 * (playerIPR / ctImpactRoundAvg)) + (0.3 * (playerWPR / (player.CtTeamsWinPoints / float64(player.CtWinPointsNormalizer))))
+				player.CtImpactRating = (0.1 * float64(openingFactor)) + (0.6 * ratio(playerIPR, ctImpactRoundAvg)) + (0.3 * (playerWPR / (player.CtTeamsWinPoints / float64(player.CtWinPointsNormalizer))))
 			} else {
-				player.CtImpactRating = (0.1 * float64(openingFactor)) + (0.6 * (playerIPR / ctImpactRoundAvg))
+				player.CtImpactRating = (0.1 * float64(openingFactor)) + (0.6 * ratio(playerIPR, ctImpactRoundAvg))
 			}
 			playerDR = float64(player.CtDeaths) / float64(player.CtRounds)
 			playerRatingDeathComponent = 0.07 * (ctDeathRoundAvg / playerDR)
 			if player.CtDeaths == 0 || playerRatingDeathComponent > 0.21 {
 				playerRatingDeathComponent = 0.21
 			}
-			player.CtRating = (0.3 * player.CtImpactRating) + (0.35 * ((float64(player.CtKills) / float64(player.CtRounds)) / ctKillRoundAvg)) + playerRatingDeathComponent + (0.08 * (player.CtKAST / ctKastRoundAvg)) + (0.2 * (player.CtADR / ctAdrAvg))
+			player.CtRating = (0.3 * player.CtImpactRating) + (0.35 * ratio(float64(player.CtKills)/float64(player.CtRounds), ctKillRoundAvg)) + playerRatingDeathComponent + (0.08 * ratio(player.CtKAST, ctKastRoundAvg)) + (0.2 * ratio(player.CtADR, ctAdrAvg))
 		}
 
 		//tRating
@@ -337,21 +337,30 @@ func calculateDerivedFields(game *Game) {
 			playerWPR = player.TWinPoints / float64(player.TRounds)
 
 			if player.TTeamsWinPoints != 0 {
-				player.TImpactRating = (0.1 * float64(openingFactor)) + (0.6 * (playerIPR / tImpactRoundAvg)) + (0.3 * (playerWPR / (player.TTeamsWinPoints / float64(player.TWinPointsNormalizer))))
+				player.TImpactRating = (0.1 * float64(openingFactor)) + (0.6 * ratio(playerIPR, tImpactRoundAvg)) + (0.3 * (playerWPR / (player.TTeamsWinPoints / float64(player.TWinPointsNormalizer))))
 			} else {
-				player.TImpactRating = (0.1 * float64(openingFactor)) + (0.6 * (playerIPR / tImpactRoundAvg))
+				player.TImpactRating = (0.1 * float64(openingFactor)) + (0.6 * ratio(playerIPR, tImpactRoundAvg))
 			}
 			playerDR = float64(player.TDeaths) / float64(player.TRounds)
 			playerRatingDeathComponent = 0.07 * (tDeathRoundAvg / playerDR)
 			if player.TDeaths == 0 || playerRatingDeathComponent > 0.21 {
 				playerRatingDeathComponent = 0.21
 			}
-			player.TRating = (0.3 * player.TImpactRating) + (0.35 * ((float64(player.TKills) / float64(player.TRounds)) / tKillRoundAvg)) + playerRatingDeathComponent + (0.08 * (player.TKAST / tKastRoundAvg)) + (0.2 * (player.TADR / tAdrAvg))
+			player.TRating = (0.3 * player.TImpactRating) + (0.35 * ratio(float64(player.TKills)/float64(player.TRounds), tKillRoundAvg)) + playerRatingDeathComponent + (0.08 * ratio(player.TKAST, tKastRoundAvg)) + (0.2 * ratio(player.TADR, tAdrAvg))
 		}
 	}
 
 	calculateSidedStats(game)
 	return
+}
+
+// ratio is a player's value relative to the match average; with no match-wide value (a lobby
+// with no kills, say) it contributes 0 instead of a NaN (Core-planning#302, corpus finding 1).
+func ratio(v, avg float64) float64 {
+	if avg == 0 {
+		return 0
+	}
+	return v / avg
 }
 
 func calculateSidedStats(game *Game) {

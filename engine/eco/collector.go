@@ -15,6 +15,7 @@ const (
 	eqP2000      = 1
 	eqRevolver   = 10
 	eqAWP        = 309
+	eqBomb       = 404
 	eqKnife      = 405
 	eqMolotov    = 502
 	eqIncendiary = 503
@@ -40,6 +41,7 @@ type Collector struct {
 	roundDecided   bool
 	roundDecidedAt float64
 	bombPlanted    bool
+	dead           map[uint64]bool // this round's victims
 }
 
 // Round is one committed round's eco stats (the oracle's RoundSnapshot).
@@ -111,6 +113,7 @@ func countAlive(ps []fact.Player) (t, ct int) {
 // Open is the oracle's BeginRound, called on every round open.
 func (c *Collector) Open(s fact.Snapshot) {
 	c.round = map[uint64]*model.RoundStats{}
+	c.dead = map[uint64]bool{}
 	c.roundHasKill = false
 	c.trades.Reset()
 	c.roundDecided, c.roundDecidedAt = false, 0
@@ -404,7 +407,10 @@ func (c *Collector) kill(f fact.Kill) {
 	if victim != nil {
 		vr := c.ensureRound(victim.Steam64)
 		vr.DeathTime = t
-		c.clutchEntry(victim, ps)
+		if f.Weapon == nil || *f.Weapon != eqBomb {
+			c.clutchEntry(victim, ps)
+		}
+		c.dead[victim.Steam64] = true
 		for _, w := range victim.Weapons {
 			if w == eqAWP {
 				vr.HadAWP, vr.LostAWP = true, true
@@ -556,12 +562,13 @@ func (c *Collector) kill(f fact.Kill) {
 }
 
 // clutchEntry is the oracle's checkClutchEntry: the victim's death leaves one teammate alive
-// against at least one enemy.
+// against at least one enemy. As in CSC (corpus finding 6), a bomb death can't start a clutch, and
+// a player killed earlier in the tick isn't alive though their entity still says so.
 func (c *Collector) clutchEntry(victim *fact.Player, ps []fact.Player) {
 	mates, enemies := 0, 0
 	var last uint64
 	for _, p := range ps {
-		if p.Steam64 == victim.Steam64 || !p.Alive {
+		if p.Steam64 == victim.Steam64 || !p.Alive || c.dead[p.Steam64] {
 			continue
 		}
 		if p.Side == victim.Side {

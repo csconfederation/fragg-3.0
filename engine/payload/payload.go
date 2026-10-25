@@ -14,6 +14,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/fold"
 	"github.com/csconfederation/fragg-3.0/engine/ingest"
 	"github.com/csconfederation/fragg-3.0/engine/match"
+	"github.com/csconfederation/fragg-3.0/engine/round"
 )
 
 // The errors Run returns besides a *match.InvariantError and stream failures. The worker maps them
@@ -28,7 +29,7 @@ var (
 // Run parses r and returns the payload and the match result. A partial demo (D9) is a score-only
 // payload; a stream that breaks after the match ended still yields the full payload.
 func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
-	s := &stats{csc: cscstats.New(), eco: eco.New(), rounds: map[*match.Round]*eco.Round{}}
+	s := &stats{round: round.New(), csc: cscstats.New(), eco: eco.New(), rounds: map[*match.Round]*eco.Round{}}
 	m := match.New(s)
 	term, _ := ingest.Run(ctx, r, m)
 	res, err := m.Finish(term)
@@ -61,14 +62,17 @@ func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
 }
 
 // stats drives both pipelines in the oracle's order: per event eco then CSC (eco's handlers are
-// registered first); at round phases CSC then eco (CSC's hooks call eco last).
+// registered first); at round phases CSC then eco (CSC's hooks call eco last). The shared round
+// state is updated before either sees a phase or fact.
 type stats struct {
+	round  *round.Tracker
 	csc    *cscstats.Collector
 	eco    *eco.Collector
 	rounds map[*match.Round]*eco.Round
 }
 
 func (s *stats) Open(m *match.Match, r *match.Round, snap fact.Snapshot, pistol bool) error {
+	s.round.Open(r)
 	if err := s.csc.Open(m, r, snap, pistol); err != nil {
 		return err
 	}
@@ -76,9 +80,13 @@ func (s *stats) Open(m *match.Match, r *match.Round, snap fact.Snapshot, pistol 
 	return nil
 }
 
-func (s *stats) RoundEnd(m *match.Match, f fact.RoundEnd) error { return s.csc.RoundEnd(m, f) }
+func (s *stats) RoundEnd(m *match.Match, f fact.RoundEnd) error {
+	s.round.RoundEnd(f)
+	return nil
+}
 
 func (s *stats) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
+	s.round.Win()
 	if err := s.csc.Win(m, r, f); err != nil {
 		return err
 	}
@@ -87,7 +95,7 @@ func (s *stats) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
 }
 
 func (s *stats) Commit(m *match.Match, r *match.Round, tick int) error {
-	if err := s.csc.Commit(m, r, tick); err != nil {
+	if err := s.csc.Commit(m, r, tick, s.round.State()); err != nil {
 		return err
 	}
 	s.rounds[r] = s.eco.Commit()
@@ -95,6 +103,7 @@ func (s *stats) Commit(m *match.Match, r *match.Round, tick int) error {
 }
 
 func (s *stats) Join(m *match.Match, r *match.Round, mem match.Member) error {
+	s.round.Join(r, mem.Steam64)
 	if err := s.csc.Join(m, r, mem); err != nil {
 		return err
 	}
@@ -103,8 +112,12 @@ func (s *stats) Join(m *match.Match, r *match.Round, mem match.Member) error {
 }
 
 func (s *stats) Fact(m *match.Match, f fact.Fact) error {
+	x, err := s.round.Fact(m, f)
+	if err != nil {
+		return err
+	}
 	if err := s.eco.Fact(f); err != nil {
 		return err
 	}
-	return s.csc.Fact(m, f)
+	return s.csc.Fact(m, f, x)
 }

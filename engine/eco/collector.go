@@ -155,6 +155,27 @@ func (c *Collector) Open(s fact.Snapshot, num int) {
 	c.swing.SetEconomyFromValues(tAvg, ctAvg)
 }
 
+// Join adds a human who joined the open round mid-round, on the side CSC gave them, so eco covers
+// every round record CSC has. The oracle left such a record without a side and flagged the gap
+// with its coverage check (Core-planning#303).
+func (c *Collector) Join(steam uint64, name string, isBot bool, side fact.Side, clan string) {
+	if isBot || !c.roundActive {
+		return
+	}
+	if ps, ok := c.players[steam]; !ok {
+		c.players[steam] = &model.PlayerStats{SteamID: fmt.Sprintf("%d", steam), Name: name, TeamName: clan}
+	} else if ps.TeamName == "" {
+		ps.TeamName = clan
+	}
+	rs := c.ensureRound(steam)
+	switch side {
+	case fact.SideT:
+		rs.PlayerSide = "T"
+	case fact.SideCT:
+		rs.PlayerSide = "CT"
+	}
+}
+
 // Win is the oracle's FinalizeRound: round-end trades, survival, clutches and residual swing.
 func (c *Collector) Win(winner fact.Side, s fact.Snapshot) {
 	if !c.roundActive || s.Warmup {
@@ -221,7 +242,7 @@ func (c *Collector) Commit() *Round {
 }
 
 // Players folds the committed rounds into match totals and derives the ratings (the oracle's
-// FoldSnapshots and FinalizeStats).
+// FoldSnapshots and FinalizeStats). engine/fold calls it once.
 func (c *Collector) Players(rounds []*Round) map[uint64]*model.PlayerStats {
 	for _, r := range rounds {
 		for id, rs := range r.stats {

@@ -1,5 +1,5 @@
-// Package payload runs the engine over a demo and builds the worker's payload: the CSC stats with
-// the eco metrics merged in, as the oracle's export.ProcessDemo does (Core-planning#302).
+// Package payload runs the engine over a demo and builds the worker's payload: the CSC and eco
+// stats of the committed rounds, folded once (Core-planning#303).
 package payload
 
 import (
@@ -9,6 +9,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/cscstats"
 	"github.com/csconfederation/fragg-3.0/engine/eco"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/fold"
 	"github.com/csconfederation/fragg-3.0/engine/ingest"
 	"github.com/csconfederation/fragg-3.0/engine/match"
 )
@@ -27,7 +28,9 @@ func Run(ctx context.Context, r io.Reader) (*cscstats.Game, *match.Result, error
 	for _, r := range res.Rounds {
 		rounds = append(rounds, s.rounds[r])
 	}
-	mergeEco(game, s.eco, rounds, res.Map)
+	if err := fold.Game(game, s.eco, rounds); err != nil {
+		return nil, nil, err
+	}
 	return game, res, nil
 }
 
@@ -66,7 +69,11 @@ func (s *stats) Commit(m *match.Match, r *match.Round, tick int) error {
 }
 
 func (s *stats) Join(m *match.Match, r *match.Round, mem match.Member) error {
-	return s.csc.Join(m, r, mem)
+	if err := s.csc.Join(m, r, mem); err != nil {
+		return err
+	}
+	s.eco.Join(mem.Steam64, mem.Name, mem.IsBot, mem.Side, mem.Clan)
+	return nil
 }
 
 func (s *stats) Fact(m *match.Match, f fact.Fact) error {

@@ -196,7 +196,8 @@ func player(pl *common.Player, listed bool) fact.Player {
 		FlashDuration: float64(pl.FlashDuration),
 	}
 	if pl.TeamState != nil {
-		f.TeamStateID = pl.TeamState.ID()
+		id := pl.TeamState.ID()
+		f.TeamStateID = &id
 	}
 	return f
 }

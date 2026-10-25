@@ -469,6 +469,14 @@ func (c *Collector) flashed(f fact.Flashed) error {
 	return nil
 }
 
+// enemies is the oracle's TeamState.ID() comparison, which dereferences both team states.
+func enemies(a, b *fact.Player) (bool, error) {
+	if a.TeamStateID == nil || b.TeamStateID == nil {
+		return false, fmt.Errorf("no team state for %d or %d", a.Steam64, b.Steam64)
+	}
+	return *a.TeamStateID != *b.TeamStateID, nil
+}
+
 // kill is the oracle's CSC kill handler.
 func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 	if !c.isDuringExpectedRound(f.RoundsPlayed) {
@@ -490,6 +498,7 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 
 	killValue, multiplier := 1.0, 1.0
 	traded, assisted, flashAssisted := false, false, false
+	var err error
 
 	if victimExists {
 		v := pS[victim.Steam64]
@@ -565,13 +574,17 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 		}
 	}
 
-	if assisterExists && victimExists && assister.TeamStateID != victim.TeamStateID {
+	if assisterExists && victimExists {
+		if assisted, err = enemies(assister, victim); err != nil {
+			return err
+		}
+	}
+	if assisted {
 		a := pS[assister.Steam64]
 		a.Assists++
 		a.Eac++
 		a.KastRounds = 1
 		a.SuppRounds = 1
-		assisted = true
 		if f.AssistedFlash {
 			a.FAss++
 			flashAssisted = true
@@ -587,7 +600,13 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 		}
 	}
 
-	if killerExists && victimExists && killer.TeamStateID != victim.TeamStateID {
+	enemy := false
+	if killerExists && victimExists {
+		if enemy, err = enemies(killer, victim); err != nil {
+			return err
+		}
+	}
+	if enemy {
 		k, v := pS[killer.Steam64], pS[victim.Steam64]
 		k.Kills++
 		k.KastRounds = 1

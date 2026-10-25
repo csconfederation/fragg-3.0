@@ -581,7 +581,8 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 			}
 		}
 
-		v.TicksAlive = tick - pr.StartingTick
+		// Summed, like Deaths, so atd stays paired with them if a row dies twice (bots share Steam64 0).
+		v.TicksAlive += tick - pr.StartingTick
 		for dead, deadTick := range v.TradeList {
 			if tick-deadTick < tradeCutoff*tickRate {
 				d := pS[dead]

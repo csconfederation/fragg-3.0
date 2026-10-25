@@ -7,6 +7,7 @@ import (
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
+	shared "github.com/csconfederation/fragg-3.0/engine/round"
 )
 
 // The oracle's constants (csc/parser.go).
@@ -14,7 +15,6 @@ const (
 	mr          = 12
 	tickRate    = 64
 	tradeCutoff = 4 // seconds
-	eqBomb      = 404
 	eqAWP       = 309
 )
 
@@ -45,36 +45,19 @@ var roundEndReasons = map[int]string{
 	20: "CTsReachedHostage",
 }
 
-func isRoundFinalInHalf(round int8) bool {
-	return round%mr == 0 || (round > mr*2 && round%3 == 0)
-}
-
-// roundFlags are the oracle's per-round flags that the stats read (its Game.Flags, minus the
-// lifecycle ones match owns).
-type roundFlags struct {
-	PrePlant, PostPlant, PostWinCon bool
-	TAlive, CtAlive                 int
-	TMoney                          bool
-	TClutchVal, CtClutchVal         int
-	TClutchSteam, CtClutchSteam     uint64
-	OpeningKill                     bool
-	LastTickProcessed               int
-	TicksProcessed                  int
-}
-
 // Collector is the oracle's CSC stat pipeline (csc/parser.go handlers and processRoundFinal) over
-// facts. It implements match.Collector; Game builds the payload once the match finishes.
+// facts, reading the shared round state (engine/round) the caller computes first. Game builds the
+// payload once the match finishes.
 type Collector struct {
-	potential *round
-	flags     roundFlags
-	rounds    map[*match.Round]*round
+	potential         *round
+	rounds            map[*match.Round]*round
+	lastTickProcessed int // the lurk sampler's clock
 }
 
 // New returns a collector before any round. Like the oracle's InitGameObject, the potential round
-// starts empty (lookups miss, so a stat fact before the first open is the oracle's error) and
-// PrePlant starts true.
+// starts empty (lookups miss, so a stat fact before the first open is the oracle's error).
 func New() *Collector {
-	return &Collector{potential: &round{}, flags: roundFlags{PrePlant: true}, rounds: map[*match.Round]*round{}}
+	return &Collector{potential: &round{}, rounds: map[*match.Round]*round{}}
 }
 
 func missing(what string, steam uint64) error {
@@ -97,7 +80,7 @@ func (c *Collector) Open(m *match.Match, r *match.Round, s fact.Snapshot, pistol
 	}
 	c.potential = pr
 	c.rounds[r] = pr
-	c.flags = roundFlags{PrePlant: true, OpeningKill: true, TAlive: r.InitT, CtAlive: r.InitCT}
+	c.lastTickProcessed = 0
 	return nil
 }
 
@@ -114,25 +97,17 @@ func (c *Collector) Join(m *match.Match, r *match.Round, mem match.Member) error
 	return nil
 }
 
-func (c *Collector) RoundEnd(m *match.Match, f fact.RoundEnd) error {
-	if f.Winner == fact.SideT {
-		c.flags.TMoney = true
-	}
-	return nil
-}
-
 // Win is the stats part of the oracle's processRoundOnWinCon.
 func (c *Collector) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
 	pr := c.potential
 	pr.WinnerENUM = int(f.Winner)
 	pr.RoundEndReason = roundEndReasons[f.Reason]
 	pr.WinnerClanName = r.WinnerClan
-	c.flags.PrePlant, c.flags.PostPlant, c.flags.PostWinCon = false, false, true
 	return nil
 }
 
-// Commit is the integrity branch of the oracle's processRoundFinal.
-func (c *Collector) Commit(m *match.Match, r *match.Round, tick int) error {
+// Commit is the integrity branch of the oracle's processRoundFinal; s is the round's final state.
+func (c *Collector) Commit(m *match.Match, r *match.Round, tick int, s shared.State) error {
 	pr := c.rounds[r]
 	if pr == nil {
 		return fmt.Errorf("round %d committed without an open", r.Num)
@@ -161,7 +136,7 @@ func (c *Collector) Commit(m *match.Match, r *match.Round, tick int) error {
 		side  int
 		val   int
 		steam uint64
-	}{{2, c.flags.TClutchVal, c.flags.TClutchSteam}, {3, c.flags.CtClutchVal, c.flags.CtClutchSteam}} {
+	}{{2, s.TClutch.Size, s.TClutch.Steam}, {3, s.CTClutch.Size, s.CTClutch.Steam}} {
 		if pr.WinnerENUM != cl.side || cl.steam == 0 {
 			continue
 		}
@@ -260,40 +235,28 @@ func (c *Collector) Commit(m *match.Match, r *match.Round, tick int) error {
 	return nil
 }
 
-// isDuringExpectedRound is the oracle's check that an event belongs to the open round.
-func (c *Collector) isDuringExpectedRound(roundsPlayed int) bool {
-	num := int(c.potential.RoundNum)
-	return num == roundsPlayed+1 || (num == roundsPlayed && c.flags.PostWinCon)
-}
-
-func (c *Collector) Fact(m *match.Match, f fact.Fact) error {
+// Fact applies f with its shared context x (engine/round rejects a bomb event without a player).
+func (c *Collector) Fact(m *match.Match, f fact.Fact, x shared.Context) error {
 	if !m.Live() {
 		return nil
 	}
+	undecided := x.Before.Phase != shared.Decided
 	switch f := f.(type) {
 	case fact.Frame:
-		return c.lurk(m, f)
+		return c.lurk(m, f, x.After)
 	case fact.Kill:
-		return c.kill(m, f)
+		return c.kill(f, x)
 	case fact.Hurt:
-		return c.hurt(f)
+		return c.hurt(f, x)
 	case fact.Flashed:
 		return c.flashed(f)
 	case fact.BombPlanted:
-		if !c.flags.PostWinCon {
-			if f.Player == nil {
-				return fmt.Errorf("bomb planted by nobody")
-			}
-			c.flags.PrePlant, c.flags.PostPlant, c.flags.TMoney = false, true, true
+		if undecided {
 			c.potential.Planter = f.Player.Steam64
 			c.potential.BombStartTick = f.Tick
 		}
 	case fact.BombDefused:
-		if !c.flags.PostWinCon {
-			if f.Player == nil {
-				return fmt.Errorf("bomb defused by nobody")
-			}
-			c.flags.PrePlant, c.flags.PostPlant, c.flags.PostWinCon = false, false, true
+		if undecided {
 			c.potential.EndDueToBombEvent = true
 			c.potential.Defuser = f.Player.Steam64
 			p := c.potential.PlayerStats[f.Player.Steam64]
@@ -303,8 +266,7 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact) error {
 			p.ImpactPoints += 0.5
 		}
 	case fact.BombExplode:
-		if !c.flags.PostWinCon {
-			c.flags.PrePlant, c.flags.PostPlant, c.flags.PostWinCon = false, false, true
+		if undecided {
 			c.potential.EndDueToBombEvent = true
 			if c.potential.Planter != 0 {
 				p := c.potential.PlayerStats[c.potential.Planter]
@@ -338,31 +300,18 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact) error {
 				p.FiresThrown++
 			}
 		}
-	case fact.Disconnect:
-		c.flags.TAlive, c.flags.CtAlive = 0, 0
-		for _, p := range m.Members(f.Snapshot, fact.SideT) {
-			if alive(c.potential.PlayerStats, p) {
-				c.flags.TAlive++
-			}
-		}
-		for _, p := range m.Members(f.Snapshot, fact.SideCT) {
-			if alive(c.potential.PlayerStats, p) {
-				c.flags.CtAlive++
-			}
-		}
 	}
 	return nil
 }
 
 // lurk is the oracle's FrameDone lurker sampler: every 4 s of a round after the first 18 s, the
 // live T furthest from... nearest-but-not-close to their teammates gets a blip.
-func (c *Collector) lurk(m *match.Match, f fact.Frame) error {
-	if !m.InRound() || c.flags.LastTickProcessed+4*tickRate >= f.Tick {
+func (c *Collector) lurk(m *match.Match, f fact.Frame, s shared.State) error {
+	if !m.InRound() || c.lastTickProcessed+4*tickRate >= f.Tick {
 		return nil
 	}
-	c.flags.LastTickProcessed = f.Tick
-	c.flags.TicksProcessed++
-	if c.flags.TAlive <= 2 || c.flags.PostWinCon || f.Tick <= 18*tickRate+c.potential.StartingTick {
+	c.lastTickProcessed = f.Tick
+	if s.TAlive <= 2 || s.Phase == shared.Decided || f.Tick <= 18*tickRate+c.potential.StartingTick {
 		return nil
 	}
 	pS := c.potential.PlayerStats
@@ -408,22 +357,14 @@ func distance(a, b [3]float64) float64 {
 	return math.Sqrt(x*x + y*y + z*z)
 }
 
-// bombIgnored is the oracle's filter on bomb kills and damage in a half's final round, where a bomb
-// can explode after the round was won by elimination. D10: the bomb still counts when it ends the
-// round, or when the round is undecided (v5 delivered the bomb's kills before the explosion).
-func (c *Collector) bombIgnored(weapon int) bool {
-	return weapon == eqBomb && isRoundFinalInHalf(c.potential.RoundNum) && c.flags.PostWinCon &&
-		!c.potential.EndDueToBombEvent
-}
-
-func (c *Collector) hurt(f fact.Hurt) error {
+func (c *Collector) hurt(f fact.Hurt, x shared.Context) error {
 	pr := c.potential
 	pS := pr.PlayerStats
 	equipment := -999
 	if f.Weapon != nil {
 		equipment = *f.Weapon
 	}
-	bombAtHalf := c.bombIgnored(equipment)
+	bombAtHalf := x.BombIgnored
 	switch {
 	case f.Player != nil && pS[f.Player.Steam64] != nil && !bombAtHalf:
 		pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
@@ -477,50 +418,19 @@ func (c *Collector) flashed(f fact.Flashed) error {
 	return nil
 }
 
-// enemies is the oracle's TeamState.ID() comparison, which dereferences both team states.
-func enemies(a, b *fact.Player) (bool, error) {
-	if a.TeamStateID == nil || b.TeamStateID == nil {
-		return false, fmt.Errorf("no team state for %d or %d", a.Steam64, b.Steam64)
-	}
-	return *a.TeamStateID != *b.TeamStateID, nil
-}
-
-// alive is p alive at the start of the tick with no death this round: entity state is applied
-// after the tick's events, so it still shows earlier victims of the tick alive.
-func alive(pS map[uint64]*playerStats, p fact.Player) bool {
-	ps := pS[p.Steam64]
-	return p.Alive && (ps == nil || ps.Deaths == 0)
-}
-
-// survivor is the last alive member with stats.
-func survivor(pS map[uint64]*playerStats, members []fact.Player) uint64 {
-	var id uint64
-	for _, p := range members {
-		if pS[p.Steam64] != nil && alive(pS, p) {
-			id = p.Steam64
-		}
-	}
-	return id
-}
-
-// kill is the oracle's CSC kill handler.
-func (c *Collector) kill(m *match.Match, f fact.Kill) error {
-	if !c.isDuringExpectedRound(f.RoundsPlayed) {
+// kill is the oracle's CSC kill handler. Alive counts, clutch slots and the opening are the shared
+// state's; x.Before is the state the kill's own arithmetic reads.
+func (c *Collector) kill(f fact.Kill, x shared.Context) error {
+	if !x.Expected {
 		return nil
 	}
 	pr := c.potential
 	pS := pr.PlayerStats
 	tick := f.Tick
-	if f.Weapon == nil {
-		return fmt.Errorf("kill without a weapon at tick %d", tick) // the oracle reads e.Weapon.Type
-	}
+	before := x.Before
 	killer, victim, assister := f.Killer, f.Victim, f.Assister
-	killerExists := killer != nil && pS[killer.Steam64] != nil
-	victimExists := victim != nil && pS[victim.Steam64] != nil
-	assisterExists := assister != nil && pS[assister.Steam64] != nil
-	if c.bombIgnored(*f.Weapon) {
-		killerExists, victimExists, assisterExists = false, false, false
-	}
+	killerExists, victimExists := x.Killer, x.Victim
+	assisterExists := assister != nil && pS[assister.Steam64] != nil && !x.BombIgnored
 
 	killValue, multiplier := 1.0, 1.0
 	traded, assisted, flashAssisted := false, false, false
@@ -532,14 +442,12 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 		v.DeathTick = tick
 		switch victim.Side {
 		case fact.SideT:
-			c.flags.TAlive--
-			v.DeathPlacement = float64(pr.InitTerroristCount - c.flags.TAlive)
+			v.DeathPlacement = float64(pr.InitTerroristCount - x.After.TAlive)
 		case fact.SideCT:
-			c.flags.CtAlive--
-			v.DeathPlacement = float64(pr.InitCTerroristCount - c.flags.CtAlive)
+			v.DeathPlacement = float64(pr.InitCTerroristCount - x.After.CTAlive)
 		}
 
-		if c.flags.OpeningKill && pr.InitCTerroristCount+pr.InitTerroristCount == 10 {
+		if before.Opening && pr.InitCTerroristCount+pr.InitTerroristCount == 10 {
 			team := v.TeamClanName
 			t := pr.TeamStats[team]
 			if t == nil {
@@ -567,20 +475,6 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 			}
 		}
 
-		// Clutches (corpus finding 6): a bomb death at the explosion can't start one, and the
-		// clutcher is the side's member with no death this round, not the entity's IsAlive(),
-		// which lags the kill.
-		if !c.flags.PostWinCon && *f.Weapon != eqBomb {
-			if c.flags.TAlive == 1 && c.flags.TClutchVal == 0 {
-				c.flags.TClutchVal = c.flags.CtAlive
-				c.flags.TClutchSteam = survivor(pS, m.Members(f.Snapshot, fact.SideT))
-			}
-			if c.flags.CtAlive == 1 && c.flags.CtClutchVal == 0 {
-				c.flags.CtClutchVal = c.flags.TAlive
-				c.flags.CtClutchSteam = survivor(pS, m.Members(f.Snapshot, fact.SideCT))
-			}
-		}
-
 		// Summed, like Deaths, so atd stays paired with them if a row dies twice (bots share Steam64 0).
 		v.TicksAlive += tick - pr.StartingTick
 		for dead, deadTick := range v.TradeList {
@@ -597,7 +491,7 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 	}
 
 	if assisterExists && victimExists {
-		if assisted, err = enemies(assister, victim); err != nil {
+		if assisted, err = shared.Enemies(assister, victim); err != nil {
 			return err
 		}
 	}
@@ -622,13 +516,7 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 		}
 	}
 
-	enemy := false
-	if killerExists && victimExists {
-		if enemy, err = enemies(killer, victim); err != nil {
-			return err
-		}
-	}
-	if enemy {
+	if x.Enemy {
 		k, v := pS[killer.Steam64], pS[victim.Steam64]
 		k.Kills++
 		k.KastRounds = 1
@@ -652,19 +540,19 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 		}
 
 		switch {
-		case c.flags.PrePlant:
+		case before.Phase == shared.PrePlant:
 			if killer.Side == fact.SideT {
 				killValue = 1.2
 			} else if killer.Side == fact.SideCT {
 				killValue = 1
 			}
-		case c.flags.PostPlant:
+		case before.Phase == shared.PostPlant:
 			if killer.Side == fact.SideT {
 				killValue = 1
 			} else if killer.Side == fact.SideCT {
 				killValue = 1.2
 			}
-		case c.flags.PostWinCon:
+		case before.Phase == shared.Decided:
 			switch pr.WinnerENUM {
 			case 2:
 				if killer.Side == fact.SideT {
@@ -678,7 +566,7 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 					killValue = 0.5
 				}
 				if killer.Side == fact.SideCT {
-					if c.flags.TMoney {
+					if before.TMoney {
 						killValue = 0.6
 					} else {
 						killValue = 0.8
@@ -687,12 +575,11 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 			}
 		}
 
-		if c.flags.OpeningKill {
-			c.flags.OpeningKill = false
+		if before.Opening {
 			k.Ok = 1
 			v.Ol = 1
 			if killer.Side == fact.SideT {
-				if c.flags.PrePlant {
+				if before.Phase == shared.PrePlant {
 					multiplier += 0.8
 					k.Entries = 1
 				} else {

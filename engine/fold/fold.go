@@ -229,7 +229,13 @@ func lurk(dst, p *cscstats.PlayerStats) {
 func derive(rows map[uint64]*cscstats.PlayerStats, tickRate int) {
 	for _, steam := range slices.Sorted(maps.Keys(rows)) {
 		p := rows[steam]
-		p.Atd = p.TicksAlive / p.Rounds / tickRate
+		// Average time to death (D20): over the rounds the player died in; survivors' rounds have no
+		// time to death (ticksAlive is set at death).
+		if p.Deaths > 0 {
+			p.Atd = p.TicksAlive / int(p.Deaths) / tickRate
+		} else {
+			p.Atd = 0
+		}
 		p.DeathPlacement = p.DeathPlacement / float64(p.Deaths)
 		p.Kast = p.KastRounds / float64(p.Rounds)
 		p.KillPointAvg = p.KillPoints / float64(p.Kills)

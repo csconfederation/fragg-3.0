@@ -125,6 +125,7 @@ type Match struct {
 	reconnectedOracle                               map[uint64]bool // the oracle's ReconnectedPlayers, which drives membership
 	disconnected, reconnected                       map[uint64]bool
 	gameEnded                                       bool
+	pendingFinal                                    *fact.RoundEnd // the deciding round, until it commits (D15)
 	mapName, serverName                             string
 	err                                             *InvariantError
 }
@@ -155,7 +156,7 @@ func (m *Match) InRound() bool { return m.inRound }
 func (m *Match) Members(s fact.Snapshot, side fact.Side) []fact.Player { return m.members(s, side) }
 
 func (m *Match) collect(f fact.Fact) error {
-	if m.stats == nil {
+	if m.stats == nil || m.pendingFinal != nil && !bombFact(f) {
 		return nil
 	}
 	if err := m.stats.Fact(m, f); err != nil {
@@ -227,6 +228,9 @@ func (m *Match) Fact(f fact.Fact) error {
 			return m.setScore(f.Tick, opp, f.Opponent.Score)
 		}
 	case fact.RoundEndOfficial:
+		if m.pendingFinal != nil {
+			return m.flush()
+		}
 		if !m.didRoundEndFire {
 			m.integrityEnd--
 		}
@@ -234,7 +238,7 @@ func (m *Match) Fact(f fact.Fact) error {
 			return m.final(f.Tick, f.RoundsPlayed, false)
 		}
 	case fact.TeamChange:
-		if m.isGameLive && m.inRound && f.NewSide > fact.SideSpectator {
+		if m.isGameLive && m.inRound && m.pendingFinal == nil && f.NewSide > fact.SideSpectator {
 			if _, ok := m.potential.Members[f.Player.Steam64]; !ok && f.Player.Alive {
 				clan, err := m.teamName(f.Tick, f.NewTeam.Clan, f.NewTeam.Side)
 				if err != nil {
@@ -277,6 +281,7 @@ func (m *Match) Fact(f fact.Fact) error {
 		}
 	case fact.WinPanelMatch:
 		m.gameEnded = true
+		return m.flush()
 	}
 	return nil
 }
@@ -284,6 +289,9 @@ func (m *Match) Fact(f fact.Fact) error {
 // open is the oracle's round open: at a frame within the early window, or at freeze end (which
 // also detects knife rounds and always reopens).
 func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
+	if err := m.flush(); err != nil {
+		return err
+	}
 	pistol := false
 	t, ct := m.members(s, fact.SideT), m.members(s, fact.SideCT)
 	if len(t) != 0 && len(ct) != 0 {
@@ -398,6 +406,9 @@ func (m *Match) members(s fact.Snapshot, side fact.Side) []fact.Player {
 }
 
 func (m *Match) roundEnd(f fact.RoundEnd) error {
+	if err := m.flush(); err != nil {
+		return err
+	}
 	if !m.isGameLive {
 		return nil
 	}
@@ -440,7 +451,12 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	}
 	if matchIsDecided(mr+1, w, l) {
 		m.winnerClan = winner
-		return m.final(f.Tick, f.RoundsPlayed, true)
+		if f.Reason != reasonTargetBombed {
+			return m.final(f.Tick, f.RoundsPlayed, true)
+		}
+		// The explosion's damage and kills arrive after RoundEnd: the deciding round commits at the
+		// win panel or the demo's end, and only those facts reach it meanwhile (D15).
+		m.pendingFinal = &f
 	}
 	return nil
 }
@@ -451,6 +467,33 @@ func (m *Match) setScore(tick int, team string, score int) error {
 	}
 	m.teams[team] = score
 	return nil
+}
+
+const (
+	reasonTargetBombed = 1   // RoundEnd.Reason when the bomb exploded
+	eqBomb             = 404 // the bomb's equipment type
+)
+
+// bombFact reports whether f is the bomb's damage or kill.
+func bombFact(f fact.Fact) bool {
+	var w *int
+	switch f := f.(type) {
+	case fact.Hurt:
+		w = f.Weapon
+	case fact.Kill:
+		w = f.Weapon
+	}
+	return w != nil && *w == eqBomb
+}
+
+// flush commits the pending deciding round and ends the match.
+func (m *Match) flush() error {
+	f := m.pendingFinal
+	if f == nil {
+		return nil
+	}
+	m.pendingFinal = nil
+	return m.final(f.Tick, f.RoundsPlayed, true)
 }
 
 // final is the oracle's processRoundFinal: commit the pending round if it ran uninterrupted, and
@@ -549,6 +592,9 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	}
 	if t.Kind == fact.InvalidFileType {
 		return nil, t.Err
+	}
+	if err := m.flush(); err != nil {
+		return nil, err
 	}
 	// The oracle's tie fallback (fragg#23/#25), which now also needs the game's own match end.
 	if m.isGameLive && !m.potential.committed && m.integrityStart == m.integrityEnd &&

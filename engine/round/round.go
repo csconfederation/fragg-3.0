@@ -32,7 +32,7 @@ type Clutch struct {
 
 // State is the shared round state.
 type State struct {
-	Num         int // the open round's number; 0 before the first
+	Num         int // the open round's number (CSC's int8 roundNum); 0 before the first
 	Phase       Phase
 	BombDecided bool // a defuse or explosion decided the round
 	TMoney      bool // the T side earns the bomb or win money this round
@@ -70,7 +70,8 @@ func New() *Tracker {
 func (t *Tracker) State() State { return t.s }
 
 func (t *Tracker) Open(r *match.Round) {
-	t.s = State{Num: r.Num, Phase: PrePlant, Opening: true, TAlive: r.InitT, CTAlive: r.InitCT}
+	// Num wraps like CSC's int8 roundNum past round 127, as the gates always read it.
+	t.s = State{Num: int(int8(r.Num)), Phase: PrePlant, Opening: true, TAlive: r.InitT, CTAlive: r.InitCT}
 	t.cur = r
 	t.members = map[uint64]bool{}
 	for id := range r.Members {

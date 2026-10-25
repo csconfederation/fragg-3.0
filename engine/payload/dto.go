@@ -3,6 +3,7 @@ package payload
 import (
 	"maps"
 	"slices"
+	"strconv"
 
 	"github.com/csconfederation/fragg-3.0/engine/cscstats"
 	"github.com/csconfederation/fragg-3.0/engine/match"
@@ -17,7 +18,10 @@ type Payload struct {
 	MapName       string `json:"mapName"`
 	TickRate      int    `json:"tickRate"`
 	TotalRounds   int    `json:"totalRounds"`
-	Teams         []Team `json:"teams"`
+	// HeaderMatchID is the match ID in the demo's server name, or null (S11-S14 demos, scrim and
+	// preseason servers). Stats logs it when it disagrees with the request's ID, which wins (D11, D19).
+	HeaderMatchID *string `json:"headerMatchID"`
+	Teams         []Team  `json:"teams"`
 	// Players holds each player's whole-match row (side 4) and side rows (2 T, 3 CT).
 	Players []*cscstats.PlayerStats `json:"players,omitempty"`
 	Rounds  []Round                 `json:"rounds,omitempty"`
@@ -41,6 +45,10 @@ const schemaVersion = 2
 func build(g *cscstats.Game, res *match.Result) *Payload {
 	p := &Payload{SchemaVersion: schemaVersion, FullStatsOK: res.Outcome == match.Ended,
 		MapName: res.Map, TickRate: g.TickRate, TotalRounds: res.TotalRounds}
+	if res.HeaderMatchID != 0 {
+		id := strconv.Itoa(res.HeaderMatchID)
+		p.HeaderMatchID = &id
+	}
 	for _, name := range slices.Sorted(maps.Keys(res.Scores)) {
 		t := Team{Name: name, Score: res.Scores[name]}
 		if p.FullStatsOK {

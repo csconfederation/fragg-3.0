@@ -17,9 +17,6 @@ func (c *Collector) Game(res *match.Result) *Game {
 		ReconnectedPlayers:       res.Reconnected,
 		ConnectedAfterRoundStart: map[uint64]bool{},
 	}
-	if g.PotentialRound == nil {
-		g.PotentialRound = &round{}
-	}
 	if res.Outcome == match.Ended || res.Outcome == match.Partial {
 		g.Result = "Ended"
 	}

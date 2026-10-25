@@ -70,8 +70,12 @@ type Collector struct {
 	rounds    map[*match.Round]*round
 }
 
-// New returns a collector before any round.
-func New() *Collector { return &Collector{rounds: map[*match.Round]*round{}} }
+// New returns a collector before any round. Like the oracle's InitGameObject, the potential round
+// starts empty (lookups miss, so a stat fact before the first open is the oracle's error) and
+// PrePlant starts true.
+func New() *Collector {
+	return &Collector{potential: &round{}, flags: roundFlags{PrePlant: true}, rounds: map[*match.Round]*round{}}
+}
 
 func missing(what string, steam uint64) error {
 	return fmt.Errorf("no player stats for %s %d", what, steam) // the oracle dereferences nil here

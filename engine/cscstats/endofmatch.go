@@ -1,7 +1,9 @@
 package cscstats
 
 import (
+	"maps"
 	"math"
+	"slices"
 	"strconv"
 )
 
@@ -22,7 +24,8 @@ func endOfMatchProcessing(game *Game) {
 	for i := len(game.Rounds) - 1; i >= 0; i-- {
 		game.TotalWPAlog = append(game.TotalWPAlog, game.Rounds[i].WPAlog...)
 
-		for teamName, team := range game.Rounds[i].TeamStats {
+		for _, teamName := range slices.Sorted(maps.Keys(game.Rounds[i].TeamStats)) {
+			team := game.Rounds[i].TeamStats[teamName]
 			if game.TotalTeamStats[teamName] == nil && teamName != "" {
 				game.TotalTeamStats[teamName] = &teamStats{}
 			}
@@ -41,7 +44,8 @@ func endOfMatchProcessing(game *Game) {
 		}
 
 		//add to round master stats
-		for steam, player := range (*game.Rounds[i]).PlayerStats {
+		for _, steam := range slices.Sorted(maps.Keys((*game.Rounds[i]).PlayerStats)) {
+			player := (*game.Rounds[i]).PlayerStats[steam]
 			if game.TotalPlayerStats[steam] == nil {
 				game.TotalPlayerStats[steam] = &playerStats{Name: player.Name, SteamID: player.SteamID, TeamClanName: player.TeamClanName}
 			}
@@ -147,7 +151,8 @@ func endOfMatchProcessing(game *Game) {
 			game.Rounds[i].TeamStats[player.TeamClanName].ImpactPoints += player.ImpactPoints
 
 		}
-		for steam, player := range (*game.Rounds[i]).PlayerStats {
+		for _, steam := range slices.Sorted(maps.Keys((*game.Rounds[i]).PlayerStats)) {
+			player := (*game.Rounds[i]).PlayerStats[steam]
 			game.TotalPlayerStats[steam].TeamsWinPoints += game.Rounds[i].TeamStats[player.TeamClanName].WinPoints
 			game.TotalPlayerStats[steam].TTeamsWinPoints += game.Rounds[i].TeamStats[player.TeamClanName].TWinPoints
 			game.TotalPlayerStats[steam].CtTeamsWinPoints += game.Rounds[i].TeamStats[player.TeamClanName].CtWinPoints
@@ -173,7 +178,8 @@ func endOfMatchProcessing(game *Game) {
 		}
 	}
 
-	for _, player := range game.TotalPlayerStats {
+	for _, key := range slices.Sorted(maps.Keys(game.TotalPlayerStats)) {
+		player := game.TotalPlayerStats[key]
 		game.TotalTeamStats[player.TeamClanName].Util += player.SmokeThrown + player.FlashThrown + player.NadesThrown + player.FiresThrown
 		game.TotalTeamStats[player.TeamClanName].Ud += player.UtilDmg
 		game.TotalTeamStats[player.TeamClanName].Ef += player.Ef
@@ -210,7 +216,8 @@ func calculateDerivedFields(game *Game) {
 	ctRoundNormalizer := 0
 
 	//check our shit
-	for _, player := range game.TotalPlayerStats {
+	for _, key := range slices.Sorted(maps.Keys(game.TotalPlayerStats)) {
+		player := game.TotalPlayerStats[key]
 
 		player.Atd = player.TicksAlive / player.Rounds / game.TickRate
 		player.DeathPlacement = player.DeathPlacement / float64(player.Deaths)
@@ -294,7 +301,8 @@ func calculateDerivedFields(game *Game) {
 	ctKastRoundAvg /= float64(ctRoundNormalizer)
 	ctAdrAvg /= float64(ctRoundNormalizer)
 
-	for _, player := range game.TotalPlayerStats {
+	for _, key := range slices.Sorted(maps.Keys(game.TotalPlayerStats)) {
+		player := game.TotalPlayerStats[key]
 		openingFactor := (float64(player.Ok-player.Ol) / 13.0) + 1 //move from 13 to (rounds / 5)
 		playerIPR := player.ImpactPoints / float64(player.Rounds)
 		playerWPR := player.WinPoints / float64(player.Rounds)
@@ -370,7 +378,8 @@ func calculateSidedStats(game *Game) {
 
 	for i := len(game.Rounds) - 1; i >= 0; i-- {
 		//add to round master stats
-		for steam, player := range (*game.Rounds[i]).PlayerStats {
+		for _, steam := range slices.Sorted(maps.Keys((*game.Rounds[i]).PlayerStats)) {
+			player := (*game.Rounds[i]).PlayerStats[steam]
 			//sidedStats := make(map[uint64]*playerStats)
 			sidedStats := game.CtPlayerStats
 			if player.Side == 2 {
@@ -452,7 +461,8 @@ func calculateSidedStats(game *Game) {
 		}
 	}
 
-	for _, player := range game.CtPlayerStats {
+	for _, key := range slices.Sorted(maps.Keys(game.CtPlayerStats)) {
+		player := game.CtPlayerStats[key]
 		player.Atd = player.TicksAlive / player.Rounds / game.TickRate
 		player.DeathPlacement = player.DeathPlacement / float64(player.Deaths)
 		player.Kast = player.KastRounds / float64(player.Rounds)
@@ -484,7 +494,8 @@ func calculateSidedStats(game *Game) {
 			player.CtADP = 0
 		}
 	}
-	for _, player := range game.TPlayerStats {
+	for _, key := range slices.Sorted(maps.Keys(game.TPlayerStats)) {
+		player := game.TPlayerStats[key]
 		player.Atd = player.TicksAlive / player.Rounds / game.TickRate
 		player.DeathPlacement = player.DeathPlacement / float64(player.Deaths)
 		player.Kast = player.KastRounds / float64(player.Rounds)

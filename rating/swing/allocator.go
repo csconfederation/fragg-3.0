@@ -2,7 +2,9 @@ package swing
 
 import (
 	"log"
+	"maps"
 	"math"
+	"slices"
 
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 
@@ -165,7 +167,8 @@ func (a *PoolAllocator) allocateKillPositivePool(
 	}
 
 	totalWeight := 0.0
-	for _, w := range weights {
+	for _, id := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[id]
 		totalWeight += w
 	}
 	if totalWeight <= 0 {
@@ -173,7 +176,8 @@ func (a *PoolAllocator) allocateKillPositivePool(
 	}
 
 	allocs := make([]PlayerSwingAllocation, 0, len(weights))
-	for steamID, w := range weights {
+	for _, steamID := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[steamID]
 		amount := pool * (w / totalWeight)
 		if amount <= 0 {
 			continue
@@ -218,7 +222,8 @@ func (a *PoolAllocator) allocateKillNegativePool(
 	}
 
 	totalWeight := 0.0
-	for _, w := range weights {
+	for _, id := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[id]
 		totalWeight += w
 	}
 	if totalWeight <= 0 {
@@ -227,7 +232,8 @@ func (a *PoolAllocator) allocateKillNegativePool(
 	}
 
 	allocs := make([]PlayerSwingAllocation, 0, len(weights))
-	for steamID, w := range weights {
+	for _, steamID := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[steamID]
 		amount := -pool * (w / totalWeight)
 		if amount == 0 {
 			continue
@@ -398,7 +404,8 @@ func (a *PoolAllocator) allocateObjectivePositive(input ObjectiveAllocationInput
 	}}
 
 	supportWeights := make(map[uint64]float64)
-	for steamID, ctx := range input.Players {
+	for _, steamID := range slices.Sorted(maps.Keys(input.Players)) {
+		ctx := input.Players[steamID]
 		if ctx.Side != input.PrimarySide || steamID == input.PrimaryID {
 			continue
 		}
@@ -412,7 +419,8 @@ func (a *PoolAllocator) allocateObjectivePositive(input ObjectiveAllocationInput
 	}
 
 	totalSupport := 0.0
-	for _, w := range supportWeights {
+	for _, id := range slices.Sorted(maps.Keys(supportWeights)) {
+		w := supportWeights[id]
 		totalSupport += w
 	}
 
@@ -421,7 +429,8 @@ func (a *PoolAllocator) allocateObjectivePositive(input ObjectiveAllocationInput
 		return allocs
 	}
 
-	for steamID, w := range supportWeights {
+	for _, steamID := range slices.Sorted(maps.Keys(supportWeights)) {
+		w := supportWeights[steamID]
 		allocs = append(allocs, PlayerSwingAllocation{
 			SteamID: steamID,
 			Side:    input.PrimarySide,
@@ -434,7 +443,8 @@ func (a *PoolAllocator) allocateObjectivePositive(input ObjectiveAllocationInput
 
 func (a *PoolAllocator) allocateObjectiveNegative(input ObjectiveAllocationInput, pool float64) []PlayerSwingAllocation {
 	weights := make(map[uint64]float64)
-	for steamID, ctx := range input.Players {
+	for _, steamID := range slices.Sorted(maps.Keys(input.Players)) {
+		ctx := input.Players[steamID]
 		if ctx.Side != input.OpposingSide {
 			continue
 		}
@@ -449,7 +459,8 @@ func (a *PoolAllocator) allocateObjectiveNegative(input ObjectiveAllocationInput
 	}
 
 	total := 0.0
-	for _, w := range weights {
+	for _, id := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[id]
 		total += w
 	}
 	if total <= 0 {
@@ -457,7 +468,8 @@ func (a *PoolAllocator) allocateObjectiveNegative(input ObjectiveAllocationInput
 	}
 
 	allocs := make([]PlayerSwingAllocation, 0, len(weights))
-	for steamID, w := range weights {
+	for _, steamID := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[steamID]
 		allocs = append(allocs, PlayerSwingAllocation{
 			SteamID: steamID,
 			Side:    input.OpposingSide,

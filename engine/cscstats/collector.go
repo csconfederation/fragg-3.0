@@ -341,12 +341,12 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact) error {
 	case fact.Disconnect:
 		c.flags.TAlive, c.flags.CtAlive = 0, 0
 		for _, p := range m.Members(f.Snapshot, fact.SideT) {
-			if p.Alive {
+			if alive(c.potential.PlayerStats, p) {
 				c.flags.TAlive++
 			}
 		}
 		for _, p := range m.Members(f.Snapshot, fact.SideCT) {
-			if p.Alive {
+			if alive(c.potential.PlayerStats, p) {
 				c.flags.CtAlive++
 			}
 		}
@@ -485,6 +485,24 @@ func enemies(a, b *fact.Player) (bool, error) {
 	return *a.TeamStateID != *b.TeamStateID, nil
 }
 
+// alive is p alive at the start of the tick with no death this round: entity state is applied
+// after the tick's events, so it still shows earlier victims of the tick alive.
+func alive(pS map[uint64]*playerStats, p fact.Player) bool {
+	ps := pS[p.Steam64]
+	return p.Alive && (ps == nil || ps.Deaths == 0)
+}
+
+// survivor is the last alive member with stats.
+func survivor(pS map[uint64]*playerStats, members []fact.Player) uint64 {
+	var id uint64
+	for _, p := range members {
+		if pS[p.Steam64] != nil && alive(pS, p) {
+			id = p.Steam64
+		}
+	}
+	return id
+}
+
 // kill is the oracle's CSC kill handler.
 func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 	if !c.isDuringExpectedRound(f.RoundsPlayed) {
@@ -549,22 +567,17 @@ func (c *Collector) kill(m *match.Match, f fact.Kill) error {
 			}
 		}
 
-		if !c.flags.PostWinCon {
+		// Clutches (corpus finding 6): a bomb death at the explosion can't start one, and the
+		// clutcher is the side's member with no death this round, not the entity's IsAlive(),
+		// which lags the kill.
+		if !c.flags.PostWinCon && *f.Weapon != eqBomb {
 			if c.flags.TAlive == 1 && c.flags.TClutchVal == 0 {
 				c.flags.TClutchVal = c.flags.CtAlive
-				for _, t := range m.Members(f.Snapshot, fact.SideT) {
-					if t.Alive && victim.Steam64 != t.Steam64 {
-						c.flags.TClutchSteam = t.Steam64
-					}
-				}
+				c.flags.TClutchSteam = survivor(pS, m.Members(f.Snapshot, fact.SideT))
 			}
 			if c.flags.CtAlive == 1 && c.flags.CtClutchVal == 0 {
 				c.flags.CtClutchVal = c.flags.TAlive
-				for _, ct := range m.Members(f.Snapshot, fact.SideCT) {
-					if ct.Alive && victim.Steam64 != ct.Steam64 {
-						c.flags.CtClutchSteam = ct.Steam64
-					}
-				}
+				c.flags.CtClutchSteam = survivor(pS, m.Members(f.Snapshot, fact.SideCT))
 			}
 		}
 

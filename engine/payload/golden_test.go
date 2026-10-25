@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -15,12 +16,15 @@ import (
 	"testing"
 )
 
-// The CI goldens are the oracle's payloads (export/testdata/ci). The engine must match every
-// field except:
+// testdata/golden holds the engine's payloads for the CI demos (export/testdata/ci): the oracle's,
+// plus the approved changes (Core-planning#302), each recorded in its PR. -update rewrites them.
+// The comparison skips:
 //   - WPAlog, totalWPAlog: Stats discards them (D7)
 //   - flags, potentialRound: parser state, not stats
 //   - reconnectedPlayers, ConnectedAfterRoundStart: the oracle loses reconnects (#300 delta report)
 var skipped = regexp.MustCompile(`^(WPAlog|totalWPAlog|reconnectedPlayers|ConnectedAfterRoundStart)$`)
+
+var update = flag.Bool("update", false, "rewrite testdata/golden from the current output")
 
 const (
 	ciDir          = "../../export/testdata/ci"
@@ -74,7 +78,12 @@ func TestCIGoldens(t *testing.T) {
 			if err := json.Unmarshal(payload, &got); err != nil {
 				t.Fatal(err)
 			}
-			want = readGolden(t, filepath.Join(ciDir, "golden", d.Name+".json.gz"))
+			path := filepath.Join("testdata", "golden", d.Name+".json.gz")
+			if *update {
+				writeGolden(t, path, got)
+				return
+			}
+			want = readGolden(t, path)
 			var diffs []string
 			diff("$", want, got, &diffs)
 			if len(diffs) > 0 {
@@ -118,6 +127,25 @@ func load(t *testing.T, dir string, d ciDemo, byName map[string]ciDemo) []byte {
 		t.Fatalf("%v (run scripts/fetch-ci-demos.sh)", err)
 	}
 	return data
+}
+
+func writeGolden(t *testing.T, path string, v any) {
+	t.Helper()
+	b, err := json.MarshalIndent(v, "", " ") // map keys come out sorted
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(append(b, '\n')); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func readGolden(t *testing.T, path string) any {

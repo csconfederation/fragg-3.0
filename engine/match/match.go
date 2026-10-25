@@ -238,7 +238,7 @@ func (m *Match) Fact(f fact.Fact) error {
 			return m.final(f.Tick, f.RoundsPlayed, false)
 		}
 	case fact.TeamChange:
-		if m.isGameLive && m.inRound && f.NewSide > fact.SideSpectator {
+		if m.isGameLive && m.inRound && m.pendingFinal == nil && f.NewSide > fact.SideSpectator {
 			if _, ok := m.potential.Members[f.Player.Steam64]; !ok && f.Player.Alive {
 				clan, err := m.teamName(f.Tick, f.NewTeam.Clan, f.NewTeam.Side)
 				if err != nil {

@@ -616,21 +616,27 @@ type recorder struct{ log []string }
 func (c *recorder) Open(*Match, *Round, fact.Snapshot, bool) error { return nil }
 func (c *recorder) RoundEnd(*Match, fact.RoundEnd) error           { return nil }
 func (c *recorder) Win(*Match, *Round, fact.RoundEnd) error        { return nil }
-func (c *recorder) Join(*Match, *Round, Member) error              { return nil }
-func (c *recorder) Commit(_ *Match, r *Round, tick int) error {
+func (c *recorder) Join(_ *Match, _ *Round, mem Member) error {
+	c.log = append(c.log, fmt.Sprintf("join %d", mem.Steam64))
+	return nil
+}
+func (c *recorder) Commit(*Match, *Round, int) error {
 	c.log = append(c.log, "commit")
 	return nil
 }
 func (c *recorder) Fact(_ *Match, f fact.Fact) error {
-	if h, ok := f.(fact.Hurt); ok {
-		c.log = append(c.log, fmt.Sprintf("hurt %d", *h.Weapon))
+	switch f := f.(type) {
+	case fact.Hurt:
+		c.log = append(c.log, fmt.Sprintf("hurt %d", *f.Weapon))
+	case fact.Kill:
+		c.log = append(c.log, fmt.Sprintf("kill %d", *f.Weapon))
 	}
 	return nil
 }
 
-// The bomb's damage arrives after the deciding round's RoundEnd; the round commits after it, at the
-// win panel or, without one, at the demo's end. Other late facts, such as world kills on the win
-// panel, stay out (D15).
+// The bomb's damage and kill arrive after the deciding round's RoundEnd; the round commits after
+// them, at the win panel or, without one, at the demo's end. Other late facts, such as world kills
+// on the win panel or a late joiner, stay out (D15).
 func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -648,8 +654,11 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 			end.Reason = reasonTargetBombed
 			s.facts[len(s.facts)-1] = end
 			bomb, world := eqBomb, 407
-			s.add(fact.Hurt{Snapshot: fact.Snapshot{Tick: s.tick + 18}, Weapon: &bomb},
-				fact.Hurt{Snapshot: fact.Snapshot{Tick: s.tick + 100}, Weapon: &world})
+			late := fact.Snapshot{Tick: s.tick + 18}
+			joiner := fact.Player{Steam64: 99, Alive: true, Connected: true, Listed: true}
+			s.add(fact.Hurt{Snapshot: late, Weapon: &bomb}, fact.Kill{Snapshot: late, Weapon: &bomb},
+				fact.Hurt{Snapshot: fact.Snapshot{Tick: s.tick + 100}, Weapon: &world},
+				fact.TeamChange{Tick: s.tick + 100, Player: joiner, NewSide: fact.SideT, NewTeam: end.WinnerTeam})
 			if tc.winPanel {
 				s.tick += 200
 				s.gameEnded()
@@ -661,11 +670,18 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			wantTail := "hurt 404,kill 404"
+			if tc.winPanel {
+				wantTail += ",commit"
+			}
+			if got := strings.Join(rec.log[len(rec.log)-strings.Count(wantTail, ",")-1:], ","); got != wantTail {
+				t.Errorf("calls before Finish end %q; want %q (log %v)", got, wantTail, rec.log)
+			}
 			res, err := m.Finish(fact.Terminal{Kind: tc.term, Err: errors.New("stream"),
 				End: fact.Snapshot{Tick: s.tick + 500, RoundsPlayed: 13}})
 			want(t, res, err, Ended, 13)
-			if got := strings.Join(rec.log[len(rec.log)-2:], ","); got != "hurt 404,commit" {
-				t.Errorf("last calls %v; want the hurt before the commit", rec.log[len(rec.log)-2:])
+			if got := strings.Join(rec.log[len(rec.log)-3:], ","); got != "hurt 404,kill 404,commit" {
+				t.Errorf("last calls %v; want the bomb's facts, then the commit", rec.log[len(rec.log)-3:])
 			}
 			if r := res.Rounds[12]; r.EndTick != end.Tick {
 				t.Errorf("end tick %d; want the RoundEnd's %d", r.EndTick, end.Tick)

@@ -1,4 +1,4 @@
-package cscstats
+package payload
 
 import (
 	"bytes"
@@ -13,18 +13,14 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/csconfederation/fragg-3.0/engine/ingest"
-	"github.com/csconfederation/fragg-3.0/engine/match"
 )
 
-// The CI goldens are the oracle's payloads (export/testdata/ci). The engine must match every CSC
-// field; the rest isn't produced yet or isn't stored:
-//   - eco*, swing_rating, ecoStatsOK: slice 3 (Core-planning#302)
+// The CI goldens are the oracle's payloads (export/testdata/ci). The engine must match every
+// field except:
 //   - WPAlog, totalWPAlog: Stats discards them (D7)
 //   - flags, potentialRound: parser state, not stats
 //   - reconnectedPlayers, ConnectedAfterRoundStart: the oracle loses reconnects (#300 delta report)
-var skipped = regexp.MustCompile(`^(eco.*|swing_rating|WPAlog|totalWPAlog|reconnectedPlayers|ConnectedAfterRoundStart)$`)
+var skipped = regexp.MustCompile(`^(WPAlog|totalWPAlog|reconnectedPlayers|ConnectedAfterRoundStart)$`)
 
 const (
 	ciDir          = "../../export/testdata/ci"
@@ -66,7 +62,7 @@ func TestCIGoldens(t *testing.T) {
 			continue
 		}
 		t.Run(d.Name, func(t *testing.T) {
-			game, err := run(load(t, dir, d, byName))
+			game, _, err := Run(context.Background(), bytes.NewReader(load(t, dir, d, byName)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -98,24 +94,13 @@ func TestNaNStillFailsToEncode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	game, err := run(data)
+	game, _, err := Run(context.Background(), bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := json.Marshal(game); err == nil || !strings.Contains(err.Error(), "NaN") {
 		t.Fatalf("encode error = %v, want NaN", err)
 	}
-}
-
-func run(data []byte) (*Game, error) {
-	stats := New()
-	m := match.New(stats)
-	term, _ := ingest.Run(context.Background(), bytes.NewReader(data), m)
-	res, err := m.Finish(term)
-	if err != nil {
-		return nil, err
-	}
-	return stats.Game(res), nil
 }
 
 func load(t *testing.T, dir string, d ciDemo, byName map[string]ciDemo) []byte {

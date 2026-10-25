@@ -1,7 +1,9 @@
 package swing
 
 import (
+	"maps"
 	"math"
+	"slices"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
@@ -68,7 +70,8 @@ func allocatePositiveResidual(input ResidualInput, winner fact.Side, residual fl
 		maxDamage = 1
 	}
 
-	for steamID, ctx := range input.Players {
+	for _, steamID := range slices.Sorted(maps.Keys(input.Players)) {
+		ctx := input.Players[steamID]
 		if ctx.Side != winner {
 			continue
 		}
@@ -91,7 +94,8 @@ func allocatePositiveResidual(input ResidualInput, winner fact.Side, residual fl
 	}
 
 	total := 0.0
-	for _, w := range weights {
+	for _, id := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[id]
 		total += w
 	}
 
@@ -113,7 +117,8 @@ func allocatePositiveResidual(input ResidualInput, winner fact.Side, residual fl
 	}
 
 	allocs := make([]PlayerSwingAllocation, 0, len(weights))
-	for steamID, w := range weights {
+	for _, steamID := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[steamID]
 		allocs = append(allocs, PlayerSwingAllocation{
 			SteamID: steamID,
 			Side:    winner,
@@ -127,7 +132,8 @@ func allocatePositiveResidual(input ResidualInput, winner fact.Side, residual fl
 func allocateNegativeResidual(input ResidualInput, losingSide fact.Side, residual float64, cfg Config) []PlayerSwingAllocation {
 	weights := make(map[uint64]float64)
 
-	for steamID, ctx := range input.Players {
+	for _, steamID := range slices.Sorted(maps.Keys(input.Players)) {
+		ctx := input.Players[steamID]
 		if ctx.Side != losingSide {
 			continue
 		}
@@ -143,7 +149,8 @@ func allocateNegativeResidual(input ResidualInput, losingSide fact.Side, residua
 	}
 
 	total := 0.0
-	for _, w := range weights {
+	for _, id := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[id]
 		total += w
 	}
 	if total <= 0 {
@@ -151,7 +158,8 @@ func allocateNegativeResidual(input ResidualInput, losingSide fact.Side, residua
 	}
 
 	allocs := make([]PlayerSwingAllocation, 0, len(weights))
-	for steamID, w := range weights {
+	for _, steamID := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[steamID]
 		allocs = append(allocs, PlayerSwingAllocation{
 			SteamID: steamID,
 			Side:    losingSide,

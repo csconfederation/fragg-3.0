@@ -5,6 +5,7 @@
 package match
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
@@ -54,20 +55,22 @@ type Member struct {
 
 // Round is one round the lifecycle opened.
 type Round struct {
-	Num          int
-	StartTick    int
-	EndTick      int
-	Winner       fact.Side
-	WinnerClan   string
-	Reason       int
-	Knife        bool
-	Pistol       bool
-	InitT        int
-	InitCT       int
-	Members      map[uint64]Member
-	committed    bool
-	sideClans    map[fact.Side]string
-	integrityEnd bool
+	Num        int
+	StartTick  int
+	EndTick    int
+	Winner     fact.Side
+	WinnerClan string
+	Reason     int
+	Knife      bool
+	Pistol     bool
+	InitT      int
+	InitCT     int
+	// TClan and CTClan are the round's team names by side, as the oracle names them at the open.
+	TClan, CTClan string
+	Members       map[uint64]Member
+	committed     bool
+	sideClans     map[fact.Side]string
+	integrityEnd  bool
 }
 
 // Result is the lifecycle's output.
@@ -90,9 +93,25 @@ type Result struct {
 	GameEnded   bool
 }
 
+// Collector computes stats over the lifecycle. Match calls each phase after updating its own
+// state, at the point the oracle's CSC pipeline does, and passes each stat fact (kill, hurt,
+// flash, bomb, grenade, frame, disconnect) after it has seen the fact itself.
+type Collector interface {
+	Open(m *Match, r *Round, s fact.Snapshot, pistol bool) error
+	// RoundEnd is every round end while the match is live, before the win is processed.
+	RoundEnd(m *Match, f fact.RoundEnd) error
+	Win(m *Match, r *Round, f fact.RoundEnd) error
+	// Commit computes the round's final stats, before it's added to the committed rounds.
+	Commit(m *Match, r *Round, tick int) error
+	// Join is a player added to the open round mid-round.
+	Join(m *Match, r *Round, member Member) error
+	Fact(m *Match, f fact.Fact) error
+}
+
 // Match is a fact.Sink. Feed it every fact, then call Finish once.
 type Match struct {
-	hasGameStarted, isGameLive, inRound, postWinCon bool
+	stats                                           Collector
+	hasGameStarted, isGameLive, inRound             bool
 	didRoundEndFire, didScoreUpdateFire, haveInit   bool
 	integrityStart, integrityEnd, integrityOfficial int
 	roundStartedAt                                  int
@@ -110,9 +129,9 @@ type Match struct {
 	err                                             *InvariantError
 }
 
-// New returns a lifecycle before any fact.
-func New() *Match {
-	return &Match{
+// New returns a lifecycle before any fact, with an optional stats collector.
+func New(stats ...Collector) *Match {
+	m := &Match{
 		integrityStart: -1, integrityEnd: -1, integrityOfficial: -1,
 		potential:           &Round{Members: map[uint64]Member{}},
 		connectedAfterStart: map[uint64]bool{},
@@ -120,6 +139,41 @@ func New() *Match {
 		disconnected:        map[uint64]bool{},
 		reconnected:         map[uint64]bool{},
 	}
+	if len(stats) > 0 {
+		m.stats = stats[0]
+	}
+	return m
+}
+
+// Live reports whether the match is live (the oracle's IsGameLive).
+func (m *Match) Live() bool { return m.isGameLive }
+
+// InRound reports whether a round is in play (the oracle's InRound).
+func (m *Match) InRound() bool { return m.inRound }
+
+// Members is the oracle's getTeamMembers over s for side.
+func (m *Match) Members(s fact.Snapshot, side fact.Side) []fact.Player { return m.members(s, side) }
+
+func (m *Match) collect(f fact.Fact) error {
+	if m.stats == nil {
+		return nil
+	}
+	if err := m.stats.Fact(m, f); err != nil {
+		return m.keep(err)
+	}
+	return nil
+}
+
+// keep records a collector's error as the match's first error.
+func (m *Match) keep(err error) error {
+	if m.err == nil {
+		var inv *InvariantError
+		if !errors.As(err, &inv) {
+			inv = &InvariantError{Reason: err.Error()}
+		}
+		m.err = inv
+	}
+	return m.err
 }
 
 func (m *Match) fail(tick int, format string, a ...any) error {
@@ -144,8 +198,13 @@ func (m *Match) Fact(f fact.Fact) error {
 		m.roundStartedAt = f.Tick
 	case fact.Frame:
 		if m.roundStartedAt > 0 && m.roundStartedAt+fact.RoundStartWindow > f.Tick && !m.haveInit {
-			return m.open(f.Sample(), false)
+			if err := m.open(f.Sample(), false); err != nil {
+				return err
+			}
 		}
+		return m.collect(f)
+	case fact.Kill, fact.Hurt, fact.Flashed, fact.BombPlanted, fact.BombDefused, fact.BombExplode, fact.GrenadeThrow:
+		return m.collect(f)
 	case fact.FreezeEnd:
 		return m.open(f.Snapshot, true)
 	case fact.RoundEnd:
@@ -180,8 +239,14 @@ func (m *Match) Fact(f fact.Fact) error {
 				if err != nil {
 					return err
 				}
-				m.potential.Members[f.Player.Steam64] = Member{Steam64: f.Player.Steam64, Name: f.Player.Name,
+				mem := Member{Steam64: f.Player.Steam64, Name: f.Player.Name,
 					IsBot: f.Player.IsBot, Side: f.NewTeam.Side, TeamID: f.NewTeam.ID, Clan: clan}
+				m.potential.Members[f.Player.Steam64] = mem
+				if m.stats != nil {
+					if err := m.stats.Join(m, m.potential, mem); err != nil {
+						return m.keep(err)
+					}
+				}
 			}
 		}
 	case fact.PlayerInfo:
@@ -200,6 +265,7 @@ func (m *Match) Fact(f fact.Fact) error {
 			m.reconnectedOracle[f.Steam64] = false
 		}
 		m.disconnected[f.Steam64] = true
+		return m.collect(f)
 	case fact.Footstep:
 		if m.isGameLive {
 			m.inRound = true
@@ -247,6 +313,11 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 		m.haveInit = true
 	}
 	m.potential.Pistol = pistol
+	if m.stats != nil {
+		if err := m.stats.Open(m, m.potential, s, pistol); err != nil {
+			return m.keep(err)
+		}
+	}
 	return nil
 }
 
@@ -282,13 +353,18 @@ func (m *Match) initRound(s fact.Snapshot) error {
 			return err
 		}
 		r.sideClans[team.state.Side] = clan
+		if team.state.Side == fact.SideT {
+			r.TClan = clan
+		} else {
+			r.CTClan = clan
+		}
 		for _, p := range team.players {
 			r.Members[p.Steam64] = Member{Steam64: p.Steam64, Name: p.Name, IsBot: p.IsBot, Side: team.state.Side,
 				TeamID: team.state.ID, Clan: clan}
 		}
 	}
 	m.potential = r
-	m.postWinCon, m.didRoundEndFire, m.didScoreUpdateFire, m.haveInit = false, false, false, false
+	m.didRoundEndFire, m.didScoreUpdateFire, m.haveInit = false, false, false
 	m.roundStartedAt = 0
 	return nil
 }
@@ -325,6 +401,11 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 		return nil
 	}
 	m.didRoundEndFire = true
+	if m.stats != nil {
+		if err := m.stats.RoundEnd(m, f); err != nil {
+			return m.keep(err)
+		}
+	}
 	if f.Winner < fact.SideT || m.integrityStart != f.RoundsPlayed {
 		return nil
 	}
@@ -340,11 +421,15 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	}
 	m.integrityEnd = f.RoundsPlayed
 	m.totalRounds = f.RoundsPlayed
-	m.postWinCon = true
 	m.potential.WinnerClan = winner
 	if !m.potential.Knife && !m.didScoreUpdateFire {
 		if err := m.setScore(f.Tick, winner, m.teams[winner]+1); err != nil {
 			return err
+		}
+	}
+	if m.stats != nil {
+		if err := m.stats.Win(m, m.potential, f); err != nil {
+			return m.keep(err)
 		}
 	}
 	w, okW := m.teams[winner]
@@ -381,6 +466,11 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 		}
 		if n := len(m.rounds); n > 0 && r.Num <= m.rounds[n-1].Num {
 			return m.fail(tick, "round %d committed after round %d (no in-demo redo path, D12)", r.Num, m.rounds[n-1].Num)
+		}
+		if m.stats != nil {
+			if err := m.stats.Commit(m, r, tick); err != nil {
+				return m.keep(err)
+			}
 		}
 		r.committed = true
 		m.rounds = append(m.rounds, r)

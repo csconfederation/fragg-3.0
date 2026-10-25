@@ -63,3 +63,7 @@ jobs:
 
       - name: Golden payloads
         run: go test -count=1 -timeout 30m -run TestCIDemos ./export
+
+      # The engine's demo tests: the ingest checks and CSC stats against the same goldens.
+      - name: Engine
+        run: go test -count=1 -timeout 30m ./engine/...

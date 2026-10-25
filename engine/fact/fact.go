@@ -25,9 +25,9 @@ type Player struct {
 	// team members; the second is every participant, for reconnects).
 	Listed      bool
 	Money       int
-	Spent       int // this round
-	TeamStateID int // the ID of the player's team state (the oracle compares killer and victim by it)
-	EquipValue  int // current equipment value
+	Spent       int  // this round
+	TeamStateID *int // the ID of the player's team state, nil without one (the oracle compares killer and victim by it)
+	EquipValue  int  // current equipment value
 	Pos         [3]float64
 	// FlashDuration is the player's current flash blindness (seconds), the entity field.
 	FlashDuration float64

@@ -34,7 +34,7 @@ type Collector struct {
 	swing          *SwingTracker
 	roundHasKill   bool
 	isPistolRound  bool
-	roundNumber    int // eco's own count of opens, as in the oracle
+	roundNumber    int // eco's own count of opens, as in the oracle; labels only, not in the payload
 	roundActive    bool
 	mapName        string
 	roundStartTime float64
@@ -90,7 +90,7 @@ func (c *Collector) ensurePlayer(p fact.Player, s fact.Snapshot) {
 
 func (c *Collector) ensureRound(steam uint64) *model.RoundStats {
 	if _, ok := c.round[steam]; !ok {
-		c.round[steam] = &model.RoundStats{}
+		c.round[steam] = &model.RoundStats{IsPistolRound: c.isPistolRound} // late records too (D13)
 	}
 	return c.round[steam]
 }
@@ -110,8 +110,10 @@ func countAlive(ps []fact.Player) (t, ct int) {
 	return min(t, 5), min(ct, 5)
 }
 
-// Open is the oracle's BeginRound, called on every round open.
-func (c *Collector) Open(s fact.Snapshot) {
+// Open is the oracle's BeginRound, called on every round open; num is the match's round number.
+// D13: the pistol rounds are rounds 1 and 13, where the oracle used IsPistolRound on eco's own
+// count of opens.
+func (c *Collector) Open(s fact.Snapshot, num int) {
 	c.round = map[uint64]*model.RoundStats{}
 	c.dead = map[uint64]bool{}
 	c.roundHasKill = false
@@ -120,7 +122,7 @@ func (c *Collector) Open(s fact.Snapshot) {
 	c.bombPlanted = false
 	c.roundActive = true
 	c.roundNumber++
-	c.isPistolRound = rating.IsPistolRound(c.roundNumber)
+	c.isPistolRound = num == rating.FirstHalfPistolRound || num == rating.SecondHalfPistolRound
 	c.roundStartTime = float64(s.Frame) / float64(rating.TickRate)
 
 	tAlive, ctAlive, tEquip, ctEquip := 0, 0, 0, 0
@@ -130,7 +132,6 @@ func (c *Collector) Open(s fact.Snapshot) {
 		}
 		c.ensurePlayer(p, s)
 		rs := c.ensureRound(p.Steam64)
-		rs.IsPistolRound = c.isPistolRound
 		if p.Side == fact.SideT {
 			rs.PlayerSide = "T"
 			tAlive++

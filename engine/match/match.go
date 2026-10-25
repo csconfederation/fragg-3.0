@@ -125,6 +125,7 @@ type Match struct {
 	reconnectedOracle                               map[uint64]bool // the oracle's ReconnectedPlayers, which drives membership
 	disconnected, reconnected                       map[uint64]bool
 	gameEnded                                       bool
+	pendingFinal                                    *fact.RoundEnd // the deciding round, until it commits (D15)
 	mapName, serverName                             string
 	err                                             *InvariantError
 }
@@ -277,6 +278,7 @@ func (m *Match) Fact(f fact.Fact) error {
 		}
 	case fact.WinPanelMatch:
 		m.gameEnded = true
+		return m.flush()
 	}
 	return nil
 }
@@ -284,6 +286,9 @@ func (m *Match) Fact(f fact.Fact) error {
 // open is the oracle's round open: at a frame within the early window, or at freeze end (which
 // also detects knife rounds and always reopens).
 func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
+	if err := m.flush(); err != nil {
+		return err
+	}
 	pistol := false
 	t, ct := m.members(s, fact.SideT), m.members(s, fact.SideCT)
 	if len(t) != 0 && len(ct) != 0 {
@@ -398,6 +403,9 @@ func (m *Match) members(s fact.Snapshot, side fact.Side) []fact.Player {
 }
 
 func (m *Match) roundEnd(f fact.RoundEnd) error {
+	if err := m.flush(); err != nil {
+		return err
+	}
 	if !m.isGameLive {
 		return nil
 	}
@@ -440,7 +448,9 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	}
 	if matchIsDecided(mr+1, w, l) {
 		m.winnerClan = winner
-		return m.final(f.Tick, f.RoundsPlayed, true)
+		// The deciding round commits at the win panel or the demo's end, as other rounds commit at
+		// RoundEndOfficial, so its post-win facts (the bomb's damage and kills) count (D15).
+		m.pendingFinal = &f
 	}
 	return nil
 }
@@ -451,6 +461,16 @@ func (m *Match) setScore(tick int, team string, score int) error {
 	}
 	m.teams[team] = score
 	return nil
+}
+
+// flush commits the pending deciding round and ends the match.
+func (m *Match) flush() error {
+	f := m.pendingFinal
+	if f == nil {
+		return nil
+	}
+	m.pendingFinal = nil
+	return m.final(f.Tick, f.RoundsPlayed, true)
 }
 
 // final is the oracle's processRoundFinal: commit the pending round if it ran uninterrupted, and
@@ -549,6 +569,9 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	}
 	if t.Kind == fact.InvalidFileType {
 		return nil, t.Err
+	}
+	if err := m.flush(); err != nil {
+		return nil, err
 	}
 	// The oracle's tie fallback (fragg#23/#25), which now also needs the game's own match end.
 	if m.isGameLive && !m.potential.committed && m.integrityStart == m.integrityEnd &&

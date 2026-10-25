@@ -608,3 +608,63 @@ func TestReconnect(t *testing.T) {
 		t.Errorf("reconnected %v", res.Reconnected)
 	}
 }
+
+// recorder logs the lifecycle calls a collector sees.
+type recorder struct{ log []string }
+
+func (c *recorder) Open(*Match, *Round, fact.Snapshot, bool) error { return nil }
+func (c *recorder) RoundEnd(*Match, fact.RoundEnd) error           { return nil }
+func (c *recorder) Win(*Match, *Round, fact.RoundEnd) error        { return nil }
+func (c *recorder) Join(*Match, *Round, Member) error              { return nil }
+func (c *recorder) Commit(_ *Match, r *Round, tick int) error {
+	c.log = append(c.log, "commit")
+	return nil
+}
+func (c *recorder) Fact(_ *Match, f fact.Fact) error {
+	if _, ok := f.(fact.Hurt); ok {
+		c.log = append(c.log, "hurt")
+	}
+	return nil
+}
+
+// The bomb's damage arrives after the deciding round's RoundEnd; the round commits after it, at the
+// win panel or, without one, at the demo's end (D15).
+func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		winPanel bool
+		term     fact.TerminalKind
+	}{{"win panel", true, fact.Clean}, {"stream error, no win panel", false, fact.Decode}} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSim()
+			for i := 0; i < 12; i++ {
+				s.play("Alpha")
+			}
+			s.open()
+			s.end("Alpha", false)
+			endTick := s.tick
+			bomb := 404
+			s.add(fact.Hurt{Snapshot: fact.Snapshot{Tick: s.tick + 18}, Weapon: &bomb})
+			if tc.winPanel {
+				s.tick += 200
+				s.gameEnded()
+			}
+			rec := &recorder{}
+			m := New(rec)
+			for _, f := range s.facts {
+				if err := m.Fact(f); err != nil {
+					t.Fatal(err)
+				}
+			}
+			res, err := m.Finish(fact.Terminal{Kind: tc.term, Err: errors.New("stream"),
+				End: fact.Snapshot{Tick: s.tick + 500, RoundsPlayed: 13}})
+			want(t, res, err, Ended, 13)
+			if got := strings.Join(rec.log[len(rec.log)-2:], ","); got != "hurt,commit" {
+				t.Errorf("last calls %v; want the hurt before the commit", rec.log[len(rec.log)-2:])
+			}
+			if r := res.Rounds[12]; r.EndTick != endTick {
+				t.Errorf("end tick %d; want the RoundEnd's %d", r.EndTick, endTick)
+			}
+		})
+	}
+}

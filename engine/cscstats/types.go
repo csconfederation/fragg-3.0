@@ -1,10 +1,5 @@
 package cscstats
 
-import (
-	"encoding/json"
-	"strconv"
-)
-
 // PlayerStats is an exported alias for the demoScrape2-compatible per-player
 // stats struct, letting other packages (e.g. export) read/write its fields
 // while keeping the ported field layout identical to demoScrape2.
@@ -49,27 +44,6 @@ type Game struct {
 	// False means eco* / swing_rating fields are unset/zero and must not be
 	// treated as genuine zero ratings.
 	EcoStatsOK bool `json:"ecoStatsOK"`
-}
-
-// MarshalJSON preserves Game's public numeric PlayerOrder API while emitting
-// those Steam64s as strings at the external JSON boundary (matching
-// demoScrape2's JSON contract).
-func (game Game) MarshalJSON() ([]byte, error) {
-	type gameJSON Game
-	var playerOrder []string
-	if game.PlayerOrder != nil {
-		playerOrder = make([]string, len(game.PlayerOrder))
-		for i, id := range game.PlayerOrder {
-			playerOrder[i] = strconv.FormatUint(id, 10)
-		}
-	}
-	return json.Marshal(struct {
-		gameJSON
-		PlayerOrder []string `json:"playerOrder"`
-	}{
-		gameJSON:    gameJSON(game),
-		PlayerOrder: playerOrder,
-	})
 }
 
 type flag struct {
@@ -144,8 +118,8 @@ type round struct {
 	RoundNum            int8                    `json:"roundNum"`
 	StartingTick        int                     `json:"startingTick"`
 	EndingTick          int                     `json:"endingTick"`
-	PlayerStats         map[uint64]*playerStats `json:"playerStats"`
-	TeamStats           map[string]*teamStats   `json:"teamStats"`
+	PlayerStats         map[uint64]*playerStats `json:"-"` // the payload lists them (engine/payload)
+	TeamStats           map[string]*teamStats   `json:"-"`
 	InitTerroristCount  int                     `json:"initTerroristCount"`
 	InitCTerroristCount int                     `json:"initCTerroristCount"`
 	WinnerClanName      string                  `json:"winnerClanName"`
@@ -161,7 +135,7 @@ type round struct {
 	KnifeRound         bool    `json:"knifeRound"`
 	RoundEndReason     string  `json:"roundEndReason"`
 
-	WPAlog        []*wpalog `json:"WPAlog"`
+	WPAlog        []*wpalog `json:"-"` // never stored (D7)
 	BombStartTick int       `json:"bombStartTick"`
 }
 
@@ -309,10 +283,10 @@ type playerStats struct {
 
 	//"flags"
 	Health             int            `json:"health"`
-	TradeList          map[uint64]int `json:"tradeList"`
+	TradeList          map[uint64]int `json:"-"`
 	MostRecentFlasher  uint64         `json:"mostRecentFlasher,string"`
 	MostRecentFlashVal float64        `json:"mostRecentFlashVal"`
-	DamageList         map[uint64]int `json:"damageList"`
+	DamageList         map[uint64]int `json:"-"`
 
 	// ================================================================
 	// Additive eco-rating metrics (NOT part of demoScrape2).

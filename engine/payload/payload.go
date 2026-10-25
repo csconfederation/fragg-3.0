@@ -32,10 +32,13 @@ func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
 	m := match.New(s)
 	term, _ := ingest.Run(ctx, r, m)
 	res, err := m.Finish(term)
+	var inv *match.InvariantError
 	switch {
-	case err != nil && err == term.Err && term.Kind == fact.InvalidFileType:
+	case err != nil && errors.As(err, &inv):
+		return nil, nil, err
+	case err != nil && term.Kind == fact.InvalidFileType:
 		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidFileType, err)
-	case err != nil && err == term.Err && term.Kind == fact.Decode:
+	case err != nil && term.Kind == fact.Decode:
 		return nil, nil, fmt.Errorf("%w: %w", ErrDecode, err)
 	case err != nil:
 		return nil, nil, err

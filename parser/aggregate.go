@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating"
 	"github.com/csconfederation/fragg-3.0/rating/probability"
@@ -234,7 +235,7 @@ func (d *DemoParser) foldSnapshot(snap *RoundSnapshot) {
 		player.RoundsPlayed++
 	}
 	if d.collector != nil {
-		d.collector.CommitPending(snap.Pending, snap.TAlive, snap.CTAlive, snap.BombPlanted, snap.Winner, snap.MapName)
+		d.collector.CommitPending(snap.Pending, snap.TAlive, snap.CTAlive, snap.BombPlanted, fact.Side(snap.Winner), snap.MapName)
 	}
 }
 

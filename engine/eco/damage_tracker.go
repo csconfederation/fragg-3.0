@@ -2,6 +2,8 @@ package eco
 
 import (
 	"github.com/csconfederation/fragg-3.0/rating/swing"
+	"maps"
+	"slices"
 )
 
 const (
@@ -91,7 +93,8 @@ func (dt *DamageTracker) GetDamageContributors(victimID uint64) []swing.DamageCo
 	contributors := make([]swing.DamageContributor, 0)
 
 	if damages, ok := dt.damageDealt[victimID]; ok {
-		for attackerID, damage := range damages {
+		for _, attackerID := range slices.Sorted(maps.Keys(damages)) {
+			damage := damages[attackerID]
 			contributors = append(contributors, swing.DamageContributor{
 				PlayerID: attackerID,
 				Damage:   damage,
@@ -146,7 +149,8 @@ func (dt *DamageTracker) GetFlashAssists(victimID uint64, currentTick int, tickR
 	}
 
 	assists := make([]swing.FlashAssist, 0, len(bestByAttacker))
-	for _, flash := range bestByAttacker {
+	for _, id := range slices.Sorted(maps.Keys(bestByAttacker)) {
+		flash := bestByAttacker[id]
 		assists = append(assists, swing.FlashAssist{
 			PlayerID: flash.AttackerID,
 			Duration: flash.Duration,

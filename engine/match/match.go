@@ -156,7 +156,7 @@ func (m *Match) InRound() bool { return m.inRound }
 func (m *Match) Members(s fact.Snapshot, side fact.Side) []fact.Player { return m.members(s, side) }
 
 func (m *Match) collect(f fact.Fact) error {
-	if m.stats == nil {
+	if m.stats == nil || m.pendingFinal != nil && !bombFact(f) {
 		return nil
 	}
 	if err := m.stats.Fact(m, f); err != nil {
@@ -228,6 +228,9 @@ func (m *Match) Fact(f fact.Fact) error {
 			return m.setScore(f.Tick, opp, f.Opponent.Score)
 		}
 	case fact.RoundEndOfficial:
+		if m.pendingFinal != nil {
+			return m.flush()
+		}
 		if !m.didRoundEndFire {
 			m.integrityEnd--
 		}
@@ -448,8 +451,11 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	}
 	if matchIsDecided(mr+1, w, l) {
 		m.winnerClan = winner
-		// The deciding round commits at the win panel or the demo's end, as other rounds commit at
-		// RoundEndOfficial, so its post-win facts (the bomb's damage and kills) count (D15).
+		if f.Reason != reasonTargetBombed {
+			return m.final(f.Tick, f.RoundsPlayed, true)
+		}
+		// The explosion's damage and kills arrive after RoundEnd: the deciding round commits at the
+		// win panel or the demo's end, and only those facts reach it meanwhile (D15).
 		m.pendingFinal = &f
 	}
 	return nil
@@ -461,6 +467,23 @@ func (m *Match) setScore(tick int, team string, score int) error {
 	}
 	m.teams[team] = score
 	return nil
+}
+
+const (
+	reasonTargetBombed = 1   // RoundEnd.Reason when the bomb exploded
+	eqBomb             = 404 // the bomb's equipment type
+)
+
+// bombFact reports whether f is the bomb's damage or kill.
+func bombFact(f fact.Fact) bool {
+	var w *int
+	switch f := f.(type) {
+	case fact.Hurt:
+		w = f.Weapon
+	case fact.Kill:
+		w = f.Weapon
+	}
+	return w != nil && *w == eqBomb
 }
 
 // flush commits the pending deciding round and ends the match.

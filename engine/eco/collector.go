@@ -110,9 +110,10 @@ func countAlive(ps []fact.Player) (t, ct int) {
 	return min(t, 5), min(ct, 5)
 }
 
-// Open is the oracle's BeginRound, called on every round open. pistol is the match's pistol round
-// (both teams at $800): D13, where the oracle used IsPistolRound on eco's open count.
-func (c *Collector) Open(s fact.Snapshot, pistol bool) {
+// Open is the oracle's BeginRound, called on every round open; num is the match's round number.
+// D13: the pistol rounds are rounds 1 and 13, where the oracle used IsPistolRound on eco's own
+// count of opens.
+func (c *Collector) Open(s fact.Snapshot, num int) {
 	c.round = map[uint64]*model.RoundStats{}
 	c.dead = map[uint64]bool{}
 	c.roundHasKill = false
@@ -121,7 +122,7 @@ func (c *Collector) Open(s fact.Snapshot, pistol bool) {
 	c.bombPlanted = false
 	c.roundActive = true
 	c.roundNumber++
-	c.isPistolRound = pistol
+	c.isPistolRound = num == rating.FirstHalfPistolRound || num == rating.SecondHalfPistolRound
 	c.roundStartTime = float64(s.Frame) / float64(rating.TickRate)
 
 	tAlive, ctAlive, tEquip, ctEquip := 0, 0, 0, 0

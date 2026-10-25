@@ -27,13 +27,15 @@ func main() {
 		return
 	}
 	defer f.Close()
-	game, res, err := payload.Run(context.Background(), f)
+	p, res, err := payload.Run(context.Background(), f)
+	if res != nil {
+		status["outcome"] = res.Outcome.String()
+	}
 	if err != nil {
 		status["error"] = err.Error()
 		return
 	}
-	status["outcome"] = res.Outcome.String()
-	b, err := json.Marshal(game)
+	b, err := json.Marshal(p)
 	if err != nil {
 		status["error"] = "encode: " + err.Error()
 		return

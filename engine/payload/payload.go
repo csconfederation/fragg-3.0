@@ -1,9 +1,11 @@
-// Package payload runs the engine over a demo and builds the worker's payload: the CSC and eco
-// stats of the committed rounds, folded once (Core-planning#303).
+// Package payload runs the engine over a demo and builds the payload the worker sends Stats: the
+// CSC and eco stats of the committed rounds, folded once (Core-planning#303).
 package payload
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 
 	"github.com/csconfederation/fragg-3.0/engine/cscstats"
@@ -14,24 +16,48 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/match"
 )
 
-// Run parses r and returns the payload and the match result.
-func Run(ctx context.Context, r io.Reader) (*cscstats.Game, *match.Result, error) {
+// The errors Run returns besides a *match.InvariantError and stream failures. The worker maps them
+// to statuses: ErrInvalidFileType 400; ErrNoRounds and ErrUnfinished 422 (D8); everything else 500.
+var (
+	ErrInvalidFileType = errors.New("not a CS2 demo")
+	ErrNoRounds        = errors.New("no valid rounds")
+	ErrUnfinished      = errors.New("the demo stops before the match ends")
+	ErrDecode          = errors.New("demo data could not be decoded")
+)
+
+// Run parses r and returns the payload and the match result. A partial demo (D9) is a score-only
+// payload; a stream that breaks after the match ended still yields the full payload.
+func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
 	s := &stats{csc: cscstats.New(), eco: eco.New(), rounds: map[*match.Round]*eco.Round{}}
 	m := match.New(s)
 	term, _ := ingest.Run(ctx, r, m)
 	res, err := m.Finish(term)
-	if err != nil {
+	var inv *match.InvariantError
+	switch {
+	case err != nil && errors.As(err, &inv):
 		return nil, nil, err
+	case err != nil && term.Kind == fact.InvalidFileType:
+		return nil, nil, fmt.Errorf("%w: %w", ErrInvalidFileType, err)
+	case err != nil && term.Kind == fact.Decode:
+		return nil, nil, fmt.Errorf("%w: %w", ErrDecode, err)
+	case err != nil:
+		return nil, nil, err
+	case res.Outcome == match.NoRounds:
+		return nil, res, ErrNoRounds
+	case res.Outcome == match.Unfinished:
+		return nil, res, fmt.Errorf("%w: %s", ErrUnfinished, res.Detail)
 	}
 	game := s.csc.Game(res)
-	rounds := make([]*eco.Round, 0, len(res.Rounds))
-	for _, r := range res.Rounds {
-		rounds = append(rounds, s.rounds[r])
+	if res.Outcome == match.Ended {
+		rounds := make([]*eco.Round, 0, len(res.Rounds))
+		for _, r := range res.Rounds {
+			rounds = append(rounds, s.rounds[r])
+		}
+		if err := fold.Game(game, s.eco, rounds); err != nil {
+			return nil, nil, err
+		}
 	}
-	if err := fold.Game(game, s.eco, rounds); err != nil {
-		return nil, nil, err
-	}
-	return game, res, nil
+	return build(game, res), res, nil
 }
 
 // stats drives both pipelines in the oracle's order: per event eco then CSC (eco's handlers are

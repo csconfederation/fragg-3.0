@@ -5,25 +5,20 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"testing"
 )
 
 // testdata/golden holds the engine's payloads for the CI demos (export/testdata/ci): the oracle's,
-// plus the approved changes (Core-planning#302), each recorded in its PR. -update rewrites them.
-// The comparison skips:
-//   - WPAlog, totalWPAlog: Stats discards them (D7)
-//   - flags, potentialRound: parser state, not stats
-//   - reconnectedPlayers, ConnectedAfterRoundStart: the oracle loses reconnects (#300 delta report)
-var skipped = regexp.MustCompile(`^(WPAlog|totalWPAlog|reconnectedPlayers|ConnectedAfterRoundStart)$`)
-
+// plus the approved changes (Core-planning#302, #303), each recorded in its PR. -update rewrites
+// them. Since #303 they are the v2 payload, compared whole.
 var update = flag.Bool("update", false, "rewrite testdata/golden from the current output")
 
 const (
@@ -38,6 +33,8 @@ type ciDemo struct {
 	Transform *struct {
 		Kind     string  `json:"kind"`
 		Fraction float64 `json:"fraction"`
+		Bytes    int     `json:"bytes"`
+		Value    byte    `json:"value"`
 	} `json:"transform"`
 	Want struct {
 		Golden bool `json:"golden"`
@@ -49,19 +46,12 @@ func TestCIGoldens(t *testing.T) {
 	if dir == "" {
 		t.Skip("FRAGG_CI_DEMOS not set; run scripts/fetch-ci-demos.sh")
 	}
-	raw, err := os.ReadFile(filepath.Join(ciDir, "demos.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m struct{ Demos []ciDemo }
-	if err := json.Unmarshal(raw, &m); err != nil {
-		t.Fatal(err)
-	}
+	demos := ciDemos(t)
 	byName := map[string]ciDemo{}
-	for _, d := range m.Demos {
+	for _, d := range demos {
 		byName[d.Name] = d
 	}
-	for _, d := range m.Demos {
+	for _, d := range demos {
 		if !d.Want.Golden {
 			continue
 		}
@@ -93,6 +83,47 @@ func TestCIGoldens(t *testing.T) {
 	}
 }
 
+// TestCIStatuses pins what each CI demo yields: a full payload, a score-only one (D9), or the
+// error the worker maps to a status.
+func TestCIStatuses(t *testing.T) {
+	dir := os.Getenv("FRAGG_CI_DEMOS")
+	if dir == "" {
+		t.Skip("FRAGG_CI_DEMOS not set; run scripts/fetch-ci-demos.sh")
+	}
+	want := map[string]error{
+		"mid9984-cache": nil, "mid8474-ancient-tie": nil, "mid8364-test-lobby-nan": nil, "truncated-tail": nil,
+		"mid9072-inferno-partial": nil, "mid9077-inferno-zero-rounds": ErrNoRounds,
+		"mid1598-csgo-header": ErrInvalidFileType, "not-a-demo": ErrInvalidFileType,
+		"truncated-mid": ErrUnfinished, "corrupt-mid": ErrDecode,
+	}
+	demos := ciDemos(t)
+	byName := map[string]ciDemo{}
+	for _, d := range demos {
+		byName[d.Name] = d
+	}
+	for _, d := range demos {
+		t.Run(d.Name, func(t *testing.T) {
+			w, ok := want[d.Name]
+			if !ok {
+				t.Fatal("no expected status")
+			}
+			p, _, err := Run(context.Background(), bytes.NewReader(load(t, dir, d, byName)))
+			if w != nil {
+				if !errors.Is(err, w) {
+					t.Fatalf("err %v; want %v", err, w)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if full := d.Name != "mid9072-inferno-partial"; p.FullStatsOK != full || (len(p.Players) > 0) != full {
+				t.Errorf("fullStatsOK %v with %d player rows; want full %v", p.FullStatsOK, len(p.Players), full)
+			}
+		})
+	}
+}
+
 // TestNoKillLobbyEncodes: mid8364, a test lobby with no kills, made the oracle's rating 0/0
 // (corpus finding 1). json.Marshal rejects NaN and Inf, so encoding proves there are none.
 func TestNoKillLobbyEncodes(t *testing.T) {
@@ -113,20 +144,45 @@ func TestNoKillLobbyEncodes(t *testing.T) {
 	}
 }
 
+func ciDemos(t *testing.T) []ciDemo {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(ciDir, "demos.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct{ Demos []ciDemo }
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	return m.Demos
+}
+
 func load(t *testing.T, dir string, d ciDemo, byName map[string]ciDemo) []byte {
 	t.Helper()
-	if d.Transform != nil {
-		if d.Transform.Kind != "prefix" {
-			t.Fatalf("unsupported transform %q", d.Transform.Kind)
+	switch {
+	case d.Transform == nil:
+		data, err := os.ReadFile(filepath.Join(dir, d.DemSha256+".dem"))
+		if err != nil {
+			t.Fatalf("%v (run scripts/fetch-ci-demos.sh)", err)
 		}
-		src := load(t, dir, byName[d.Source], byName)
-		return src[:int(float64(len(src))*d.Transform.Fraction)]
+		return data
+	case d.Transform.Kind == "zeros":
+		return make([]byte, d.Transform.Bytes)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, d.DemSha256+".dem"))
-	if err != nil {
-		t.Fatalf("%v (run scripts/fetch-ci-demos.sh)", err)
+	src := load(t, dir, byName[d.Source], byName)
+	at := int(float64(len(src)) * d.Transform.Fraction)
+	switch d.Transform.Kind {
+	case "prefix":
+		return src[:at]
+	case "fill":
+		data := append([]byte{}, src...)
+		for i := at; i < at+d.Transform.Bytes; i++ {
+			data[i] = d.Transform.Value
+		}
+		return data
 	}
-	return data
+	t.Fatalf("unsupported transform %q", d.Transform.Kind)
+	return nil
 }
 
 func writeGolden(t *testing.T, path string, v any) {
@@ -183,9 +239,7 @@ func diff(path string, want, got any, diffs *[]string) {
 		}
 		sorted := make([]string, 0, len(keys))
 		for k := range keys {
-			if !skipped.MatchString(k) && !(path == "$" && (k == "flags" || k == "potentialRound")) {
-				sorted = append(sorted, k)
-			}
+			sorted = append(sorted, k)
 		}
 		sort.Strings(sorted)
 		for _, k := range sorted {

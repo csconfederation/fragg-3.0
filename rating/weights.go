@@ -72,14 +72,6 @@ const (
 const (
 	RatingBaseline = 1.0 // Starting point for rating calculation
 
-	// KPR contribution multipliers (asymmetric - rewards high KPR more)
-	KPRContribAbove = 0.35 // Multiplier when KPR >= baseline
-	KPRContribBelow = 0.30 // Multiplier when KPR < baseline
-
-	// DPR contribution multipliers (asymmetric - penalizes high DPR more)
-	DPRContribBelow = 0.08 // Multiplier when DPR <= baseline (good)
-	DPRContribAbove = 0.25 // Multiplier when DPR > baseline (bad)
-
 	// ADR contribution multipliers
 	ADRContribAbove = 0.01  // Multiplier when ADR >= baseline
 	ADRContribBelow = 0.012 // Multiplier when ADR < baseline
@@ -101,6 +93,5 @@ const (
 const (
 	FirstHalfPistolRound  = 1  // First pistol round of the match
 	SecondHalfPistolRound = 13 // Second half pistol round (MR12)
-	RoundsPerHalf         = 12 // Rounds per half in regulation
 	TickRate              = 64 // Server tick rate for time calculations
 )

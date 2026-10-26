@@ -13,8 +13,8 @@ func TestJoinCoversTheRound(t *testing.T) {
 	s := fact.Snapshot{T: fact.Team{Side: fact.SideT, Clan: "Alpha"}, CT: fact.Team{Side: fact.SideCT, Clan: "Bravo"},
 		Players: []fact.Player{{Steam64: 1, Side: fact.SideT, Alive: true, Connected: true, Listed: true}}}
 	c.Open(s, 2, s.Players, 1, 0)
-	c.Join(2, "late", false, fact.SideCT, "Bravo")
-	c.Join(3, "bot", true, fact.SideCT, "Bravo")
+	c.Join(2, false, fact.SideCT, "Bravo")
+	c.Join(3, true, fact.SideCT, "Bravo")
 	p := c.Players([]*Round{c.Commit()})
 	if p[2] == nil || p[2].CTRoundsPlayed != 1 || p[2].RoundsPlayed != 1 || p[2].TeamName != "Bravo" {
 		t.Fatalf("joiner %+v", p[2])

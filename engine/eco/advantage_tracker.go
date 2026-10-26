@@ -16,7 +16,6 @@ const (
 // The slot persists until neutralized by a teammate's death or the creator dies.
 type AdvantageSlot struct {
 	PlayerID uint64
-	Side     fact.Side
 }
 
 // AdvantageTracker tracks man advantages created by kills within a round.
@@ -63,7 +62,6 @@ func (at *AdvantageTracker) RecordKill(killerID uint64, killerSide fact.Side) []
 	// Add the new advantage slot for the killer
 	at.addSlot(killerSide, AdvantageSlot{
 		PlayerID: killerID,
-		Side:     killerSide,
 	})
 
 	return survivalBeneficiaries

@@ -3,8 +3,6 @@
 // users find and understand code for reference while building FraGG 3.0.
 // =============================================================================
 
-// Package model defines the core data structures for player and round statistics.
-
 package model
 
 // RoundStats tracks a player's performance within a single round.
@@ -23,70 +21,41 @@ type RoundStats struct {
 	AWPKills           int
 	AWPOpeningKill     bool
 	TeamWon            bool
-	PlayersAlive       int
-	EnemiesAlive       int
-	WasLastAlive       bool
-	ClutchKills        int
 	PlantedBomb        bool
 	DefusedBomb        bool
-	OpeningKill        bool
 	OpeningDeath       bool
-	MultiKillRound     int
-	EntryFragger       bool
 	ClutchAttempt      bool
 	ClutchWon          bool
 	ClutchSize         int
 	SavedWeapons       bool
-	EcoKill            bool
-	AntiEcoKill        bool
 	FlashAssists       int
 	TradeKills         int // trade kills, each kill once (#591)
 	FastTrades         int // trade kills within 2 s of the avenged death
-	TradeDeath         bool
-	FailedTrades       int
 	TradeDenials       int
 	SavedByTeammate    bool
 	SavedTeammate      bool
-	IsSupportRound     bool
-	InvolvedInOpening  bool
-	UtilityDamage      int
 	UtilityKills       int
-	SmokeDamage        int
 	DeathTime          float64
 	TimeAlive          float64
 	KillTimes          []float64
-	IsExitFrag         bool
 	ExitFrags          int
-	TeamFlashCount     int
-	TeamFlashDuration  float64
-	FlashesThrown      int
 	EnemyFlashDuration float64
 	AWPKill            bool
 	KnifeKill          bool
 	PistolVsRifleKill  bool
-	HadAWP             bool
 	LostAWP            bool
 	IsPistolRound      bool
 	PlayerSide         string
-
-	// Utility tracking per round (demoScrape2 compatibility)
-	SmokesThrown   int
-	HEsThrown      int
-	MolotovsThrown int
-	HEDamage       int
-	FireDamage     int
 
 	// Damage taken this round
 	DamageTaken int
 
 	// Probability-based swing tracking (new for v3.0)
-	ProbabilitySwing   float64             // Win probability delta contribution
-	LastDeathSwing     float64             // Most recent death swing (for trade refund calculation)
-	SwingContributions []SwingContribution // Detailed swing events for this round
+	ProbabilitySwing float64 // Win probability delta contribution
+	LastDeathSwing   float64 // Most recent death swing (for trade refund calculation)
 
 	// Event-time counters stored on the round so match totals can be folded
 	// after CSC drops knife/incomplete/redo rounds.
-	Headshots             int
 	EcoDeathValue         float64
 	TimeToKillSum         float64
 	KillsWithTTK          int
@@ -97,25 +66,4 @@ type RoundStats struct {
 	EcoAdjustedKills      float64
 	PerfectKills          int
 	EnemiesFlashed        int
-}
-
-// SwingContribution captures a single event's impact on probability swing.
-type SwingContribution struct {
-	Type          string  `json:"type"`
-	Amount        float64 `json:"amount"`
-	TimeInRound   float64 `json:"time_in_round,omitempty"`
-	Opponent      string  `json:"opponent,omitempty"`
-	Weapon        string  `json:"weapon,omitempty"`
-	IsTrade       bool    `json:"is_trade,omitempty"`
-	IsHeadshot    bool    `json:"is_headshot,omitempty"`
-	EcoMultiplier float64 `json:"eco_multiplier,omitempty"`
-	Notes         string  `json:"notes,omitempty"`
-}
-
-// AddSwingContribution appends a swing contribution entry for the round.
-func (r *RoundStats) AddSwingContribution(contribution SwingContribution) {
-	if contribution.Amount == 0 {
-		return
-	}
-	r.SwingContributions = append(r.SwingContributions, contribution)
 }

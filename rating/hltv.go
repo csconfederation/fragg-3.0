@@ -13,7 +13,6 @@ package rating
 type HLTVInput struct {
 	RoundsPlayed int
 	Kills        int
-	Deaths       int
 	Survivals    int
 	MultiKills   [6]int // Index 0 unused, 1-5 for 1K through 5K
 }
@@ -49,7 +48,7 @@ func ComputeRMKPoints(multiKills [6]int) int {
 }
 
 // ComputePistolRoundRating calculates the HLTV-style rating for pistol rounds only.
-func ComputePistolRoundRating(roundsPlayed, kills, deaths, survivals, multiKills int) float64 {
+func ComputePistolRoundRating(roundsPlayed, kills, survivals, multiKills int) float64 {
 	if roundsPlayed == 0 {
 		return 0
 	}
@@ -71,11 +70,10 @@ func ComputePistolRoundRating(roundsPlayed, kills, deaths, survivals, multiKills
 }
 
 // ComputeSideHLTVRating calculates HLTV rating for a specific side (T or CT).
-func ComputeSideHLTVRating(roundsPlayed, kills, deaths, survivals int, multiKills [6]int) float64 {
+func ComputeSideHLTVRating(roundsPlayed, kills, survivals int, multiKills [6]int) float64 {
 	return ComputeHLTVRating(HLTVInput{
 		RoundsPlayed: roundsPlayed,
 		Kills:        kills,
-		Deaths:       deaths,
 		Survivals:    survivals,
 		MultiKills:   multiKills,
 	})

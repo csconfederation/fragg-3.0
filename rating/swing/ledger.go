@@ -13,7 +13,6 @@ type SwingReason string
 const (
 	SwingReasonKillFinalHit      SwingReason = "kill_final_hit"
 	SwingReasonKillDamageShare   SwingReason = "kill_damage_share"
-	SwingReasonFlashAssist       SwingReason = "flash_assist"
 	SwingReasonVictimDeath       SwingReason = "victim_death"
 	SwingReasonTradeRefund       SwingReason = "trade_refund"
 	SwingReasonBombPlant         SwingReason = "bomb_plant"
@@ -26,17 +25,6 @@ const (
 	SwingReasonSurvivalCredit    SwingReason = "survival_credit"
 )
 
-// SwingEventType identifies the source event for a ledger entry.
-type SwingEventType int
-
-const (
-	SwingEventKill SwingEventType = iota
-	SwingEventBombPlant
-	SwingEventBombDefuse
-	SwingEventResidual
-	SwingEventExitFrag
-)
-
 // PlayerSwingAllocation records a single swing credit or debit.
 type PlayerSwingAllocation struct {
 	SteamID uint64
@@ -47,46 +35,26 @@ type PlayerSwingAllocation struct {
 
 // SwingLedgerEvent records one event's pool allocation before applying to stats.
 type SwingLedgerEvent struct {
-	Tick int
-	Type SwingEventType
-
-	BenefitingSide fact.Side
-	HurtSide       fact.Side
-
 	RawDelta      float64
-	PositivePool  float64
 	NegativePool  float64
 	PositiveAlloc []PlayerSwingAllocation
 	NegativeAlloc []PlayerSwingAllocation
-
-	IsExitFrag bool
-	IsResidual bool
 }
 
 // RoundSwingLedger tracks per-round swing accounting for zero-sum validation.
 type RoundSwingLedger struct {
-	RoundNumber int
-
-	Events []SwingLedgerEvent
-
-	PositiveTotal float64
-	NegativeTotal float64
-
 	TeamPositive map[fact.Side]float64
 	TeamNegative map[fact.Side]float64
 
 	PlayerSwing map[uint64]float64
 
-	ResidualApplied  bool
-	ExitFragsIgnored int
-	DebugWarnings    []string
+	ResidualApplied bool
+	DebugWarnings   []string
 }
 
 // NewRoundSwingLedger creates a fresh ledger for a round.
-func NewRoundSwingLedger(roundNumber int) *RoundSwingLedger {
+func NewRoundSwingLedger() *RoundSwingLedger {
 	return &RoundSwingLedger{
-		RoundNumber:  roundNumber,
-		Events:       make([]SwingLedgerEvent, 0),
 		TeamPositive: make(map[fact.Side]float64),
 		TeamNegative: make(map[fact.Side]float64),
 		PlayerSwing:  make(map[uint64]float64),
@@ -95,49 +63,31 @@ func NewRoundSwingLedger(roundNumber int) *RoundSwingLedger {
 
 // RecordEvent appends an event and applies all allocations to player totals.
 func (l *RoundSwingLedger) RecordEvent(event SwingLedgerEvent) {
-	l.Events = append(l.Events, event)
-
 	for _, alloc := range event.PositiveAlloc {
-		l.applyAllocation(alloc, true)
+		l.applyAllocation(alloc)
 	}
 	for _, alloc := range event.NegativeAlloc {
-		l.applyAllocation(alloc, false)
-	}
-
-	if event.IsExitFrag {
-		l.ExitFragsIgnored++
+		l.applyAllocation(alloc)
 	}
 }
 
 // ApplyAllocations adds swing amounts directly (e.g. trade reallocation).
 func (l *RoundSwingLedger) ApplyAllocations(allocs []PlayerSwingAllocation) {
 	for _, alloc := range allocs {
-		positive := alloc.Amount > 0
-		l.applyAllocation(alloc, positive)
+		l.applyAllocation(alloc)
 	}
 }
 
-func (l *RoundSwingLedger) applyAllocation(alloc PlayerSwingAllocation, positiveSide bool) {
+func (l *RoundSwingLedger) applyAllocation(alloc PlayerSwingAllocation) {
 	if alloc.Amount == 0 {
 		return
 	}
 	l.PlayerSwing[alloc.SteamID] += alloc.Amount
 	if alloc.Amount > 0 {
-		l.PositiveTotal += alloc.Amount
 		l.TeamPositive[alloc.Side] += alloc.Amount
 	} else {
-		l.NegativeTotal += alloc.Amount
 		l.TeamNegative[alloc.Side] += alloc.Amount
 	}
-}
-
-// PlayerTotals returns a copy of per-player swing totals.
-func (l *RoundSwingLedger) PlayerTotals() map[uint64]float64 {
-	out := make(map[uint64]float64, len(l.PlayerSwing))
-	for id, v := range l.PlayerSwing {
-		out[id] = v
-	}
-	return out
 }
 
 // ValidateRoundSwingLedger checks that player swing sums to approximately zero.

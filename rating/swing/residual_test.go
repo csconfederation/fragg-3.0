@@ -9,13 +9,13 @@ import (
 
 func TestApplyRoundResidualSaveAfterAdvantage(t *testing.T) {
 	cfg := DefaultConfig()
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 
 	players := map[uint64]PlayerRoundContext{
-		100: {SteamID: 100, Side: fact.SideT, Alive: true, PositiveSwing: 0.10, Kills: 2},
-		101: {SteamID: 101, Side: fact.SideT, Alive: true, PositiveSwing: 0.08, Kills: 1},
-		200: {SteamID: 200, Side: fact.SideCT, Alive: true, NegativeSwing: 0.05},
-		201: {SteamID: 201, Side: fact.SideCT, Alive: true, NegativeSwing: 0.02},
+		100: {Side: fact.SideT, Alive: true, PositiveSwing: 0.10, Kills: 2},
+		101: {Side: fact.SideT, Alive: true, PositiveSwing: 0.08, Kills: 1},
+		200: {Side: fact.SideCT, Alive: true, NegativeSwing: 0.05},
+		201: {Side: fact.SideCT, Alive: true, NegativeSwing: 0.02},
 	}
 
 	allocs := ApplyRoundResidual(ledger, ResidualInput{
@@ -60,7 +60,7 @@ func TestApplyRoundResidualSaveAfterAdvantage(t *testing.T) {
 func TestApplyRoundResidualDisabled(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.ResidualEnabled = false
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 
 	allocs := ApplyRoundResidual(ledger, ResidualInput{
 		Winner:         fact.SideT,

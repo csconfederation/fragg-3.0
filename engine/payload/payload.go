@@ -108,7 +108,7 @@ func (s *stats) Join(m *match.Match, r *match.Round, mem match.Member) error {
 	if err := s.csc.Join(m, r, mem); err != nil {
 		return err
 	}
-	s.eco.Join(mem.Steam64, mem.Name, mem.IsBot, mem.Side, mem.Clan)
+	s.eco.Join(mem.Steam64, mem.IsBot, mem.Side, mem.Clan)
 	return nil
 }
 

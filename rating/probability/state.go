@@ -122,18 +122,6 @@ func (s *RoundState) SetTimeRemaining(seconds float64) {
 	s.TimeRemaining = seconds
 }
 
-// StateKey returns a unique key for this state for table lookups.
-func (s *RoundState) StateKey() string {
-	bombStatus := "none"
-	if s.BombPlanted {
-		bombStatus = "planted"
-	}
-	if s.BombDefused {
-		bombStatus = "defused"
-	}
-	return stateKeyFromComponents(s.TAlive, s.CTAlive, bombStatus)
-}
-
 // stateKeyFromComponents builds a state key from individual components.
 // Format: "5v4_none" or "3v2_planted"
 func stateKeyFromComponents(tAlive, ctAlive int, bombStatus string) string {

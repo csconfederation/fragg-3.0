@@ -135,11 +135,9 @@ Each round maintains a `RoundSwingLedger`:
 
 | Field | Purpose |
 |-------|---------|
-| `Events[]` | Every swing allocation before it hits player stats |
 | `PlayerSwing` | Running per-player totals for the round |
-| `PositiveTotal` / `NegativeTotal` | Team-level accounting |
+| `TeamPositive` / `TeamNegative` | Team-level accounting |
 | `ResidualApplied` | Whether end-of-round residual was applied |
-| `ExitFragsIgnored` | Count of exit frags skipped |
 | `DebugWarnings` | Zero-sum validation failures |
 
 Each ledger event records:
@@ -149,17 +147,17 @@ Each ledger event records:
 - Negative allocations (victim death, team responsibility, objective loss, residual loss)
 - A `SwingReason` tag per allocation (e.g. `kill_final_hit`, `round_residual_loss`)
 
-At round end, `ValidateRoundSwingLedger` checks that `|sum(PlayerSwing)| ≤ swing_zero_sum_tolerance` (default 0.005).
+At round end, `ValidateRoundSwingLedger` checks that `|sum(PlayerSwing)| ≤ ZeroSumTolerance` (0.005).
 
 ### Live parsing flow
 
 1. **Event occurs** (kill, plant, defuse, trade reallocation)
 2. **`PoolAllocator`** computes pools and player weights
-3. **Ledger records** the event
+3. **Ledger applies** the allocations
 4. **`applyLedger`** in `engine/eco/collector.go` updates `RoundStats.ProbabilitySwing`
 5. **Round end:** residual swing applied, ledger validated, stats rolled up
 
-When `swing_survival_credit_enabled: false`, survival credit is off and conversion value is handled by end-of-round residual swing.
+With `SurvivalCreditEnabled` false (the default), survival credit is off and conversion value is handled by end-of-round residual swing.
 
 ---
 
@@ -189,10 +187,10 @@ Duel win rate comes from equipment matchup tables (see [Duel win rates](#duel-wi
 **Killer weight** (economy as weight, not pool multiplier):
 
 ```
-killer_credit = swing_kill_final_hit_base
-              + swing_kill_damage_share_weight × (killer_damage / total_damage)
+killer_credit = KillFinalHitBase
+              + KillDamageShareWeight × (killer_damage / total_damage)
 
-if trade kill: killer_credit ×= swing_trade_kill_multiplier   // default 0.80
+if trade kill: killer_credit ×= TradeKillMultiplier   // default 0.80
 
 killer_weight = killer_credit × killer_eco_weight
 killer_eco_weight = 0.50 / duel_win_rate   (capped at 2.0)
@@ -209,11 +207,11 @@ All positive-side weights (killer + helpers) are **normalized** to sum to `posit
 
 Default attribution constants:
 
-| Config key | Default | Old value |
+| Config field | Default | Old value |
 |------------|---------|-----------|
-| `swing_kill_final_hit_base` | 0.35 | 0.60 |
-| `swing_kill_damage_share_weight` | 0.45 | 0.25 |
-| `swing_trade_kill_multiplier` | 0.80 | 0.70 penalty subtract |
+| `KillFinalHitBase` | 0.35 | 0.60 |
+| `KillDamageShareWeight` | 0.45 | 0.25 |
+| `TradeKillMultiplier` | 0.80 | 0.70 penalty subtract |
 
 ### Kills — negative pool (hurt side)
 
@@ -253,9 +251,9 @@ Trade death reallocation runs through `SwingTracker.ApplyTradeReallocation` and 
 
 ### Kills — man-advantage survival credit
 
-**Disabled by default** (`swing_survival_credit_enabled: false`).
+**Disabled by default** (`SurvivalCreditEnabled` false).
 
-When enabled, prior advantage creators receive up to `swing_survival_credit_max_share` (default 5%) of the kill’s raw delta. Conversion value is otherwise handled by end-of-round residual swing.
+When enabled, prior advantage creators receive up to `SurvivalCreditMaxShare` (default 5%) of the kill’s raw delta. Conversion value is otherwise handled by end-of-round residual swing.
 
 ### Bomb plant
 
@@ -267,7 +265,7 @@ positive_pool = negative_pool = |plant_delta|
 **Positive pool (T side):**
 
 ```
-planter_share = plant_delta × swing_plant_planter_share     // default 45%
+planter_share = plant_delta × PlantPlanterShare     // default 45%
 support_pool  = plant_delta × (1 - planter_share)           // default 55%
 ```
 
@@ -285,7 +283,7 @@ positive_pool = negative_pool = |defuse_delta|
 **Positive pool (CT side):**
 
 ```
-defuser_share = defuse_delta × swing_defuse_defuser_share   // default 60%
+defuser_share = defuse_delta × DefuseDefuserShare   // default 60%
 support_pool  = defuse_delta × (1 - defuser_share)          // default 40%
 ```
 
@@ -301,7 +299,7 @@ No extra swing attribution; outcome is already reflected in planted-state probab
 
 After bomb defuse, bomb explode, or team elimination, `RoundDecided` is set. Kills after that point are tagged as exit frags for stats.
 
-Exit frag swing behavior is controlled by `swing_exit_frags`:
+Exit frag swing behavior is controlled by `ExitFrags`:
 
 | Value | Behavior |
 |-------|----------|
@@ -315,7 +313,7 @@ The elimination kill itself still receives normal swing — `RoundDecided` is se
 When a round ends, remaining uncredited probability is distributed so the outcome is fully represented:
 
 ```
-residual = min(1.0 - current_winner_win_prob, swing_residual_max)   // default cap 0.35
+residual = min(1.0 - current_winner_win_prob, ResidualMax)   // default cap 0.35
 ```
 
 **Winning side** (positive residual), weighted by:
@@ -333,11 +331,11 @@ If all scores are zero, split evenly among alive winners.
 
 ```
 score = |round_negative_swing| × 1.0
-      + swing_save_penalty_weight if alive at round end   // default 0.35
+      + SavePenaltyWeight if alive at round end   // default 0.35
 minimum score = 1.0
 ```
 
-This credits entry players who force saves and penalizes saving players on lost rounds. Controlled by `swing_residual_enabled` (default true).
+This credits entry players who force saves and penalizes saving players on lost rounds. Controlled by `ResidualEnabled` (default true).
 
 ### What does NOT add swing
 
@@ -426,7 +424,7 @@ final_rating clamped to [0.20, 3.00]
 | `BaselineKPR` | 0.72 | KPR baseline (optional modifier) |
 | `BaselineDPR` | 0.68 | DPR baseline (optional modifier) |
 
-### Optional KPR/DPR modifier (`kdpr_modifier` in config)
+### Optional KPR/DPR modifier (off)
 
 When enabled:
 
@@ -751,60 +749,29 @@ Empirically derived round-level T win rate per map. Used as `map_factor = value 
 
 Maps not in this table default to **0.500** T win rate (factor **1.00**).
 
-### Swing normalization constants
-
-From the bottom of `tables_data.go` — used for `SwingRating` display, not final rating:
-
-| Constant | Value | Meaning |
-|----------|-------|---------|
-| `SwingToRatingScale` | 10.0 | Multiplier on avg swing per round |
-| `SwingRatingBaseline` | 1.0 | Zero swing → 1.0 |
-| `MinSwingRating` | 0.40 | Floor (integration helper) |
-| `MaxSwingRating` | 1.80 | Ceiling (integration helper) |
-
-Parser clamp for exported `SwingRating`: **[0.5, 1.5]**.
-
 ---
 
 ## Config
 
-### Swing parser settings (`config.json`)
+### Swing settings
 
-All swing settings have defaults in `config.DefaultConfig()` / `rating/swing.DefaultConfig()`.
+`swing.DefaultConfig()` (`rating/swing/config.go`); nothing overrides it.
 
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `swing_exit_frags` | `"zero"` | Exit frag swing: `zero` or `tiny` (5%) |
-| `swing_residual_enabled` | `true` | Apply end-of-round residual swing |
-| `swing_residual_max` | `0.35` | Cap on residual correction per round |
-| `swing_save_penalty_weight` | `0.35` | Penalty weight for alive losers at round end |
-| `swing_plant_planter_share` | `0.45` | Planter’s share of plant positive pool |
-| `swing_defuse_defuser_share` | `0.60` | Defuser’s share of defuse positive pool |
-| `swing_kill_final_hit_base` | `0.35` | Base killer credit before damage share |
-| `swing_kill_damage_share_weight` | `0.45` | Damage share component of killer credit |
-| `swing_trade_kill_multiplier` | `0.80` | Trade kill credit multiplier |
-| `swing_survival_credit_enabled` | `false` | Man-advantage survival credit |
-| `swing_survival_credit_max_share` | `0.05` | Max survival credit per event (if enabled) |
-| `swing_zero_sum_tolerance` | `0.005` | Ledger validation tolerance |
-
-Example block:
-
-```json
-{
-  "swing_exit_frags": "zero",
-  "swing_residual_enabled": true,
-  "swing_residual_max": 0.35,
-  "swing_save_penalty_weight": 0.35,
-  "swing_plant_planter_share": 0.45,
-  "swing_defuse_defuser_share": 0.60,
-  "swing_kill_final_hit_base": 0.35,
-  "swing_kill_damage_share_weight": 0.45,
-  "swing_trade_kill_multiplier": 0.80,
-  "swing_survival_credit_enabled": false,
-  "swing_zero_sum_tolerance": 0.005
-}
-```
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `ExitFrags` | `"zero"` | Exit frag swing: `zero` or `tiny` (5%) |
+| `ResidualEnabled` | `true` | Apply end-of-round residual swing |
+| `ResidualMax` | `0.35` | Cap on residual correction per round |
+| `SavePenaltyWeight` | `0.35` | Penalty weight for alive losers at round end |
+| `PlantPlanterShare` | `0.45` | Planter’s share of plant positive pool |
+| `DefuseDefuserShare` | `0.60` | Defuser’s share of defuse positive pool |
+| `KillFinalHitBase` | `0.35` | Base killer credit before damage share |
+| `KillDamageShareWeight` | `0.45` | Damage share component of killer credit |
+| `TradeKillMultiplier` | `0.80` | Trade kill credit multiplier |
+| `SurvivalCreditEnabled` | `false` | Man-advantage survival credit |
+| `SurvivalCreditMaxShare` | `0.05` | Max survival credit per event (if enabled) |
+| `ZeroSumTolerance` | `0.005` | Ledger validation tolerance |
 
 ### Rating modifier
 
-In `config.json`, `"kdpr_modifier": true` adds the KPR/DPR adjustment described in Part 5. With it off, final rating is purely swing + ADR + KAST.
+The KPR/DPR modifier (Part 5) is off: `engine/eco` calls `Derive(p, false)`, so the final rating is swing + ADR + KAST.

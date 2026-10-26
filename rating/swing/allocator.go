@@ -21,7 +21,6 @@ const (
 
 // PlayerRoundContext holds per-player round data used for allocation scoring.
 type PlayerRoundContext struct {
-	SteamID       uint64
 	Side          fact.Side
 	Alive         bool
 	Damage        int
@@ -59,15 +58,9 @@ func (a *PoolAllocator) AllocateKillEvent(
 	input KillAllocationInput,
 ) (SwingLedgerEvent, KillSwingResult) {
 	kill := input.Kill
-	event := SwingLedgerEvent{
-		Type:           SwingEventKill,
-		BenefitingSide: kill.KillerSide,
-		HurtSide:       kill.VictimSide,
-	}
+	event := SwingLedgerEvent{}
 
 	if input.ExitFrag {
-		event.IsExitFrag = true
-		event.Type = SwingEventExitFrag
 		positive := []PlayerSwingAllocation{{
 			SteamID: kill.KillerID,
 			Side:    kill.KillerSide,
@@ -103,7 +96,6 @@ func (a *PoolAllocator) AllocateKillEvent(
 
 	event.RawDelta = rawDelta
 	pool := math.Abs(rawDelta)
-	event.PositivePool = pool
 	event.NegativePool = pool
 
 	if pool <= 0 {
@@ -342,7 +334,6 @@ type ObjectiveAllocationInput struct {
 	PrimaryID     uint64
 	PrimarySide   fact.Side
 	OpposingSide  fact.Side
-	TimeInRound   float64
 	Players       map[uint64]PlayerRoundContext
 	PrimaryShare  float64
 	PrimaryReason SwingReason
@@ -356,13 +347,8 @@ func (a *PoolAllocator) AllocateObjectiveEvent(
 	calcDelta func(*probability.RoundState) float64,
 	applyState func(*probability.RoundState),
 	input ObjectiveAllocationInput,
-	eventType SwingEventType,
 ) (SwingLedgerEvent, map[uint64]float64) {
-	event := SwingLedgerEvent{
-		Type:           eventType,
-		BenefitingSide: input.PrimarySide,
-		HurtSide:       input.OpposingSide,
-	}
+	event := SwingLedgerEvent{}
 
 	stateBefore := state.Clone()
 	delta := calcDelta(stateBefore)
@@ -375,7 +361,6 @@ func (a *PoolAllocator) AllocateObjectiveEvent(
 
 	event.RawDelta = delta
 	pool := math.Abs(delta)
-	event.PositivePool = pool
 	event.NegativePool = pool
 
 	event.PositiveAlloc = a.allocateObjectivePositive(input, pool)

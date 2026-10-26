@@ -16,10 +16,10 @@ func TestAllocateObjectiveEventPlantSharing(t *testing.T) {
 
 	state := probability.NewRoundState(3, 5, "de_dust2")
 	players := map[uint64]PlayerRoundContext{
-		100: {SteamID: 100, Side: fact.SideT, Kills: 1, Damage: 80, Alive: true},
-		101: {SteamID: 101, Side: fact.SideT, Damage: 40, Alive: true},
-		200: {SteamID: 200, Side: fact.SideCT, NegativeSwing: 0.05, Alive: true},
-		201: {SteamID: 201, Side: fact.SideCT, NegativeSwing: 0.03, Alive: false},
+		100: {Side: fact.SideT, Kills: 1, Damage: 80, Alive: true},
+		101: {Side: fact.SideT, Damage: 40, Alive: true},
+		200: {Side: fact.SideCT, NegativeSwing: 0.05, Alive: true},
+		201: {Side: fact.SideCT, NegativeSwing: 0.03, Alive: false},
 	}
 
 	input := ObjectiveAllocationInput{
@@ -38,7 +38,6 @@ func TestAllocateObjectiveEventPlantSharing(t *testing.T) {
 		engine.CalculateBombPlantSwing,
 		func(s *probability.RoundState) { s.SetBombPlanted() },
 		input,
-		SwingEventBombPlant,
 	)
 
 	if event.RawDelta <= 0 {
@@ -70,9 +69,9 @@ func TestAllocateObjectiveEventDefuseSharing(t *testing.T) {
 	state.SetBombPlanted()
 
 	players := map[uint64]PlayerRoundContext{
-		300: {SteamID: 300, Side: fact.SideCT, Kills: 1, Alive: true},
-		301: {SteamID: 301, Side: fact.SideCT, FlashAssists: 1, Alive: true},
-		100: {SteamID: 100, Side: fact.SideT, NegativeSwing: 0.04, Alive: true},
+		300: {Side: fact.SideCT, Kills: 1, Alive: true},
+		301: {Side: fact.SideCT, FlashAssists: 1, Alive: true},
+		100: {Side: fact.SideT, NegativeSwing: 0.04, Alive: true},
 	}
 
 	input := ObjectiveAllocationInput{
@@ -91,7 +90,6 @@ func TestAllocateObjectiveEventDefuseSharing(t *testing.T) {
 		engine.CalculateBombDefuseSwing,
 		func(s *probability.RoundState) { s.SetBombDefused() },
 		input,
-		SwingEventBombDefuse,
 	)
 
 	if !state.BombDefused {
@@ -122,7 +120,7 @@ func TestAllocateObjectiveEventPlantAppliesStateEvenIfDeltaNonPositive(t *testin
 		PrimaryID:     1,
 		PrimarySide:   fact.SideT,
 		OpposingSide:  fact.SideCT,
-		Players:       map[uint64]PlayerRoundContext{1: {SteamID: 1, Side: fact.SideT, Alive: true}},
+		Players:       map[uint64]PlayerRoundContext{1: {Side: fact.SideT, Alive: true}},
 		PrimaryShare:  cfg.PlantPlanterShare,
 		PrimaryReason: SwingReasonBombPlant,
 		SupportReason: SwingReasonPlantSupport,
@@ -134,7 +132,6 @@ func TestAllocateObjectiveEventPlantAppliesStateEvenIfDeltaNonPositive(t *testin
 		engine.CalculateBombPlantSwing,
 		func(s *probability.RoundState) { s.SetBombPlanted() },
 		input,
-		SwingEventBombPlant,
 	)
 
 	if !state.BombPlanted {

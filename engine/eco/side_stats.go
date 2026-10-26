@@ -41,9 +41,6 @@ func (u *SideStatsUpdater) updateTSide() {
 	if u.roundStats.Deaths > 0 {
 		u.player.TDeaths++
 	}
-	if u.roundStats.Kills >= 2 {
-		u.player.TRoundsWithMultiKill++
-	}
 	if u.roundStats.Kills >= 0 && u.roundStats.Kills <= 5 {
 		u.player.TMultiKills[u.roundStats.Kills]++
 	}
@@ -72,9 +69,6 @@ func (u *SideStatsUpdater) updateCTSide() {
 	}
 	if u.roundStats.Deaths > 0 {
 		u.player.CTDeaths++
-	}
-	if u.roundStats.Kills >= 2 {
-		u.player.CTRoundsWithMultiKill++
 	}
 	if u.roundStats.Kills >= 0 && u.roundStats.Kills <= 5 {
 		u.player.CTMultiKills[u.roundStats.Kills]++
@@ -250,24 +244,6 @@ func (u *SideStatsUpdater) UpdateCommonRoundStats() {
 		u.player.KAST++
 	}
 
-	if u.roundStats.GotKill {
-		u.player.RoundsWithKill++
-		u.player.AttackRounds++
-	}
-
-	if u.roundStats.Kills >= 2 {
-		u.player.RoundsWithMultiKill++
-	}
-
-	if u.roundStats.TeamWon {
-		u.player.KillsInWonRounds += u.roundStats.Kills
-		u.player.DamageInWonRounds += u.roundStats.Damage
-
-		if u.roundStats.OpeningKill {
-			u.player.RoundsWonAfterOpening++
-		}
-	}
-
 	u.updateAWPStats()
 	u.updateSupportStats()
 	u.updateUtilityStats()
@@ -285,19 +261,11 @@ func (u *SideStatsUpdater) updateAWPStats() {
 	}
 	if u.roundStats.LostAWP {
 		u.player.AWPDeaths++
-		if !u.roundStats.AWPKill {
-			u.player.AWPDeathsNoKill++
-		}
 	}
 }
 
 // updateSupportStats updates support-related statistics.
 func (u *SideStatsUpdater) updateSupportStats() {
-	if u.roundStats.GotAssist || u.roundStats.FlashAssists > 0 {
-		u.player.SupportRounds++
-		u.roundStats.IsSupportRound = true
-	}
-
 	if u.roundStats.GotAssist {
 		u.player.AssistedKills += u.roundStats.Assists
 	}
@@ -305,12 +273,6 @@ func (u *SideStatsUpdater) updateSupportStats() {
 
 // updateUtilityStats updates utility-related statistics.
 func (u *SideStatsUpdater) updateUtilityStats() {
-	u.player.UtilityDamage += u.roundStats.UtilityDamage
-	u.player.FlashesThrown += u.roundStats.FlashesThrown
-	u.player.FlashAssists += u.roundStats.FlashAssists
-	u.player.EnemyFlashDuration += u.roundStats.EnemyFlashDuration
-	u.player.TeamFlashCount += u.roundStats.TeamFlashCount
-	u.player.TeamFlashDuration += u.roundStats.TeamFlashDuration
 	u.player.ExitFrags += u.roundStats.ExitFrags
 
 	if u.roundStats.SavedByTeammate {
@@ -344,16 +306,11 @@ func (u *SideStatsUpdater) updatePistolStats() {
 
 	u.player.PistolRoundsPlayed++
 	u.player.PistolRoundKills += u.roundStats.Kills
-	u.player.PistolRoundDamage += u.roundStats.Damage
 
 	if u.roundStats.Deaths > 0 {
 		u.player.PistolRoundDeaths++
 	} else if u.roundStats.Survived {
 		u.player.PistolRoundSurvivals++
-	}
-
-	if u.roundStats.TeamWon {
-		u.player.PistolRoundsWon++
 	}
 
 	if u.roundStats.Kills >= 2 {

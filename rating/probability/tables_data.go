@@ -154,20 +154,3 @@ func DefaultTables() *ProbabilityTables {
 
 	return tables
 }
-
-// NormalizationConstants for converting swing to rating contribution.
-const (
-	// SwingToRatingScale converts average swing per round to a ~1.0 centered rating.
-	// A player with +4% avg swing should get ~1.40 rating contribution.
-	// A player with -3% avg swing should get ~0.70 rating contribution.
-	SwingToRatingScale = 10.0
-
-	// SwingRatingBaseline is the baseline for swing rating (average = 1.0).
-	SwingRatingBaseline = 1.0
-
-	// MinSwingRating is the minimum possible swing rating component.
-	MinSwingRating = 0.40
-
-	// MaxSwingRating is the maximum possible swing rating component.
-	MaxSwingRating = 1.80
-)

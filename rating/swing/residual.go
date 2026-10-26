@@ -42,15 +42,10 @@ func ApplyRoundResidual(ledger *RoundSwingLedger, input ResidualInput, cfg Confi
 	negativeAllocs := allocateNegativeResidual(input, losingSide, residual, cfg)
 
 	event := SwingLedgerEvent{
-		Type:           SwingEventResidual,
-		BenefitingSide: input.Winner,
-		HurtSide:       losingSide,
-		RawDelta:       residual,
-		PositivePool:   residual,
-		NegativePool:   residual,
-		PositiveAlloc:  positiveAllocs,
-		NegativeAlloc:  negativeAllocs,
-		IsResidual:     true,
+		RawDelta:      residual,
+		NegativePool:  residual,
+		PositiveAlloc: positiveAllocs,
+		NegativeAlloc: negativeAllocs,
 	}
 	ledger.RecordEvent(event)
 	ledger.ResidualApplied = true

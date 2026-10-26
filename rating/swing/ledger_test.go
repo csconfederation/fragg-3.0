@@ -8,7 +8,7 @@ import (
 )
 
 func TestValidateRoundSwingLedgerZeroSum(t *testing.T) {
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 	ledger.PlayerSwing[1] = 0.08
 	ledger.PlayerSwing[2] = -0.05
 	ledger.PlayerSwing[3] = -0.03
@@ -20,7 +20,7 @@ func TestValidateRoundSwingLedgerZeroSum(t *testing.T) {
 }
 
 func TestValidateRoundSwingLedgerDetectsImbalance(t *testing.T) {
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 	ledger.PlayerSwing[1] = 0.10
 	ledger.PlayerSwing[2] = -0.05
 
@@ -31,7 +31,7 @@ func TestValidateRoundSwingLedgerDetectsImbalance(t *testing.T) {
 }
 
 func TestRecordEventUpdatesTotals(t *testing.T) {
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 	event := SwingLedgerEvent{
 		PositiveAlloc: []PlayerSwingAllocation{{
 			SteamID: 1, Side: fact.SideT, Amount: 0.08, Reason: SwingReasonKillFinalHit,

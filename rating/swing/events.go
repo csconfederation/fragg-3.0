@@ -4,7 +4,6 @@ import "github.com/csconfederation/fragg-3.0/engine/fact"
 
 // KillEvent represents a kill during the round.
 type KillEvent struct {
-	TimeInRound         float64
 	KillerID            uint64
 	VictimID            uint64
 	KillerSide          fact.Side
@@ -12,7 +11,6 @@ type KillEvent struct {
 	KillerEquip         float64
 	VictimEquip         float64
 	IsTradeKill         bool
-	IsHeadshot          bool
 	TotalDamageToVictim int
 	KillerDamageDealt   int
 	DamageContributors  []DamageContributor

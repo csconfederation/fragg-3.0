@@ -17,16 +17,13 @@ type SwingTracker struct {
 	roundState       *probability.RoundState
 	ledger           *swing.RoundSwingLedger
 	cfg              swing.Config
-	roundNumber      int
-	enabled          bool
 	tickRate         float64
 	lastClockTick    int
-	defaultRoundTime float64
 	bombTimer        float64
 }
 
 const (
-	DefaultRoundTimeSeconds = 115.0
+	roundTimeSeconds        = 115.0
 	defaultBombTimerSeconds = 40.0
 )
 
@@ -39,43 +36,17 @@ func NewSwingTrackerWithConfig(cfg swing.Config) *SwingTracker {
 		damageTracker:    NewDamageTracker(),
 		advantageTracker: NewAdvantageTracker(),
 		cfg:              cfg,
-		enabled:          true,
 		tickRate:         float64(rating.TickRate),
-		defaultRoundTime: DefaultRoundTimeSeconds,
 		bombTimer:        defaultBombTimerSeconds,
 	}
 }
 
-// SetEnabled enables or disables swing tracking.
-func (st *SwingTracker) SetEnabled(enabled bool) {
-	st.enabled = enabled
-}
-
-// IsEnabled returns whether swing tracking is enabled.
-func (st *SwingTracker) IsEnabled() bool {
-	return st.enabled
-}
-
-// Config returns the current swing configuration.
-func (st *SwingTracker) Config() swing.Config {
-	return st.cfg
-}
-
-// ResetRound clears state for a new round.
-func (st *SwingTracker) ResetRound(roundNumber, tAlive, ctAlive int, mapName string) {
-	st.ResetRoundWithClock(roundNumber, tAlive, ctAlive, mapName, 0, st.defaultRoundTime)
-}
-
-// ResetRoundWithClock clears state for a new round and seeds the round clock.
-func (st *SwingTracker) ResetRoundWithClock(roundNumber, tAlive, ctAlive int, mapName string, startTick int, roundTimeSeconds float64) {
-	st.roundNumber = roundNumber
+// ResetRound clears state for a new round and starts the round clock at startTick.
+func (st *SwingTracker) ResetRound(tAlive, ctAlive int, mapName string, startTick int) {
 	st.roundState = probability.NewRoundState(tAlive, ctAlive, mapName)
-	if roundTimeSeconds <= 0 {
-		roundTimeSeconds = st.defaultRoundTime
-	}
 	st.roundState.SetTimeRemaining(roundTimeSeconds)
 	st.lastClockTick = startTick
-	st.ledger = swing.NewRoundSwingLedger(roundNumber)
+	st.ledger = swing.NewRoundSwingLedger()
 	st.damageTracker.Reset()
 	st.advantageTracker.Reset()
 }
@@ -102,18 +73,11 @@ func (st *SwingTracker) SetAlive(tAlive, ctAlive int) {
 // RecordDeath is a counted death that isn't an enemy kill (a team kill, suicide or world death):
 // the victim's advantage slots and damage go, as in RecordKill.
 func (st *SwingTracker) RecordDeath(victimID uint64, victimSide fact.Side) {
-	if !st.enabled || st.roundState == nil {
+	if st.roundState == nil {
 		return
 	}
 	st.advantageTracker.RecordDeath(victimID, victimSide)
 	st.damageTracker.ClearVictimData(victimID)
-}
-
-// SetTickRate overrides the assumed tick rate used for clock advancement.
-func (st *SwingTracker) SetTickRate(tickRate float64) {
-	if tickRate > 0 {
-		st.tickRate = tickRate
-	}
 }
 
 // SetEconomyFromValues sets economy from equipment values.
@@ -126,17 +90,11 @@ func (st *SwingTracker) SetEconomyFromValues(tAvgEquip, ctAvgEquip float64) {
 
 // RecordDamage records damage dealt for attribution tracking.
 func (st *SwingTracker) RecordDamage(attackerID, victimID uint64, damage int, timeInRound float64) {
-	if !st.enabled {
-		return
-	}
 	st.damageTracker.RecordDamage(attackerID, victimID, damage, timeInRound)
 }
 
 // RecordFlash records a flash for attribution tracking.
 func (st *SwingTracker) RecordFlash(attackerID, victimID uint64, duration float64, tick int) {
-	if !st.enabled {
-		return
-	}
 	st.damageTracker.RecordFlash(attackerID, victimID, duration, tick)
 }
 
@@ -146,7 +104,6 @@ type KillResult struct {
 	Allocations             []swing.PlayerSwingAllocation
 	SurvivalBeneficiaries   []uint64
 	SurvivalCreditPerPlayer float64
-	VictimPriorDamage       int
 }
 
 // RecordKill records a kill event and returns swing allocations.
@@ -160,14 +117,13 @@ func (st *SwingTracker) RecordKill(
 	losingSideTeammates []uint64,
 	currentTick int,
 ) KillResult {
-	if !st.enabled || st.roundState == nil {
+	if st.roundState == nil {
 		return KillResult{}
 	}
 
 	st.advanceClock(currentTick)
 
 	killEvent := &swing.KillEvent{
-		TimeInRound:         timeInRound,
 		KillerID:            killerID,
 		VictimID:            victimID,
 		KillerSide:          killerSide,
@@ -175,7 +131,6 @@ func (st *SwingTracker) RecordKill(
 		KillerEquip:         killerEquip,
 		VictimEquip:         victimEquip,
 		IsTradeKill:         isTradeKill,
-		IsHeadshot:          isHeadshot,
 		TotalDamageToVictim: st.damageTracker.GetTotalDamageToVictim(victimID),
 		KillerDamageDealt:   st.damageTracker.GetKillerDamage(killerID, victimID),
 		DamageContributors:  st.damageTracker.GetDamageContributors(victimID),
@@ -220,7 +175,6 @@ func (st *SwingTracker) RecordKill(
 		Allocations:             allocations,
 		SurvivalBeneficiaries:   survivalBeneficiaries,
 		SurvivalCreditPerPlayer: survivalCredit,
-		VictimPriorDamage:       victimPriorDamage,
 	}
 }
 
@@ -258,7 +212,7 @@ func (st *SwingTracker) RecordBombPlant(
 	players map[uint64]swing.PlayerRoundContext,
 	currentTick int,
 ) []swing.PlayerSwingAllocation {
-	if !st.enabled || st.roundState == nil {
+	if st.roundState == nil {
 		return nil
 	}
 
@@ -268,7 +222,6 @@ func (st *SwingTracker) RecordBombPlant(
 		PrimaryID:     planterID,
 		PrimarySide:   fact.SideT,
 		OpposingSide:  fact.SideCT,
-		TimeInRound:   timeInRound,
 		Players:       players,
 		PrimaryShare:  st.cfg.PlantPlanterShare,
 		PrimaryReason: swing.SwingReasonBombPlant,
@@ -283,7 +236,6 @@ func (st *SwingTracker) RecordBombPlant(
 			s.SetTimeRemaining(st.bombTimer)
 		},
 		input,
-		swing.SwingEventBombPlant,
 	)
 	st.ledger.RecordEvent(event)
 	return append(event.PositiveAlloc, event.NegativeAlloc...)
@@ -296,7 +248,7 @@ func (st *SwingTracker) RecordBombDefuse(
 	players map[uint64]swing.PlayerRoundContext,
 	currentTick int,
 ) []swing.PlayerSwingAllocation {
-	if !st.enabled || st.roundState == nil {
+	if st.roundState == nil {
 		return nil
 	}
 
@@ -306,7 +258,6 @@ func (st *SwingTracker) RecordBombDefuse(
 		PrimaryID:     defuserID,
 		PrimarySide:   fact.SideCT,
 		OpposingSide:  fact.SideT,
-		TimeInRound:   timeInRound,
 		Players:       players,
 		PrimaryShare:  st.cfg.DefuseDefuserShare,
 		PrimaryReason: swing.SwingReasonBombDefuse,
@@ -318,7 +269,6 @@ func (st *SwingTracker) RecordBombDefuse(
 		st.engine.CalculateBombDefuseSwing,
 		func(s *probability.RoundState) { s.SetBombDefused() },
 		input,
-		swing.SwingEventBombDefuse,
 	)
 	st.ledger.RecordEvent(event)
 	return append(event.PositiveAlloc, event.NegativeAlloc...)
@@ -326,7 +276,7 @@ func (st *SwingTracker) RecordBombDefuse(
 
 // ApplyRoundResidual applies end-of-round residual swing if enabled.
 func (st *SwingTracker) ApplyRoundResidual(winner fact.Side, players map[uint64]swing.PlayerRoundContext, maxDamage int) []swing.PlayerSwingAllocation {
-	if !st.enabled || st.ledger == nil {
+	if st.ledger == nil {
 		return nil
 	}
 	currentProb := st.GetCurrentWinProbability(winner)
@@ -348,7 +298,7 @@ func (st *SwingTracker) FinalizeRound() []string {
 
 // GetCurrentWinProbability returns the current win probability for a side.
 func (st *SwingTracker) GetCurrentWinProbability(side fact.Side) float64 {
-	if !st.enabled || st.roundState == nil {
+	if st.roundState == nil {
 		return 0.5
 	}
 	return st.engine.GetWinProbability(st.roundState, side)

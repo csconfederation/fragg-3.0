@@ -1,4 +1,3 @@
-// Package eco is the oracle's eco/swing pipeline (fragg's parser package) over engine facts
-// (Core-planning#302). The trackers and side stats moved here unchanged; the oracle's parser
-// imports them until #303 deletes it.
+// Package eco is the oracle's eco/swing pipeline (fragg's former parser package) over engine
+// facts (Core-planning#302). Its shared concepts come from engine/round (#591).
 package eco

@@ -36,14 +36,12 @@ type RoundStats struct {
 	ClutchAttempt      bool
 	ClutchWon          bool
 	ClutchSize         int
-	ClutchEnteredSize  int // Number of enemies when player entered clutch (0 = not in clutch)
 	SavedWeapons       bool
 	EcoKill            bool
 	AntiEcoKill        bool
 	FlashAssists       int
-	TradeKill          bool // the legacy parser's; engine/eco counts TradeKills
-	TradeKills         int  // trade kills, each kill once (#591)
-	FastTrades         int  // trade kills within 2 s of the avenged death
+	TradeKills         int // trade kills, each kill once (#591)
+	FastTrades         int // trade kills within 2 s of the avenged death
 	TradeDeath         bool
 	FailedTrades       int
 	TradeDenials       int
@@ -57,7 +55,6 @@ type RoundStats struct {
 	DeathTime          float64
 	TimeAlive          float64
 	KillTimes          []float64
-	TradeSpeed         float64
 	IsExitFrag         bool
 	ExitFrags          int
 	TeamFlashCount     int

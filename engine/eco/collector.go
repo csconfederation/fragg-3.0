@@ -47,8 +47,7 @@ type Collector struct {
 
 // Round is one committed round's eco stats (the oracle's RoundSnapshot).
 type Round struct {
-	number int
-	stats  map[uint64]*model.RoundStats
+	stats map[uint64]*model.RoundStats
 }
 
 // New returns a collector with the default swing configuration.
@@ -230,7 +229,7 @@ func (c *Collector) Commit() *Round {
 		cp.SwingContributions = append([]model.SwingContribution(nil), rs.SwingContributions...)
 		stats[id] = &cp
 	}
-	return &Round{number: c.roundNumber, stats: stats}
+	return &Round{stats: stats}
 }
 
 // Players folds the committed rounds into match totals and derives the ratings (the oracle's
@@ -243,7 +242,7 @@ func (c *Collector) Players(rounds []*Round) map[uint64]*model.PlayerStats {
 				p = &model.PlayerStats{SteamID: fmt.Sprintf("%d", id)}
 				c.players[id] = p
 			}
-			FoldRound(p, rs, r.number)
+			FoldRound(p, rs)
 			u := NewSideStatsUpdater(p, rs)
 			u.UpdateCommonRoundStats()
 			u.UpdateSideStats()

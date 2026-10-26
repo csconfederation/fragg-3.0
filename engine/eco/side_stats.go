@@ -93,11 +93,7 @@ func (u *SideStatsUpdater) updateCTSide() {
 }
 
 func (u *SideStatsUpdater) recordSideClutchAttempts(tSide bool) {
-	size := u.roundStats.ClutchEnteredSize
-	if size == 0 {
-		size = u.roundStats.ClutchSize
-	}
-	switch size {
+	switch u.roundStats.ClutchSize {
 	case 1:
 		if tSide {
 			u.player.TClutch1v1Attempts++

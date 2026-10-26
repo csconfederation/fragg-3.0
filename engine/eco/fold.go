@@ -6,7 +6,7 @@ import (
 )
 
 // FoldRound adds one round's stats to the player's match totals.
-func FoldRound(player *model.PlayerStats, round *model.RoundStats, roundNumber int) {
+func FoldRound(player *model.PlayerStats, round *model.RoundStats) {
 	player.Kills += round.Kills
 	player.Assists += round.Assists
 	player.Damage += round.Damage
@@ -94,13 +94,9 @@ func FoldRound(player *model.PlayerStats, round *model.RoundStats, roundNumber i
 		player.MultiKillsRaw[round.Kills]++
 	}
 
-	if round.ClutchEnteredSize > 0 || round.ClutchAttempt {
-		size := round.ClutchEnteredSize
-		if size == 0 {
-			size = round.ClutchSize
-		}
+	if round.ClutchAttempt {
 		player.ClutchRounds++
-		switch size {
+		switch round.ClutchSize {
 		case 1:
 			player.Clutch1v1Attempts++
 			if round.TeamWon {
@@ -144,7 +140,6 @@ func FoldRound(player *model.PlayerStats, round *model.RoundStats, roundNumber i
 
 	round.MultiKillRound = round.Kills
 	player.ProbabilitySwing += round.ProbabilitySwing
-	player.RoundBreakdowns = append(player.RoundBreakdowns, model.NewRoundSwingBreakdown(roundNumber, round))
 	if round.PlayerSide == "T" {
 		player.TProbabilitySwing += round.ProbabilitySwing
 	} else if round.PlayerSide == "CT" {

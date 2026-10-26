@@ -2,7 +2,9 @@ package eco
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/round"
@@ -137,16 +139,19 @@ func (c *Collector) Open(s fact.Snapshot, num int, members []fact.Player, tAlive
 	c.swing.SetEconomyFromValues(tAvg, ctAvg)
 }
 
-// addRow gives a member a row on their side; late rows are pistol rows too (D13).
-func (c *Collector) addRow(steam uint64, side fact.Side) {
-	rs := &model.RoundStats{IsPistolRound: c.isPistolRound}
+func sideName(side fact.Side) string {
 	switch side {
 	case fact.SideT:
-		rs.PlayerSide = "T"
+		return "T"
 	case fact.SideCT:
-		rs.PlayerSide = "CT"
+		return "CT"
 	}
-	c.round[steam] = rs
+	return ""
+}
+
+// addRow gives a member a row on their side; late rows are pistol rows too (D13).
+func (c *Collector) addRow(steam uint64, side fact.Side) {
+	c.round[steam] = &model.RoundStats{IsPistolRound: c.isPistolRound, PlayerSide: sideName(side)}
 }
 
 // Join adds a human who joined the open round mid-round, on the side CSC gave them, so eco covers
@@ -432,10 +437,10 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 		ar.TradeDenials++
 		oldest := x.Avenged[0].Steam
 		if d, ok := c.round[oldest]; ok && d.LastDeathSwing < 0 {
-			mates := make([]uint64, 0)
-			for _, p := range ps {
-				if !p.IsBot && p.Side == attacker.Side && p.Steam64 != oldest {
-					mates = append(mates, p.Steam64)
+			mates := make([]uint64, 0) // the round's human members on the trader's side (#591)
+			for _, id := range slices.Sorted(maps.Keys(c.round)) {
+				if c.round[id].PlayerSide == sideName(attacker.Side) && id != oldest {
+					mates = append(mates, id)
 				}
 			}
 			c.applyLedger(c.swing.ApplyTradeReallocation(oldest, attacker.Side, d.LastDeathSwing, mates), t,

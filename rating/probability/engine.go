@@ -86,9 +86,7 @@ func (e *Engine) applyEconomyAdjustment(baseProb float64, state *RoundState) flo
 func (e *Engine) applyMapAdjustment(baseProb float64, mapName string) float64 {
 	mapTWinRate := e.tables.GetMapAdjustment(mapName)
 
-	// Adjust relative to the default 50% baseline
-	// If map is T-sided (e.g., 0.52), boost T probability slightly
-	mapFactor := mapTWinRate / 0.50
+	mapFactor := mapTWinRate / e.tables.MapBaseline
 
 	return baseProb * mapFactor
 }

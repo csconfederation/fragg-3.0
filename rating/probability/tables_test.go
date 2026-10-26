@@ -90,3 +90,20 @@ func TestApplyTimeAdjustmentLowTime(t *testing.T) {
 		t.Fatalf("expected time boost at 4s remaining: base=%f adjusted=%f", base, adjusted)
 	}
 }
+
+// The base table already carries the all-maps T rate, so a map at that rate (or an unknown map)
+// leaves the base probability unchanged.
+func TestMapFactorRelativeToBaseline(t *testing.T) {
+	tables := NewProbabilityTables()
+	tables.BaseWinProb["5v5_none"] = 0.48
+	tables.MapBaseline = 0.48
+	tables.MapAdjustments["de_even"] = 0.48
+	tables.MapAdjustments["de_tsided"] = 0.528
+	e := NewEngine(tables)
+	for name, want := range map[string]float64{"de_even": 0.48, "de_unknown": 0.48, "de_tsided": 0.528} {
+		got := e.GetWinProbability(&RoundState{TAlive: 5, CTAlive: 5, Map: name}, fact.SideT)
+		if d := got - want; d > 1e-9 || d < -1e-9 {
+			t.Errorf("%s: T win %.4f, want %.4f", name, got, want)
+		}
+	}
+}

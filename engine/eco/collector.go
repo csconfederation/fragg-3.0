@@ -39,6 +39,7 @@ type Collector struct {
 	roundActive   bool
 	mapName       string
 	startTick     int // the round clock starts at the open's tick, as CSC's
+	winTime       float64
 	roundDecided  bool
 	bombPlanted   bool
 	dead          map[uint64]bool // this round's victims
@@ -107,6 +108,7 @@ func (c *Collector) Open(s fact.Snapshot, num int, members []fact.Player, tAlive
 	c.roundHasKill = false
 	c.trades.Reset()
 	c.roundDecided = false
+	c.winTime = 0
 	c.bombPlanted = false
 	c.roundActive = true
 	c.roundNumber++
@@ -176,18 +178,13 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player) 
 		return
 	}
 	duration := c.timeInRound(s.Tick)
+	c.winTime = duration
 	c.trades.ProcessRoundEndTrades(s.Tick, c.round)
 
 	ps := playing(s)
 	for _, p := range ps {
 		r := c.row(p.Steam64)
 		r.TeamWon = p.Side == winner
-		if p.Alive {
-			r.Survived = true
-			r.TimeAlive = duration
-		} else if r.Deaths > 0 {
-			r.TimeAlive = r.DeathTime
-		}
 	}
 	isAlive, aliveOn := map[uint64]bool{}, map[fact.Side]int{}
 	for _, p := range alive {
@@ -207,9 +204,6 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player) 
 				r.ClutchWon = true
 			}
 		}
-		if p.Alive && !r.TeamWon {
-			r.SavedWeapons = true
-		}
 	}
 
 	maxDamage := 0
@@ -222,10 +216,17 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player) 
 	c.swing.FinalizeRound()
 }
 
-// Commit is the oracle's SnapshotRound: the round's stats, copied when the round commits.
+// Commit is the oracle's SnapshotRound: the round's stats, copied when the round commits. Survival
+// is final here, as CSC's (#591): no death in the round, post-round deaths included.
 func (c *Collector) Commit() *Round {
 	stats := make(map[uint64]*model.RoundStats, len(c.round))
 	for id, rs := range c.round {
+		rs.Survived = rs.Deaths == 0
+		rs.TimeAlive = rs.DeathTime
+		if rs.Survived {
+			rs.TimeAlive = c.winTime
+		}
+		rs.SavedWeapons = rs.Survived && !rs.TeamWon
 		cp := *rs
 		cp.KillTimes = append([]float64(nil), rs.KillTimes...)
 		cp.SwingContributions = append([]model.SwingContribution(nil), rs.SwingContributions...)

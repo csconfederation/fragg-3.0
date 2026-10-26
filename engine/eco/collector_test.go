@@ -89,3 +89,27 @@ func TestTeamKillIsADeath(t *testing.T) {
 		t.Errorf("killer kills %d", k.Kills)
 	}
 }
+
+// Survival is final at commit (#591): a death after the win isn't a survival or a save.
+func TestPostRoundDeathIsNoSurvival(t *testing.T) {
+	c := New()
+	ak := 7
+	killer := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}
+	victim := fact.Player{Steam64: 2, Side: fact.SideCT, Alive: true, Listed: true}
+	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{killer, victim}}
+	c.Open(s, 2, s.Players, 1, 1)
+	c.Win(fact.SideT, s, s.Players)
+	x := round.Context{Expected: true, Victim: true, Killer: true, Enemy: true,
+		Before: round.State{TAlive: 1, CTAlive: 1}, After: round.State{TAlive: 1}}
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	r := c.Commit()
+	if v := r.stats[2]; v.Survived || v.SavedWeapons {
+		t.Errorf("victim survived %v, saved %v", v.Survived, v.SavedWeapons)
+	}
+	if k := r.stats[1]; !k.Survived || k.SavedWeapons {
+		t.Errorf("killer survived %v, saved %v", k.Survived, k.SavedWeapons)
+	}
+}

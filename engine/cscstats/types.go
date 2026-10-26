@@ -316,57 +316,57 @@ type playerStats struct {
 
 	// Eco ratings (HLTV 2.0 + eco side ratings), kept distinct from the
 	// demoScrape2 rating/impactRating/ctRating/TRating fields above.
-	EcoHLTVRating   float64 `json:"ecoHLTVRating"`
-	EcoHLTVCtRating float64 `json:"ecoHLTVCtRating"`
-	EcoHLTVTRating  float64 `json:"ecoHLTVTRating"`
-	EcoCTEcoRating  float64 `json:"ecoCTEcoRating"`
-	EcoTEcoRating   float64 `json:"ecoTEcoRating"`
+	HLTVRating     float64 `json:"hltvRating"`
+	HLTVCtRating   float64 `json:"hltvCtRating"`
+	HLTVTRating    float64 `json:"hltvTRating"`
+	EcoCTEcoRating float64 `json:"ecoCTEcoRating"`
+	EcoTEcoRating  float64 `json:"ecoTEcoRating"`
 	// Eco display swing rating (1 + 10*swing/round). Distinct from
 	// swing_rating (which is eco FinalRating).
 	EcoSwingDisplayRating float64 `json:"ecoSwingDisplayRating"`
-	EcoPistolRoundRating  float64 `json:"ecoPistolRoundRating"`
+	PistolRoundRating     float64 `json:"pistolRoundRating"`
 
 	// Eco assisted kills (assist count only) — distinct from demoScrape2 eac.
-	EcoAssistedKills int `json:"ecoAssistedKills"`
+	AssistedKills int `json:"assistedKills"`
 
 	// Clutch attempts (demoScrape2 only tracks wins in cl_*).
-	EcoClutch1v1Attempts int `json:"ecoClutch1v1Attempts"`
-	EcoClutch1v2Attempts int `json:"ecoClutch1v2Attempts"`
-	EcoClutch1v3Attempts int `json:"ecoClutch1v3Attempts"`
-	EcoClutch1v4Attempts int `json:"ecoClutch1v4Attempts"`
-	EcoClutch1v5Attempts int `json:"ecoClutch1v5Attempts"`
+	Clutch1v1Attempts int `json:"clutch1v1Attempts"`
+	Clutch1v2Attempts int `json:"clutch1v2Attempts"`
+	Clutch1v3Attempts int `json:"clutch1v3Attempts"`
+	Clutch1v4Attempts int `json:"clutch1v4Attempts"`
+	Clutch1v5Attempts int `json:"clutch1v5Attempts"`
 
 	// Trade detail (eco 5s-window trade model), distinct from demoScrape2 trades/traded.
-	EcoTradeKills          int `json:"ecoTradeKills"`
-	EcoTradeDenials        int `json:"ecoTradeDenials"`
-	EcoFastTrades          int `json:"ecoFastTrades"`
-	EcoOpeningDeathsTraded int `json:"ecoOpeningDeathsTraded"`
+	TradeKills          int `json:"tradeKills"`
+	TradeDenials        int `json:"tradeDenials"`
+	FastTrades          int `json:"fastTrades"`
+	OpeningDeathsTraded int `json:"openingDeathsTraded"`
 
 	// AWP extras.
-	EcoAWPOpeningKills    int     `json:"ecoAWPOpeningKills"`
-	EcoAWPMultiKillRounds int     `json:"ecoAWPMultiKillRounds"`
-	EcoAWPDeaths          int     `json:"ecoAWPDeaths"`
-	EcoRoundsWithAWPKill  int     `json:"ecoRoundsWithAWPKill"`
-	EcoAWPKillsPerRound   float64 `json:"ecoAWPKillsPerRound"`
+	AWPOpeningKills    int     `json:"awpOpeningKills"`
+	AWPMultiKillRounds int     `json:"awpMultiKillRounds"`
+	AWPDeaths          int     `json:"awpDeaths"`
+	RoundsWithAWPKill  int     `json:"roundsWithAWPKill"`
+	AWPKillsPerRound   float64 `json:"awpKillsPerRound"`
 
 	// Time-based stats. atd above is demoScrape2 (avg time alive); these are eco's.
-	EcoTimeAlivePerRound float64 `json:"ecoTimeAlivePerRound"`
-	EcoAvgTimeToDeath    float64 `json:"ecoAvgTimeToDeath"`
-	EcoAvgTimeToKill     float64 `json:"ecoAvgTimeToKill"`
+	TimeAlivePerRound float64 `json:"timeAlivePerRound"`
+	AvgTimeToDeath    float64 `json:"avgTimeToDeath"`
+	AvgTimeToKill     float64 `json:"avgTimeToKill"`
 
 	// Other unique eco metrics.
-	EcoManAdvantageKills     int `json:"ecoManAdvantageKills"`
-	EcoManDisadvantageDeaths int `json:"ecoManDisadvantageDeaths"`
-	EcoExitFrags             int `json:"ecoExitFrags"`
-	EcoKnifeKills            int `json:"ecoKnifeKills"`
-	EcoPistolVsRifleKills    int `json:"ecoPistolVsRifleKills"`
-	EcoLowBuyKills           int `json:"ecoLowBuyKills"`
-	EcoDisadvantagedBuyKills int `json:"ecoDisadvantagedBuyKills"`
-	EcoUtilityKills          int `json:"ecoUtilityKills"`
-	EcoPerfectKills          int `json:"ecoPerfectKills"`
-	EcoEarlyDeaths           int `json:"ecoEarlyDeaths"`
-	EcoSavedByTeammate       int `json:"ecoSavedByTeammate"`
-	EcoSavedTeammate         int `json:"ecoSavedTeammate"`
+	ManAdvantageKills     int `json:"manAdvantageKills"`
+	ManDisadvantageDeaths int `json:"manDisadvantageDeaths"`
+	ExitFrags             int `json:"exitFrags"`
+	KnifeKills            int `json:"knifeKills"`
+	PistolVsRifleKills    int `json:"pistolVsRifleKills"`
+	KillsVsLowerBuy       int `json:"killsVsLowerBuy"`
+	KillsVsMuchLowerBuy   int `json:"killsVsMuchLowerBuy"`
+	UtilityKills          int `json:"utilityKills"`
+	PerfectKills          int `json:"perfectKills"`
+	EarlyDeaths           int `json:"earlyDeaths"`
+	SavedByTeammate       int `json:"savedByTeammate"`
+	SavedTeammate         int `json:"savedTeammate"`
 }
 
 type Accolades struct {

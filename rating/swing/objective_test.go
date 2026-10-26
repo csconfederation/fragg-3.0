@@ -34,7 +34,6 @@ func TestAllocateObjectiveEventPlantSharing(t *testing.T) {
 
 	event, _ := allocator.AllocateObjectiveEvent(
 		state,
-		fact.SideT,
 		engine.CalculateBombPlantSwing,
 		func(s *probability.RoundState) { s.SetBombPlanted() },
 		input,
@@ -86,7 +85,6 @@ func TestAllocateObjectiveEventDefuseSharing(t *testing.T) {
 
 	event, amounts := allocator.AllocateObjectiveEvent(
 		state,
-		fact.SideCT,
 		engine.CalculateBombDefuseSwing,
 		func(s *probability.RoundState) { s.SetBombDefused() },
 		input,
@@ -128,7 +126,6 @@ func TestAllocateObjectiveEventPlantAppliesStateEvenIfDeltaNonPositive(t *testin
 
 	_, _ = allocator.AllocateObjectiveEvent(
 		state,
-		fact.SideT,
 		engine.CalculateBombPlantSwing,
 		func(s *probability.RoundState) { s.SetBombPlanted() },
 		input,

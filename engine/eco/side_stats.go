@@ -48,10 +48,6 @@ func (u *SideStatsUpdater) updateTSide() {
 		u.player.TKAST++
 	}
 	if u.roundStats.ClutchAttempt {
-		u.player.TClutchRounds++
-		if u.roundStats.ClutchWon {
-			u.player.TClutchWins++
-		}
 		u.recordSideClutchAttempts(true)
 	}
 	u.applySideEcoCounters(true)
@@ -77,10 +73,6 @@ func (u *SideStatsUpdater) updateCTSide() {
 		u.player.CTKAST++
 	}
 	if u.roundStats.ClutchAttempt {
-		u.player.CTClutchRounds++
-		if u.roundStats.ClutchWon {
-			u.player.CTClutchWins++
-		}
 		u.recordSideClutchAttempts(false)
 	}
 	u.applySideEcoCounters(false)
@@ -307,9 +299,7 @@ func (u *SideStatsUpdater) updatePistolStats() {
 	u.player.PistolRoundsPlayed++
 	u.player.PistolRoundKills += u.roundStats.Kills
 
-	if u.roundStats.Deaths > 0 {
-		u.player.PistolRoundDeaths++
-	} else if u.roundStats.Survived {
+	if u.roundStats.Deaths == 0 && u.roundStats.Survived {
 		u.player.PistolRoundSurvivals++
 	}
 

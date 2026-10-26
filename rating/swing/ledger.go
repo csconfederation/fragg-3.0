@@ -64,22 +64,21 @@ func NewRoundSwingLedger() *RoundSwingLedger {
 // RecordEvent appends an event and applies all allocations to player totals.
 func (l *RoundSwingLedger) RecordEvent(event SwingLedgerEvent) {
 	for _, alloc := range event.PositiveAlloc {
-		l.applyAllocation(alloc, true)
+		l.applyAllocation(alloc)
 	}
 	for _, alloc := range event.NegativeAlloc {
-		l.applyAllocation(alloc, false)
+		l.applyAllocation(alloc)
 	}
 }
 
 // ApplyAllocations adds swing amounts directly (e.g. trade reallocation).
 func (l *RoundSwingLedger) ApplyAllocations(allocs []PlayerSwingAllocation) {
 	for _, alloc := range allocs {
-		positive := alloc.Amount > 0
-		l.applyAllocation(alloc, positive)
+		l.applyAllocation(alloc)
 	}
 }
 
-func (l *RoundSwingLedger) applyAllocation(alloc PlayerSwingAllocation, positiveSide bool) {
+func (l *RoundSwingLedger) applyAllocation(alloc PlayerSwingAllocation) {
 	if alloc.Amount == 0 {
 		return
 	}

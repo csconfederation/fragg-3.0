@@ -343,7 +343,6 @@ type ObjectiveAllocationInput struct {
 // AllocateObjectiveEvent distributes plant or defuse swing across both teams.
 func (a *PoolAllocator) AllocateObjectiveEvent(
 	state *probability.RoundState,
-	primarySide fact.Side,
 	calcDelta func(*probability.RoundState) float64,
 	applyState func(*probability.RoundState),
 	input ObjectiveAllocationInput,

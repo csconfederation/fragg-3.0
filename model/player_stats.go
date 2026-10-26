@@ -57,7 +57,6 @@ type PlayerStats struct {
 	DisadvantagedBuyKills  int
 	PistolRoundsPlayed     int
 	PistolRoundKills       int
-	PistolRoundDeaths      int
 	PistolRoundSurvivals   int
 	PistolRoundMultiKills  int
 	PistolRoundRating      float64
@@ -72,8 +71,6 @@ type PlayerStats struct {
 	TProbabilitySwing      float64
 	TKAST                  float64
 	TMultiKills            [6]int
-	TClutchRounds          int
-	TClutchWins            int
 	TManAdvantageKills     int
 	TManDisadvantageDeaths int
 	TRating                float64
@@ -111,8 +108,6 @@ type PlayerStats struct {
 	CTProbabilitySwing      float64
 	CTKAST                  float64
 	CTMultiKills            [6]int
-	CTClutchRounds          int
-	CTClutchWins            int
 	CTManAdvantageKills     int
 	CTManDisadvantageDeaths int
 	CTRating                float64
@@ -159,5 +154,4 @@ type PlayerStats struct {
 	ProbabilitySwing         float64 // Cumulative win probability contribution
 	ProbabilitySwingPerRound float64 // Average swing per round
 	EcoAdjustedKills         float64 // Kills weighted by duel difficulty
-	SwingRating              float64 // Swing contribution to final rating
 }

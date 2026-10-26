@@ -103,19 +103,18 @@ func Derive(p *model.PlayerStats, kdprModifier bool) {
 		// Pistol round rating
 		if p.PistolRoundsPlayed > 0 {
 			p.PistolRoundRating = rating.ComputePistolRoundRating(
-				p.PistolRoundsPlayed, p.PistolRoundKills, p.PistolRoundDeaths,
-				p.PistolRoundSurvivals, p.PistolRoundMultiKills)
+				p.PistolRoundsPlayed, p.PistolRoundKills, p.PistolRoundSurvivals, p.PistolRoundMultiKills)
 		}
 
 		// Side-specific HLTV ratings
 		if p.TRoundsPlayed > 0 {
 			p.TRating = rating.ComputeSideHLTVRating(
-				p.TRoundsPlayed, p.TKills, p.TDeaths, p.TSurvivals, p.TMultiKills)
+				p.TRoundsPlayed, p.TKills, p.TSurvivals, p.TMultiKills)
 		}
 
 		if p.CTRoundsPlayed > 0 {
 			p.CTRating = rating.ComputeSideHLTVRating(
-				p.CTRoundsPlayed, p.CTKills, p.CTDeaths, p.CTSurvivals, p.CTMultiKills)
+				p.CTRoundsPlayed, p.CTKills, p.CTSurvivals, p.CTMultiKills)
 		}
 
 		p.TimeAlivePerRound = p.TotalTimeAlive / rounds
@@ -137,25 +136,16 @@ func Derive(p *model.PlayerStats, kdprModifier bool) {
 		// DuelSwing: EcoKillValue - EcoDeathValue (net duel economy impact)
 		p.DuelSwing = p.EcoKillValue - p.EcoDeathValue
 		p.DuelSwingPerRound = p.DuelSwing / rounds
-		// SwingRating: scale swing to rating (0% = 1.0, +4% = 1.4, -3% = 0.7)
-		p.SwingRating = 1.0 + (p.ProbabilitySwingPerRound * 10.0)
-		if p.SwingRating < 0.5 {
-			p.SwingRating = 0.5
-		} else if p.SwingRating > 1.5 {
-			p.SwingRating = 1.5
-		}
 	}
 
 	p.FinalRating = rating.ComputeFinalRating(p, kdprModifier)
 
 	if p.TRoundsPlayed > 0 {
 		p.TEcoRating = rating.ComputeSideRating(
-			p.TRoundsPlayed, p.TKills, p.TDeaths, p.TDamage, p.TEcoKillValue,
-			p.TProbabilitySwing, p.TKAST, p.TMultiKills, p.TClutchRounds, p.TClutchWins, kdprModifier)
+			p.TRoundsPlayed, p.TKills, p.TDeaths, p.TDamage, p.TProbabilitySwing, p.TKAST, kdprModifier)
 	}
 	if p.CTRoundsPlayed > 0 {
 		p.CTEcoRating = rating.ComputeSideRating(
-			p.CTRoundsPlayed, p.CTKills, p.CTDeaths, p.CTDamage, p.CTEcoKillValue,
-			p.CTProbabilitySwing, p.CTKAST, p.CTMultiKills, p.CTClutchRounds, p.CTClutchWins, kdprModifier)
+			p.CTRoundsPlayed, p.CTKills, p.CTDeaths, p.CTDamage, p.CTProbabilitySwing, p.CTKAST, kdprModifier)
 	}
 }

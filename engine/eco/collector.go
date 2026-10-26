@@ -147,7 +147,7 @@ func (c *Collector) addRow(steam uint64, side fact.Side) {
 // Join adds a human who joined the open round mid-round, on the side CSC gave them, so eco covers
 // every round record CSC has. The oracle left such a record without a side and flagged the gap
 // with its coverage check (Core-planning#303).
-func (c *Collector) Join(steam uint64, name string, isBot bool, side fact.Side, clan string) {
+func (c *Collector) Join(steam uint64, isBot bool, side fact.Side, clan string) {
 	if isBot || !c.roundActive {
 		return
 	}
@@ -322,8 +322,7 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 			return fmt.Errorf("bomb planted by nobody at tick %d", f.Tick) // the oracle dereferences nil
 		}
 		c.row(f.Player.Steam64).PlantedBomb = true
-		t := c.timeInRound(f.Tick)
-		c.applyLedger(c.swing.RecordBombPlant(f.Player.Steam64, t, c.roundContext(x.Alive), f.Tick))
+		c.applyLedger(c.swing.RecordBombPlant(f.Player.Steam64, c.roundContext(x.Alive), f.Tick))
 	case fact.BombDefused:
 		if !c.roundActive {
 			return nil
@@ -332,8 +331,7 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 			return fmt.Errorf("bomb defused by nobody at tick %d", f.Tick) // the oracle dereferences nil
 		}
 		c.row(f.Player.Steam64).DefusedBomb = true
-		t := c.timeInRound(f.Tick)
-		c.applyLedger(c.swing.RecordBombDefuse(f.Player.Steam64, t, c.roundContext(x.Alive), f.Tick))
+		c.applyLedger(c.swing.RecordBombDefuse(f.Player.Steam64, c.roundContext(x.Alive), f.Tick))
 	}
 	return nil
 }
@@ -453,7 +451,6 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 
 	// processOpeningKill: the round's opening, as CSC's (#591)
 	if x.Before.Opening && x.Enemy {
-		r.OpeningKill = true
 		if f.Weapon != nil && *f.Weapon == eqAWP {
 			r.AWPOpeningKill = true
 		}
@@ -476,7 +473,7 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 			}
 		}
 		kr := c.swing.RecordKill(attacker.Steam64, victim.Steam64, attacker.Side, victim.Side, float64(attackerEquip),
-			float64(victimEquip), t, isTradeKill, f.Headshot, decided, losing, tick)
+			float64(victimEquip), isTradeKill, decided, losing, tick)
 		c.applyLedger(kr.Allocations)
 		for _, a := range kr.Allocations {
 			if a.SteamID == victim.Steam64 && a.Reason == swing.SwingReasonVictimDeath {

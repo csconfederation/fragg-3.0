@@ -388,7 +388,7 @@ ProbabilitySwingPerRound = ProbabilitySwing / RoundsPlayed
 
 ## Part 5: Final rating formula
 
-Implemented in `rating.ComputeFinalRating`:
+Implemented in `rating.ComputeFinalRating`; Stats stores it as `swing_rating` (the side ratings as the T and CT rows' `swing_rating`):
 
 ```
 adr  = total_damage / rounds_played
@@ -449,10 +449,9 @@ KPR/DPR is a small secondary nudge. Kills/deaths are **not** directly in the rat
 | Probability swing | Yes (primary driver) |
 | ADR | Yes |
 | KAST | Yes |
-| KPR/DPR | Only if `kdpr_modifier` enabled |
-| `SwingRating` | No (export/display only) |
+| KPR/DPR | No (the modifier is off) |
 | `EcoKillValue` / `EcoDeathValue` | No (separate export stats) |
-| Multi-kills, clutches | No (passed to side rating but unused there) |
+| Multi-kills, clutches | No (multi-kills feed the HLTV ratings) |
 | HLTV rating | No (parallel comparison stat) |
 
 ### Side ratings (`TEcoRating`, `CTEcoRating`)
@@ -527,19 +526,7 @@ final_rating ≈ 1.0 + 0.05 + 0.009 + 0.075 = 1.134
 
 ## Part 7: Derived metrics (informational)
 
-**SwingRating** (stored on player, not used in final rating):
-
-```
-SwingRating = 1.0 + (ProbabilitySwingPerRound × 10.0)
-clamped to [0.5, 1.5]
-
-Interpretation:
-  0% avg swing/round  → 1.00
-  +4% avg swing/round → 1.40
-  -3% avg swing/round → 0.70
-```
-
-**DuelSwing** (also not in final rating):
+**DuelSwing** (not in final rating; stored as `ecoDuelSwing`):
 
 ```
 DuelSwing = EcoKillValue - EcoDeathValue   // legacy-style eco point totals

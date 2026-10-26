@@ -38,7 +38,7 @@ func ApplyRoundResidual(ledger *RoundSwingLedger, input ResidualInput, cfg Confi
 		losingSide = fact.SideT
 	}
 
-	positiveAllocs := allocatePositiveResidual(input, input.Winner, residual, cfg)
+	positiveAllocs := allocatePositiveResidual(input, input.Winner, residual)
 	negativeAllocs := allocateNegativeResidual(input, losingSide, residual, cfg)
 
 	event := SwingLedgerEvent{
@@ -56,7 +56,7 @@ func ApplyRoundResidual(ledger *RoundSwingLedger, input ResidualInput, cfg Confi
 	return allocs
 }
 
-func allocatePositiveResidual(input ResidualInput, winner fact.Side, residual float64, cfg Config) []PlayerSwingAllocation {
+func allocatePositiveResidual(input ResidualInput, winner fact.Side, residual float64) []PlayerSwingAllocation {
 	weights := make(map[uint64]float64)
 	aliveWinners := make([]uint64, 0)
 

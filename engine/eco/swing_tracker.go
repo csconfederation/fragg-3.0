@@ -111,8 +111,7 @@ func (st *SwingTracker) RecordKill(
 	killerID, victimID uint64,
 	killerSide, victimSide fact.Side,
 	killerEquip, victimEquip float64,
-	timeInRound float64,
-	isTradeKill, isHeadshot bool,
+	isTradeKill bool,
 	roundDecided bool,
 	losingSideTeammates []uint64,
 	currentTick int,
@@ -208,7 +207,6 @@ func (st *SwingTracker) ApplyTradeReallocation(
 // RecordBombPlant records a bomb plant and returns per-player swing allocations.
 func (st *SwingTracker) RecordBombPlant(
 	planterID uint64,
-	timeInRound float64,
 	players map[uint64]swing.PlayerRoundContext,
 	currentTick int,
 ) []swing.PlayerSwingAllocation {
@@ -229,7 +227,6 @@ func (st *SwingTracker) RecordBombPlant(
 	}
 	event, _ := st.allocator.AllocateObjectiveEvent(
 		st.roundState,
-		fact.SideT,
 		st.engine.CalculateBombPlantSwing,
 		func(s *probability.RoundState) {
 			s.SetBombPlanted()
@@ -244,7 +241,6 @@ func (st *SwingTracker) RecordBombPlant(
 // RecordBombDefuse records a bomb defuse and returns per-player swing allocations.
 func (st *SwingTracker) RecordBombDefuse(
 	defuserID uint64,
-	timeInRound float64,
 	players map[uint64]swing.PlayerRoundContext,
 	currentTick int,
 ) []swing.PlayerSwingAllocation {
@@ -265,7 +261,6 @@ func (st *SwingTracker) RecordBombDefuse(
 	}
 	event, _ := st.allocator.AllocateObjectiveEvent(
 		st.roundState,
-		fact.SideCT,
 		st.engine.CalculateBombDefuseSwing,
 		func(s *probability.RoundState) { s.SetBombDefused() },
 		input,

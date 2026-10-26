@@ -23,7 +23,6 @@ type RoundStats struct {
 	TeamWon            bool
 	PlantedBomb        bool
 	DefusedBomb        bool
-	OpeningKill        bool
 	OpeningDeath       bool
 	ClutchAttempt      bool
 	ClutchWon          bool

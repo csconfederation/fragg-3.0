@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/round"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
@@ -38,6 +39,7 @@ type Collector struct {
 	roundActive   bool
 	mapName       string
 	startTick     int // the round clock starts at the open's tick, as CSC's
+	winTime       float64
 	roundDecided  bool
 	bombPlanted   bool
 	dead          map[uint64]bool // this round's victims
@@ -96,21 +98,6 @@ func (c *Collector) row(steam uint64) *model.RoundStats {
 	return &model.RoundStats{}
 }
 
-// countAlive is the oracle's CountAlivePlayers: alive humans per side, capped at 5.
-func countAlive(ps []fact.Player) (t, ct int) {
-	for _, p := range ps {
-		if p.IsBot || !p.Alive {
-			continue
-		}
-		if p.Side == fact.SideT {
-			t++
-		} else if p.Side == fact.SideCT {
-			ct++
-		}
-	}
-	return min(t, 5), min(ct, 5)
-}
-
 // Open is the oracle's BeginRound, called on every round open; num is the match's round number
 // and members the round's members (bots included), whose alive counts are tAlive and ctAlive.
 // D13: the pistol rounds are rounds 1 and 13, where the oracle used IsPistolRound on eco's own
@@ -121,6 +108,7 @@ func (c *Collector) Open(s fact.Snapshot, num int, members []fact.Player, tAlive
 	c.roundHasKill = false
 	c.trades.Reset()
 	c.roundDecided = false
+	c.winTime = 0
 	c.bombPlanted = false
 	c.roundActive = true
 	c.roundNumber++
@@ -185,33 +173,26 @@ func (c *Collector) Join(steam uint64, name string, isBot bool, side fact.Side, 
 }
 
 // Win is the oracle's FinalizeRound: round-end trades, survival, clutches and residual swing.
-func (c *Collector) Win(winner fact.Side, s fact.Snapshot) {
+func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player) {
 	if !c.roundActive || s.Warmup {
 		return
 	}
 	duration := c.timeInRound(s.Tick)
+	c.winTime = duration
 	c.trades.ProcessRoundEndTrades(s.Tick, c.round)
 
+	for _, r := range c.round { // every row, a disconnected member's too (#591)
+		r.TeamWon = r.PlayerSide == "T" && winner == fact.SideT || r.PlayerSide == "CT" && winner == fact.SideCT
+	}
 	ps := playing(s)
-	for _, p := range ps {
-		r := c.row(p.Steam64)
-		r.TeamWon = p.Side == winner
-		if p.Alive {
-			r.Survived = true
-			r.TimeAlive = duration
-		} else if r.Deaths > 0 {
-			r.TimeAlive = r.DeathTime
-		}
+	isAlive, aliveOn := map[uint64]bool{}, map[fact.Side]int{}
+	for _, p := range alive {
+		isAlive[p.Steam64] = true
+		aliveOn[p.Side]++
 	}
 	for _, p := range ps {
 		r := c.row(p.Steam64)
-		mates := 0
-		for _, o := range ps {
-			if o.Alive && o.Side == p.Side {
-				mates++
-			}
-		}
-		if p.Alive && mates == 1 {
+		if isAlive[p.Steam64] && aliveOn[p.Side] == 1 {
 			r.WasLastAlive = true
 		}
 		if r.ClutchEnteredSize > 0 {
@@ -222,9 +203,6 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot) {
 				r.ClutchWon = true
 			}
 		}
-		if p.Alive && !r.TeamWon {
-			r.SavedWeapons = true
-		}
 	}
 
 	maxDamage := 0
@@ -233,14 +211,21 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot) {
 			maxDamage = r.Damage
 		}
 	}
-	c.applyLedger(c.swing.ApplyRoundResidual(winner, c.roundContext(s), maxDamage), duration, "")
+	c.applyLedger(c.swing.ApplyRoundResidual(winner, c.roundContext(alive), maxDamage), duration, "")
 	c.swing.FinalizeRound()
 }
 
-// Commit is the oracle's SnapshotRound: the round's stats, copied when the round commits.
+// Commit is the oracle's SnapshotRound: the round's stats, copied when the round commits. Survival
+// is final here, as CSC's (#591): no death in the round, post-round deaths included.
 func (c *Collector) Commit() *Round {
 	stats := make(map[uint64]*model.RoundStats, len(c.round))
 	for id, rs := range c.round {
+		rs.Survived = rs.Deaths == 0
+		rs.TimeAlive = rs.DeathTime
+		if rs.Survived {
+			rs.TimeAlive = c.winTime
+		}
+		rs.SavedWeapons = rs.Survived && !rs.TeamWon
 		cp := *rs
 		cp.KillTimes = append([]float64(nil), rs.KillTimes...)
 		cp.SwingContributions = append([]model.SwingContribution(nil), rs.SwingContributions...)
@@ -287,13 +272,11 @@ func (c *Collector) applyLedger(allocs []swing.PlayerSwingAllocation, timeInRoun
 	}
 }
 
-// roundContext is the oracle's buildPlayerRoundContext.
-func (c *Collector) roundContext(s fact.Snapshot) map[uint64]swing.PlayerRoundContext {
+// roundContext is the oracle's buildPlayerRoundContext over the round's alive members.
+func (c *Collector) roundContext(members []fact.Player) map[uint64]swing.PlayerRoundContext {
 	alive := map[uint64]bool{}
-	for _, p := range playing(s) {
-		if !p.IsBot {
-			alive[p.Steam64] = p.Alive
-		}
+	for _, p := range members {
+		alive[p.Steam64] = true
 	}
 	players := map[uint64]swing.PlayerRoundContext{}
 	for id, rs := range c.round {
@@ -316,22 +299,36 @@ func (c *Collector) roundContext(s fact.Snapshot) map[uint64]swing.PlayerRoundCo
 	return players
 }
 
-// Fact runs the oracle's eco handlers for f. Kills run handleKill, then handleRoundDecisionKill.
-func (c *Collector) Fact(f fact.Fact) error {
+// Fact runs the oracle's eco handlers for f with its round context. Kills run handleKill, then
+// handleRoundDecisionKill; kills count as the round decides (#591): expected, not bomb-ignored.
+func (c *Collector) Fact(f fact.Fact, x round.Context) error {
+	err := c.fact(f, x)
+	c.swing.SetAlive(x.After.TAlive, x.After.CTAlive) // swing's alive counts are the round's
+	return err
+}
+
+func (c *Collector) fact(f fact.Fact, x round.Context) error {
 	switch f := f.(type) {
 	case fact.ServerInfo:
 		c.mapName = f.Map
 	case fact.Kill:
-		if !f.Warmup && c.roundActive {
-			c.kill(f)
+		if x.Victim {
+			c.death(f)
+		}
+		swung := x.Expected && !x.BombIgnored && c.kill(f, x)
+		if x.Victim && !swung {
+			c.swing.RecordDeath(f.Victim.Steam64, f.Victim.Side)
+		}
+		if x.Assist {
+			ar := c.row(f.Assister.Steam64)
+			ar.GotAssist = true
+			ar.Assists++
 		}
 		if c.roundActive && f.Victim != nil {
 			c.dead[f.Victim.Steam64] = true // suicides and team kills too, which kill skips
 		}
-		if c.roundActive && !c.roundDecided {
-			if t, ct := countAlive(playing(f.Snapshot)); t == 0 || ct == 0 {
-				c.roundDecided = true
-			}
+		if x.Victim && (x.After.TAlive == 0 || x.After.CTAlive == 0) {
+			c.roundDecided = true
 		}
 	case fact.Hurt:
 		if !f.Warmup && c.roundActive {
@@ -374,7 +371,7 @@ func (c *Collector) Fact(f fact.Fact) error {
 		c.bombPlanted = true
 		c.row(f.Player.Steam64).PlantedBomb = true
 		t := c.timeInRound(f.Tick)
-		c.applyLedger(c.swing.RecordBombPlant(f.Player.Steam64, t, c.roundContext(f.Snapshot), f.Tick), t, "")
+		c.applyLedger(c.swing.RecordBombPlant(f.Player.Steam64, t, c.roundContext(x.Alive), f.Tick), t, "")
 	case fact.BombDefused:
 		if !c.roundActive {
 			return nil
@@ -384,7 +381,7 @@ func (c *Collector) Fact(f fact.Fact) error {
 		}
 		c.row(f.Player.Steam64).DefusedBomb = true
 		t := c.timeInRound(f.Tick)
-		c.applyLedger(c.swing.RecordBombDefuse(f.Player.Steam64, t, c.roundContext(f.Snapshot), f.Tick), t, "")
+		c.applyLedger(c.swing.RecordBombDefuse(f.Player.Steam64, t, c.roundContext(x.Alive), f.Tick), t, "")
 		c.roundDecided = true
 	case fact.BombExplode:
 		if c.roundActive {
@@ -415,11 +412,11 @@ func (c *Collector) hurt(f fact.Hurt) {
 	c.swing.RecordDamage(f.Attacker.Steam64, f.Player.Steam64, dmg, c.timeInRound(f.Tick))
 }
 
-// kill is the oracle's handleKill.
-func (c *Collector) kill(f fact.Kill) {
+// kill is the oracle's handleKill. It reports whether the kill reached swing's kill transition.
+func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 	attacker, victim := f.Killer, f.Victim
 	if attacker != nil && victim != nil && (attacker.Steam64 == victim.Steam64 || attacker.Side == victim.Side) {
-		return
+		return false
 	}
 	tick := f.Tick
 	t := c.timeInRound(tick)
@@ -436,17 +433,8 @@ func (c *Collector) kill(f fact.Kill) {
 
 	// processVictimDeath
 	if victim != nil {
-		vr := c.row(victim.Steam64)
-		vr.Deaths++
-		vr.DeathTime = t
 		if f.Weapon == nil || *f.Weapon != eqBomb {
 			c.clutchEntry(victim, ps)
-		}
-		for _, w := range victim.Weapons {
-			if w == eqAWP {
-				vr.HadAWP, vr.LostAWP = true, true
-				break
-			}
 		}
 		c.trades.RecordDeath(victim, attacker, tick, t, ps)
 	}
@@ -473,7 +461,7 @@ func (c *Collector) kill(f fact.Kill) {
 	c.trades.ProcessExpiredTrades(tick, c.round)
 
 	if attacker == nil || victim == nil {
-		return
+		return false
 	}
 	c.trades.RecordKill(attacker, victim, tick)
 
@@ -501,12 +489,8 @@ func (c *Collector) kill(f fact.Kill) {
 	if killValue <= 0.85 {
 		r.DisadvantagedBuyKills++
 	}
-	tAlive, ctAlive := countAlive(ps)
-	attackerAfter, victimAfter := ctAlive, tAlive
-	if attacker.Side == fact.SideT {
-		attackerAfter, victimAfter = tAlive, ctAlive
-	}
-	attackerBefore, victimBefore := attackerAfter, victimAfter+1
+	attackerBefore, victimBefore := alive(x.Before, attacker.Side), alive(x.Before, victim.Side)
+	attackerAfter, victimAfter := alive(x.After, attacker.Side), alive(x.After, victim.Side)
 	if attackerBefore <= victimBefore && attackerAfter > victimAfter {
 		r.ManAdvantageKills++
 	}
@@ -546,30 +530,33 @@ func (c *Collector) kill(f fact.Kill) {
 		r.TradeKill = true
 		r.TradeSpeed = tradeSpeed
 	}
-	losing := make([]uint64, 0)
-	for _, p := range ps {
-		if !p.IsBot && p.Alive && p.Side == victim.Side && p.Steam64 != victim.Steam64 {
-			losing = append(losing, p.Steam64)
+	// Swing's kill transition is the counted victim's death (#591): not a non-member's.
+	if x.Victim {
+		losing := make([]uint64, 0)
+		for _, p := range x.Alive {
+			if !p.IsBot && p.Side == victim.Side {
+				losing = append(losing, p.Steam64)
+			}
 		}
-	}
-	kr := c.swing.RecordKill(attacker.Steam64, victim.Steam64, attacker.Side, victim.Side, float64(attackerEquip),
-		float64(victimEquip), t, isTradeKill, f.Headshot, c.roundDecided, losing, tick)
-	c.applyLedger(kr.Allocations, t, victim.Name)
-	for _, a := range kr.Allocations {
-		if a.SteamID == victim.Steam64 && a.Reason == swing.SwingReasonVictimDeath {
-			vr.LastDeathSwing = a.Amount
+		kr := c.swing.RecordKill(attacker.Steam64, victim.Steam64, attacker.Side, victim.Side, float64(attackerEquip),
+			float64(victimEquip), t, isTradeKill, f.Headshot, c.roundDecided, losing, tick)
+		c.applyLedger(kr.Allocations, t, victim.Name)
+		for _, a := range kr.Allocations {
+			if a.SteamID == victim.Steam64 && a.Reason == swing.SwingReasonVictimDeath {
+				vr.LastDeathSwing = a.Amount
+			}
 		}
-	}
-	if kr.SurvivalCreditPerPlayer > 0 {
-		allocs := make([]swing.PlayerSwingAllocation, 0, len(kr.SurvivalBeneficiaries))
-		for _, id := range kr.SurvivalBeneficiaries {
-			allocs = append(allocs, swing.PlayerSwingAllocation{SteamID: id, Side: attacker.Side,
-				Amount: kr.SurvivalCreditPerPlayer, Reason: swing.SwingReasonSurvivalCredit})
+		if kr.SurvivalCreditPerPlayer > 0 {
+			allocs := make([]swing.PlayerSwingAllocation, 0, len(kr.SurvivalBeneficiaries))
+			for _, id := range kr.SurvivalBeneficiaries {
+				allocs = append(allocs, swing.PlayerSwingAllocation{SteamID: id, Side: attacker.Side,
+					Amount: kr.SurvivalCreditPerPlayer, Reason: swing.SwingReasonSurvivalCredit})
+			}
+			c.applyLedger(allocs, t, victim.Name)
 		}
-		c.applyLedger(allocs, t, victim.Name)
-	}
-	if kr.Swing.EcoMultiplier > 0 {
-		r.EcoAdjustedKills += kr.Swing.EcoMultiplier
+		if kr.Swing.EcoMultiplier > 0 {
+			r.EcoAdjustedKills += kr.Swing.EcoMultiplier
+		}
 	}
 
 	// processEcoKillFlags
@@ -584,12 +571,27 @@ func (c *Collector) kill(f fact.Kill) {
 		r.PerfectKills++
 	}
 
-	// processAssist
-	if f.Assister != nil {
-		ar := c.row(f.Assister.Steam64)
-		ar.GotAssist = true
-		ar.Assists++
+	return x.Victim
+}
+
+// death records a death the round counts (#591): every death, team kills and suicides too.
+func (c *Collector) death(f fact.Kill) {
+	v := c.row(f.Victim.Steam64)
+	v.Deaths++
+	v.DeathTime = c.timeInRound(f.Tick)
+	for _, w := range f.Victim.Weapons {
+		if w == eqAWP {
+			v.HadAWP, v.LostAWP = true, true
+			break
+		}
 	}
+}
+
+func alive(s round.State, side fact.Side) int {
+	if side == fact.SideT {
+		return s.TAlive
+	}
+	return s.CTAlive
 }
 
 // clutchEntry is the oracle's checkClutchEntry: the victim's death leaves one teammate alive

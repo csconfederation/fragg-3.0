@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/round"
 )
 
 // A human who joins mid-round gets the side CSC gave them, so their side rounds count.
@@ -34,7 +35,7 @@ func TestRowsAreMembers(t *testing.T) {
 		Players: []fact.Player{human, bot, late, enemy}}
 	c.Open(s, 2, []fact.Player{human, bot, enemy}, 1, 2)
 	for _, a := range []fact.Player{bot, late} {
-		if err := c.Fact(fact.Hurt{Snapshot: s, Attacker: &a, Player: &human, HealthDamageTaken: 10}); err != nil {
+		if err := c.Fact(fact.Hurt{Snapshot: s, Attacker: &a, Player: &human, HealthDamageTaken: 10}, round.Context{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -56,11 +57,78 @@ func TestDeathAtTimeZero(t *testing.T) {
 	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
 		Players: []fact.Player{killer, victim}}
 	c.Open(s, 2, s.Players, 1, 1)
-	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}); err != nil {
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak},
+		round.Context{Expected: true, Victim: true, Killer: true, Enemy: true}); err != nil {
 		t.Fatal(err)
 	}
 	p := c.Players([]*Round{c.Commit()})
 	if p[2].Deaths != 1 || p[2].EarlyDeaths != 1 {
 		t.Errorf("deaths %d, early deaths %d", p[2].Deaths, p[2].EarlyDeaths)
+	}
+}
+
+// A team kill is a death the round counts (#591), with no kill for the killer.
+func TestTeamKillIsADeath(t *testing.T) {
+	c := New()
+	ak := 7
+	killer := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}
+	victim := fact.Player{Steam64: 2, Side: fact.SideT, Listed: true}
+	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{killer, victim}}
+	c.Open(s, 2, s.Players, 2, 0)
+	s.Tick = 740
+	x := round.Context{Expected: true, Victim: true, Killer: true, Before: round.State{TAlive: 2}, After: round.State{TAlive: 1}}
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	r := c.Commit()
+	if v := r.stats[2]; v.Deaths != 1 || v.DeathTime != 10 {
+		t.Errorf("victim deaths %d at %v s", v.Deaths, v.DeathTime)
+	}
+	if k := r.stats[1]; k.Kills != 0 {
+		t.Errorf("killer kills %d", k.Kills)
+	}
+}
+
+// Survival is final at commit (#591): a death after the win isn't a survival or a save.
+func TestPostRoundDeathIsNoSurvival(t *testing.T) {
+	c := New()
+	ak := 7
+	killer := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}
+	victim := fact.Player{Steam64: 2, Side: fact.SideCT, Alive: true, Listed: true}
+	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{killer, victim}}
+	c.Open(s, 2, s.Players, 1, 1)
+	c.Win(fact.SideT, s, s.Players)
+	x := round.Context{Expected: true, Victim: true, Killer: true, Enemy: true,
+		Before: round.State{TAlive: 1, CTAlive: 1}, After: round.State{TAlive: 1}}
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	r := c.Commit()
+	if v := r.stats[2]; v.Survived || v.SavedWeapons {
+		t.Errorf("victim survived %v, saved %v", v.Survived, v.SavedWeapons)
+	}
+	if k := r.stats[1]; !k.Survived || k.SavedWeapons {
+		t.Errorf("killer survived %v, saved %v", k.Survived, k.SavedWeapons)
+	}
+}
+
+// A winner who disconnected without dying won the round: no save (#591, review50).
+func TestDisconnectedWinnerIsNoSave(t *testing.T) {
+	c := New()
+	winner := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}
+	loser := fact.Player{Steam64: 2, Side: fact.SideCT, Alive: true, Listed: true}
+	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{winner, loser}}
+	c.Open(s, 2, s.Players, 1, 1)
+	s.Players = []fact.Player{loser}
+	c.Win(fact.SideT, s, s.Players)
+	r := c.Commit()
+	if w := r.stats[1]; !w.TeamWon || w.SavedWeapons {
+		t.Errorf("winner won %v, saved %v", w.TeamWon, w.SavedWeapons)
+	}
+	if l := r.stats[2]; l.TeamWon || !l.SavedWeapons {
+		t.Errorf("loser won %v, saved %v", l.TeamWon, l.SavedWeapons)
 	}
 }

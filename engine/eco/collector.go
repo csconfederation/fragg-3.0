@@ -39,7 +39,6 @@ type Collector struct {
 	mapName       string
 	startTick     int // the round clock starts at the open's tick, as CSC's
 	winTime       float64
-	roundDecided  bool
 	bombPlanted   bool
 }
 
@@ -103,7 +102,6 @@ func (c *Collector) row(steam uint64) *model.RoundStats {
 func (c *Collector) Open(s fact.Snapshot, num int, members []fact.Player, tAlive, ctAlive int) {
 	c.round = map[uint64]*model.RoundStats{}
 	c.trades.Reset()
-	c.roundDecided = false
 	c.winTime = 0
 	c.bombPlanted = false
 	c.roundActive = true
@@ -319,9 +317,6 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 			ar.GotAssist = true
 			ar.Assists++
 		}
-		if x.Victim && (x.After.TAlive == 0 || x.After.CTAlive == 0) {
-			c.roundDecided = true
-		}
 	case fact.Hurt:
 		if !f.Warmup && c.roundActive {
 			c.hurt(f)
@@ -374,11 +369,6 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 		c.row(f.Player.Steam64).DefusedBomb = true
 		t := c.timeInRound(f.Tick)
 		c.applyLedger(c.swing.RecordBombDefuse(f.Player.Steam64, t, c.roundContext(x.Alive), f.Tick), t, "")
-		c.roundDecided = true
-	case fact.BombExplode:
-		if c.roundActive {
-			c.roundDecided = true
-		}
 	}
 	return nil
 }
@@ -465,7 +455,9 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 	r := c.row(attacker.Steam64)
 	vr := c.row(victim.Steam64)
 	r.KillTimes = append(r.KillTimes, t)
-	if c.roundDecided {
+	// An exit frag is a kill once the round is decided, as CSC reads it (#591): won, defused or exploded.
+	decided := x.Before.Phase == round.Decided
+	if decided {
 		r.IsExitFrag = true
 		r.ExitFrags++
 	}
@@ -536,7 +528,7 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 			}
 		}
 		kr := c.swing.RecordKill(attacker.Steam64, victim.Steam64, attacker.Side, victim.Side, float64(attackerEquip),
-			float64(victimEquip), t, isTradeKill, f.Headshot, c.roundDecided, losing, tick)
+			float64(victimEquip), t, isTradeKill, f.Headshot, decided, losing, tick)
 		c.applyLedger(kr.Allocations, t, victim.Name)
 		for _, a := range kr.Allocations {
 			if a.SteamID == victim.Steam64 && a.Reason == swing.SwingReasonVictimDeath {

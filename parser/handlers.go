@@ -437,6 +437,7 @@ func (d *DemoParser) processVictimDeath(ctx *killContext) {
 	}
 
 	victimRound := d.state.ensureRound(ctx.victim)
+	victimRound.Deaths++ // engine/eco folds death presence by count (#591)
 	victimRound.DeathTime = ctx.timeInRound
 
 	// Check if this death puts a teammate into a clutch situation

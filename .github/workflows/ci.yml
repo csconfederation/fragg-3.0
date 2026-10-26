@@ -50,7 +50,7 @@ jobs:
         id: demos
         run: |
           echo "FRAGG_CI_DEMOS=$RUNNER_TEMP/ci-demos" >> "$GITHUB_ENV"
-          echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' export/testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v6
         with:

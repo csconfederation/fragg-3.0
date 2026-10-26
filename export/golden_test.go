@@ -70,7 +70,7 @@ func TestCIDemos(t *testing.T) {
 	if dir == "" {
 		t.Skip("FRAGG_CI_DEMOS not set; run scripts/fetch-ci-demos.sh")
 	}
-	raw, err := os.ReadFile(filepath.Join(ciDir, "demos.json"))
+	raw, err := os.ReadFile("../testdata/ci/demos.json")
 	if err != nil {
 		t.Fatal(err)
 	}

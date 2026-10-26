@@ -503,6 +503,12 @@ func TestInDemoRestoreReplaysRounds(t *testing.T) {
 	restoredAt := s.tick
 	s.played, s.score = 2, map[string]int{"Alpha": 2, "Bravo": 0} // the game restores round 3
 	s.play("Bravo")
+	t.Run("the replay drops the later rounds", func(t *testing.T) {
+		res, err := s.run(t, fact.Terminal{Kind: fact.Truncated, Err: errors.New("eof")})
+		if err != nil || !slices.Equal(nums(res.Rounds), []int{1, 2, 3}) {
+			t.Fatalf("rounds %v, error %v; want 1-3", nums(res.Rounds), err)
+		}
+	})
 	for i := 0; i < 10; i++ {
 		s.play("Alpha")
 	}

@@ -492,7 +492,8 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 			return m.fail(tick, "round %d winner %q isn't one of its teams %v", r.Num, r.WinnerClan, r.sideClans)
 		}
 		// An in-demo restore (D12) replays from round r.Num: the rounds committed from it on are
-		// superseded, as the oracle's removeInvalidRounds keeps each round number's last commit.
+		// superseded. The oracle's removeInvalidRounds agrees when the replay commits every number;
+		// if it skips one, the gap is left for Finish to report as Partial (D9).
 		m.rounds = slices.DeleteFunc(m.rounds, func(c *Round) bool { return c.Num >= r.Num })
 		if m.stats != nil {
 			if err := m.stats.Commit(m, r, tick); err != nil {

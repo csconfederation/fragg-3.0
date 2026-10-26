@@ -3,7 +3,7 @@
 # DIR as <demSha256>.dem, verifying both hashes. Demos already in DIR are kept.
 #
 #   scripts/fetch-ci-demos.sh DIR
-#   FRAGG_CI_DEMOS=DIR go test ./export -run TestCIDemos
+#   FRAGG_CI_DEMOS=DIR go test ./engine/...
 set -euo pipefail
 
 dir=${1:?usage: fetch-ci-demos.sh DIR}

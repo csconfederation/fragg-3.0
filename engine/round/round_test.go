@@ -177,3 +177,23 @@ func TestFlashes(t *testing.T) {
 		t.Errorf("flash assist %v by %d", c.FlashAssisted, c.FlashAssister)
 	}
 }
+
+// A disconnect recounts the alive members; a player relisted alive mid-round without joining the
+// round (a reconnect with no player-info match, S19 Combine mid7214) isn't one.
+func TestDisconnectRecountsMembersOnly(t *testing.T) {
+	tr, m := newRound(), match.New()
+	var s fact.Snapshot
+	for _, id := range []uint64{1, 2, 3, 11, 12, 13} { // 3 is the relisted ghost
+		p := *player(id)
+		p.Listed = true
+		p.Alive = id != 13 // 13 is the one disconnecting
+		s.Players = append(s.Players, p)
+	}
+	var c Context
+	if err := tr.apply(m, fact.Disconnect{Snapshot: s, Steam64: 13}, &c); err != nil {
+		t.Fatal(err)
+	}
+	if tr.s.TAlive != 2 || tr.s.CTAlive != 2 {
+		t.Errorf("alive %dv%d, want 2v2", tr.s.TAlive, tr.s.CTAlive)
+	}
+}

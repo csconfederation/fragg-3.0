@@ -207,14 +207,16 @@ func (t *Tracker) apply(m *match.Match, f fact.Fact, c *Context) error {
 			t.s.Phase, t.s.BombDecided = Decided, true
 		}
 	case fact.Disconnect:
+		// Only the round's members, as Alive: a mid-round reconnect can be relisted alive without
+		// joining the round (S19 Combine mid7214).
 		t.s.TAlive, t.s.CTAlive = 0, 0
 		for _, p := range m.Members(f.Snapshot, fact.SideT) {
-			if t.alive(p) {
+			if t.members[p.Steam64] && t.alive(p) {
 				t.s.TAlive++
 			}
 		}
 		for _, p := range m.Members(f.Snapshot, fact.SideCT) {
-			if t.alive(p) {
+			if t.members[p.Steam64] && t.alive(p) {
 				t.s.CTAlive++
 			}
 		}

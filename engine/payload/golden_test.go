@@ -16,13 +16,13 @@ import (
 	"testing"
 )
 
-// testdata/golden holds the engine's payloads for the CI demos (export/testdata/ci): the oracle's,
+// testdata/golden holds the engine's payloads for the CI demos (testdata/ci at the root): the oracle's,
 // plus the approved changes (Core-planning#302, #303), each recorded in its PR. -update rewrites
 // them. Since #303 they are the v2 payload, compared whole.
 var update = flag.Bool("update", false, "rewrite testdata/golden from the current output")
 
 const (
-	ciDir          = "../../export/testdata/ci"
+	ciDir          = "../../testdata/ci"
 	floatTolerance = 1e-9 // float summation order (#300)
 )
 

@@ -213,7 +213,6 @@ func (st *SwingTracker) RecordKill(
 		}
 	}
 
-	st.roundState.RecordDeath(victimSide) // the legacy parser's count; eco's collector resets it (SetAlive)
 	st.damageTracker.ClearVictimData(victimID)
 
 	return KillResult{

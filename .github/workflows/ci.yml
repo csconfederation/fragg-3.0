@@ -28,7 +28,7 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # TestCIDemos skips here: FRAGG_CI_DEMOS isn't set.
+      # The demo tests skip here: FRAGG_CI_DEMOS isn't set.
       - name: go test
         run: go test -count=1 ./...
 
@@ -50,7 +50,7 @@ jobs:
         id: demos
         run: |
           echo "FRAGG_CI_DEMOS=$RUNNER_TEMP/ci-demos" >> "$GITHUB_ENV"
-          echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' export/testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "key=ci-demos-$(jq -r '.demos[] | select(.object) | .demSha256' testdata/ci/demos.json | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v6
         with:
@@ -61,9 +61,6 @@ jobs:
       - name: Fetch CI demos
         run: scripts/fetch-ci-demos.sh "$FRAGG_CI_DEMOS"
 
-      - name: Golden payloads
-        run: go test -count=1 -timeout 30m -run TestCIDemos ./export
-
-      # The engine's demo tests: the ingest checks and CSC stats against the same goldens.
+      # The engine's demo tests: the ingest checks and the payload goldens.
       - name: Engine
         run: go test -count=1 -timeout 30m ./engine/...

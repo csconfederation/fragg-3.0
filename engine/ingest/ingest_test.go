@@ -33,7 +33,7 @@ func ciDemo(t *testing.T, name string) []byte {
 	if dir == "" {
 		t.Skip("FRAGG_CI_DEMOS not set; run scripts/fetch-ci-demos.sh")
 	}
-	raw, err := os.ReadFile("../../export/testdata/ci/demos.json")
+	raw, err := os.ReadFile("../../testdata/ci/demos.json")
 	if err != nil {
 		t.Fatal(err)
 	}

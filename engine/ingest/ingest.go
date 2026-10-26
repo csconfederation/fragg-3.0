@@ -225,7 +225,7 @@ func equipment(e *common.Equipment) *int {
 func snapshot(p *dem.Parser) fact.Snapshot {
 	gs := p.GameState()
 	t, ct := gs.TeamTerrorists(), gs.TeamCounterTerrorists()
-	s := fact.Snapshot{Tick: gs.IngameTick(), Frame: p.CurrentFrame(), RoundsPlayed: gs.TotalRoundsPlayed(),
+	s := fact.Snapshot{Tick: gs.IngameTick(), RoundsPlayed: gs.TotalRoundsPlayed(),
 		Warmup: gs.IsWarmupPeriod(), FreezeTime: gs.IsFreezetimePeriod(), T: team(t), CT: team(ct)}
 	for _, pl := range gs.Participants().All() {
 		if pl.Team == common.TeamTerrorists || pl.Team == common.TeamCounterTerrorists {

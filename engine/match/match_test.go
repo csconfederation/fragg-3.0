@@ -123,7 +123,7 @@ func (s *sim) run(t *testing.T, term fact.Terminal) (*Result, error) {
 
 // frame is a Frame whose sample is s.
 func frame(s fact.Snapshot) fact.Frame {
-	return fact.Frame{Tick: s.Tick, Frame: s.Frame, Sample: func() fact.Snapshot { return s }}
+	return fact.Frame{Tick: s.Tick, Sample: func() fact.Snapshot { return s }}
 }
 
 func nums(rs []*Round) []int {

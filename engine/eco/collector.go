@@ -28,20 +28,19 @@ const (
 // handlers, and BeginRound, FinalizeRound and SnapshotRound, which the CSC pipeline drives. The
 // oracle's probability DataCollector is left out: it only feeds offline probability tables.
 type Collector struct {
-	players        map[uint64]*model.PlayerStats
-	round          map[uint64]*model.RoundStats
-	trades         *TradeDetector
-	swing          *SwingTracker
-	roundHasKill   bool
-	isPistolRound  bool
-	roundNumber    int // eco's own count of opens, as in the oracle; labels only, not in the payload
-	roundActive    bool
-	mapName        string
-	roundStartTime float64
-	roundDecided   bool
-	roundDecidedAt float64
-	bombPlanted    bool
-	dead           map[uint64]bool // this round's victims
+	players       map[uint64]*model.PlayerStats
+	round         map[uint64]*model.RoundStats
+	trades        *TradeDetector
+	swing         *SwingTracker
+	roundHasKill  bool
+	isPistolRound bool
+	roundNumber   int // eco's own count of opens, as in the oracle; labels only, not in the payload
+	roundActive   bool
+	mapName       string
+	startTick     int // the round clock starts at the open's tick, as CSC's
+	roundDecided  bool
+	bombPlanted   bool
+	dead          map[uint64]bool // this round's victims
 }
 
 // Round is one committed round's eco stats (the oracle's RoundSnapshot).
@@ -71,8 +70,8 @@ func playing(s fact.Snapshot) []fact.Player {
 	return ps
 }
 
-func (c *Collector) timeInRound(frame int) float64 {
-	return float64(frame)/float64(rating.TickRate) - c.roundStartTime
+func (c *Collector) timeInRound(tick int) float64 {
+	return float64(tick-c.startTick) / float64(rating.TickRate)
 }
 
 // ensurePlayer registers p. The name and clan are metadata the payload doesn't carry.
@@ -118,12 +117,12 @@ func (c *Collector) Open(s fact.Snapshot, num int) {
 	c.dead = map[uint64]bool{}
 	c.roundHasKill = false
 	c.trades.Reset()
-	c.roundDecided, c.roundDecidedAt = false, 0
+	c.roundDecided = false
 	c.bombPlanted = false
 	c.roundActive = true
 	c.roundNumber++
 	c.isPistolRound = num == rating.FirstHalfPistolRound || num == rating.SecondHalfPistolRound
-	c.roundStartTime = float64(s.Frame) / float64(rating.TickRate)
+	c.startTick = s.Tick
 
 	tAlive, ctAlive, tEquip, ctEquip := 0, 0, 0, 0
 	for _, p := range playing(s) {
@@ -181,8 +180,8 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot) {
 	if !c.roundActive || s.Warmup {
 		return
 	}
-	duration := c.timeInRound(s.Frame)
-	c.trades.ProcessRoundEndTrades(s.Frame, c.round)
+	duration := c.timeInRound(s.Tick)
+	c.trades.ProcessRoundEndTrades(s.Tick, c.round)
 
 	ps := playing(s)
 	for _, p := range ps {
@@ -322,7 +321,7 @@ func (c *Collector) Fact(f fact.Fact) error {
 		}
 		if c.roundActive && !c.roundDecided {
 			if t, ct := countAlive(playing(f.Snapshot)); t == 0 || ct == 0 {
-				c.roundDecided, c.roundDecidedAt = true, c.timeInRound(f.Frame)
+				c.roundDecided = true
 			}
 		}
 	case fact.Hurt:
@@ -366,7 +365,7 @@ func (c *Collector) Fact(f fact.Fact) error {
 		c.bombPlanted = true
 		c.ensurePlayer(*f.Player, f.Snapshot)
 		c.ensureRound(f.Player.Steam64).PlantedBomb = true
-		t := c.timeInRound(f.Frame)
+		t := c.timeInRound(f.Tick)
 		c.applyLedger(c.swing.RecordBombPlant(f.Player.Steam64, t, c.roundContext(f.Snapshot), f.Tick), t, "")
 	case fact.BombDefused:
 		if !c.roundActive {
@@ -377,12 +376,12 @@ func (c *Collector) Fact(f fact.Fact) error {
 		}
 		c.ensurePlayer(*f.Player, f.Snapshot)
 		c.ensureRound(f.Player.Steam64).DefusedBomb = true
-		t := c.timeInRound(f.Frame)
+		t := c.timeInRound(f.Tick)
 		c.applyLedger(c.swing.RecordBombDefuse(f.Player.Steam64, t, c.roundContext(f.Snapshot), f.Tick), t, "")
-		c.roundDecided, c.roundDecidedAt = true, t
+		c.roundDecided = true
 	case fact.BombExplode:
 		if c.roundActive {
-			c.roundDecided, c.roundDecidedAt = true, c.timeInRound(f.Frame)
+			c.roundDecided = true
 		}
 	}
 	return nil
@@ -406,7 +405,7 @@ func (c *Collector) hurt(f fact.Hurt) {
 			r.FireDamage += dmg
 		}
 	}
-	c.swing.RecordDamage(f.Attacker.Steam64, f.Player.Steam64, dmg, c.timeInRound(f.Frame))
+	c.swing.RecordDamage(f.Attacker.Steam64, f.Player.Steam64, dmg, c.timeInRound(f.Tick))
 }
 
 // kill is the oracle's handleKill.
@@ -415,7 +414,7 @@ func (c *Collector) kill(f fact.Kill) {
 	if attacker != nil && victim != nil && (attacker.Steam64 == victim.Steam64 || attacker.Side == victim.Side) {
 		return
 	}
-	tick := f.Frame
+	tick := f.Tick
 	t := c.timeInRound(tick)
 	ps := playing(f.Snapshot)
 	var attackerEquip, victimEquip int

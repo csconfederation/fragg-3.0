@@ -58,9 +58,7 @@ type Round struct {
 	Num        int
 	StartTick  int
 	EndTick    int
-	Winner     fact.Side
 	WinnerClan string
-	Reason     int
 	Knife      bool
 	Pistol     bool
 	InitT      int
@@ -70,7 +68,6 @@ type Round struct {
 	Members       map[uint64]Member
 	committed     bool
 	sideClans     map[fact.Side]string
-	integrityEnd  bool
 }
 
 // Result is the lifecycle's output.
@@ -85,12 +82,8 @@ type Result struct {
 	WinnerClan  string
 	TotalRounds int
 	Map         string
-	ServerName  string
 	// HeaderMatchID is the match ID in the server name, 0 if none (D11).
 	HeaderMatchID int
-	// Reconnected holds players who connected again after disconnecting.
-	Reconnected map[uint64]bool
-	GameEnded   bool
 }
 
 // Collector computes stats over the lifecycle. Match calls each phase after updating its own
@@ -122,8 +115,7 @@ type Match struct {
 	potential                                       *Round
 	rounds                                          []*Round // in commit order
 	connectedAfterStart                             map[uint64]bool
-	reconnectedOracle                               map[uint64]bool // the oracle's ReconnectedPlayers, which drives membership
-	disconnected, reconnected                       map[uint64]bool
+	reconnected                                     map[uint64]bool // the oracle's ReconnectedPlayers, which drives membership
 	gameEnded                                       bool
 	pendingFinal                                    *fact.RoundEnd // the deciding round, until it commits (D15)
 	mapName, serverName                             string
@@ -136,8 +128,6 @@ func New(stats ...Collector) *Match {
 		integrityStart: -1, integrityEnd: -1, integrityOfficial: -1,
 		potential:           &Round{Members: map[uint64]Member{}},
 		connectedAfterStart: map[uint64]bool{},
-		reconnectedOracle:   map[uint64]bool{},
-		disconnected:        map[uint64]bool{},
 		reconnected:         map[uint64]bool{},
 	}
 	if len(stats) > 0 {
@@ -256,20 +246,15 @@ func (m *Match) Fact(f fact.Fact) error {
 		}
 	case fact.PlayerInfo:
 		if f.Found {
-			m.reconnectedOracle[f.Resolved] = true
+			m.reconnected[f.Resolved] = true
 			if m.inRound && m.isGameLive {
 				m.connectedAfterStart[f.Resolved] = true
 			}
 		}
-	case fact.Connect:
-		if m.disconnected[f.Steam64] {
-			m.reconnected[f.Steam64] = true
-		}
 	case fact.Disconnect:
-		if m.reconnectedOracle[f.Steam64] {
-			m.reconnectedOracle[f.Steam64] = false
+		if m.reconnected[f.Steam64] {
+			m.reconnected[f.Steam64] = false
 		}
-		m.disconnected[f.Steam64] = true
 		return m.collect(f)
 	case fact.Footstep:
 		if m.isGameLive {
@@ -388,8 +373,8 @@ func (m *Match) members(s fact.Snapshot, side fact.Side) []fact.Player {
 			out = append(out, p)
 		}
 	}
-	for _, id := range slices.Sorted(maps.Keys(m.reconnectedOracle)) {
-		if !m.reconnectedOracle[id] {
+	for _, id := range slices.Sorted(maps.Keys(m.reconnected)) {
+		if !m.reconnected[id] {
 			continue
 		}
 		for _, p := range s.Players {
@@ -421,8 +406,6 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if f.Winner < fact.SideT || m.integrityStart != f.RoundsPlayed {
 		return nil
 	}
-	m.potential.Winner = f.Winner
-	m.potential.Reason = f.Reason
 	winner, err := m.teamName(f.Tick, f.WinnerTeam.Clan, f.WinnerTeam.Side)
 	if err != nil {
 		return err
@@ -608,8 +591,7 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 		return nil, t.Err
 	}
 
-	res := &Result{Map: m.mapName, ServerName: m.serverName, WinnerClan: m.winnerClan, TotalRounds: m.totalRounds,
-		GameEnded: m.gameEnded, Scores: maps.Clone(m.teams), Reconnected: m.reconnected}
+	res := &Result{Map: m.mapName, WinnerClan: m.winnerClan, TotalRounds: m.totalRounds, Scores: maps.Clone(m.teams)}
 	if g := headerMatchID.FindStringSubmatch(m.serverName); g != nil {
 		res.HeaderMatchID, _ = strconv.Atoi(g[1])
 	}

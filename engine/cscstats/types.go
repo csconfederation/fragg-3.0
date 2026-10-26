@@ -1,86 +1,20 @@
 package cscstats
 
-// PlayerStats is an exported alias for the demoScrape2-compatible per-player
-// stats struct, letting other packages (e.g. export) read/write its fields
-// while keeping the ported field layout identical to demoScrape2.
-type PlayerStats = playerStats
-
-// Round is an exported alias for the demoScrape2-compatible per-round struct,
-// letting other packages inspect Game.Rounds (which is the post-dedup round
-// list once end-of-match processing has run).
-type Round = round
-
-// TeamStats and WPALog are exported aliases for the fold (engine/fold).
+// The aliases export the payload's rows to engine/fold and engine/payload.
 type (
-	TeamStats = teamStats
-	WPALog    = wpalog
+	PlayerStats = playerStats
+	Round       = round
+	TeamStats   = teamStats
 )
 
+// Game is the committed rounds' CSC stats; engine/fold folds them into the player and team rows.
 type Game struct {
-	//winnerID         int
-	CoreID                   string                  `json:"coreID"`
-	MapNum                   int                     `json:"mapNum"`
-	WinnerClanName           string                  `json:"winnerClanName"`
-	Result                   string                  `json:"result"`
-	Rounds                   []*round                `json:"rounds"`
-	PotentialRound           *round                  `json:"potentialRound"`
-	Teams                    map[string]*team        `json:"teams"`
-	Flags                    flag                    `json:"flags"`
-	MapName                  string                  `json:"mapName"`
-	TickRate                 int                     `json:"tickRate"`
-	TickLength               int                     `json:"tickLength"`
-	RoundsToWin              int                     `json:"roundsToWin"` // 9, 13, or 16 -- rounds needed to clinch the match (MR8/MR12/MR15)
-	TotalPlayerStats         map[uint64]*playerStats `json:"totalPlayerStats"`
-	CtPlayerStats            map[uint64]*playerStats `json:"ctPlayerStats"`
-	TPlayerStats             map[uint64]*playerStats `json:"TPlayerStats"`
-	TotalTeamStats           map[string]*teamStats   `json:"totalTeamStats"`
-	ReconnectedPlayers       map[uint64]bool         `json:"reconnectedPlayers"`       // Map of SteamID to reconnection status
-	ConnectedAfterRoundStart map[uint64]bool         `json:"ConnectedAfterRoundStart"` // Map of SteamID to reconnection status
-	PlayerOrder              []uint64                `json:"playerOrder"`
-	TeamOrder                []string                `json:"teamOrder"`
-	TotalRounds              int                     `json:"totalRounds"`
-	TotalWPAlog              []*wpalog               `json:"totalWPAlog"`
-	// EcoStatsOK is true only when the eco-rating merge completed successfully.
-	// False means eco* / swing_rating fields are unset/zero and must not be
-	// treated as genuine zero ratings.
-	EcoStatsOK bool `json:"ecoStatsOK"`
-}
-
-type flag struct {
-	//all our sentinals and shit
-	HasGameStarted            bool `json:"hasGameStarted"`
-	IsGameLive                bool `json:"isGameLive"`
-	IsGameOver                bool `json:"isGameOver"`
-	InRound                   bool `json:"inRound"`
-	PrePlant                  bool `json:"prePlant"`
-	PostPlant                 bool `json:"postPlant"`
-	PostWinCon                bool `json:"postWinCon"`
-	RoundIntegrityStart       int  `json:"roundIntegrityStart"`
-	RoundIntegrityEnd         int  `json:"roundIntegrityEnd"`
-	RoundIntegrityEndOfficial int  `json:"roundIntegrityEndOfficial"`
-
-	//for the round (gets reset on a new round) maybe should be in a new struct
-	TAlive             int    `json:"TAlive"`
-	CtAlive            int    `json:"ctAlive"`
-	TMoney             bool   `json:"TMoney"`
-	TClutchVal         int    `json:"TClutchVal"`
-	CtClutchVal        int    `json:"ctClutchVal"`
-	TClutchSteam       uint64 `json:"TClutchSteam,string"`
-	CtClutchSteam      uint64 `json:"ctClutchSteam,string"`
-	OpeningKill        bool   `json:"openingKill"`
-	LastTickProcessed  int    `json:"lastTickProcessed"`
-	TicksProcessed     int    `json:"ticksProcessed"`
-	DidRoundEndFire    bool   `json:"didRoundEndFire"`
-	DidScoreUpdateFire bool   `json:"didScoreUpdateFire"`
-	RoundStartedAt     int    `json:"roundStartedAt"`
-	HaveInitRound      bool   `json:"haveInitRound"`
-}
-
-type team struct {
-	//id    int //meaningless?
-	Name          string `json:"name"`
-	Score         int    `json:"score"`
-	ScoreAdjusted int    `json:"scoreAdjusted"`
+	Rounds           []*round
+	TickRate         int
+	TotalPlayerStats map[uint64]*playerStats
+	CtPlayerStats    map[uint64]*playerStats
+	TPlayerStats     map[uint64]*playerStats
+	TotalTeamStats   map[string]*teamStats
 }
 
 type teamStats struct {
@@ -135,32 +69,7 @@ type round struct {
 	KnifeRound         bool    `json:"knifeRound"`
 	RoundEndReason     string  `json:"roundEndReason"`
 
-	WPAlog        []*wpalog `json:"-"` // never stored (D7)
-	BombStartTick int       `json:"bombStartTick"`
-}
-
-type wpalog struct {
-	Round               int `json:"round"`
-	Tick                int `json:"tick"`
-	Clock               int `json:"clock"`
-	Planted             int `json:"planted"`
-	CtAlive             int `json:"ctAlive"`
-	TAlive              int `json:"TAlive"`
-	CtEquipVal          int `json:"ctEquipVal"`
-	TEquipVal           int `json:"TEquipVal"`
-	CtFlashes           int `json:"ctFlashes"`
-	CtSmokes            int `json:"ctSmokes"`
-	CtMolys             int `json:"ctMolys"`
-	CtFrags             int `json:"ctFrags"`
-	TFlashes            int `json:"TFlashes"`
-	TSmokes             int `json:"TSmokes"`
-	TMolys              int `json:"TMolys"`
-	TFrags              int `json:"TFrags"`
-	ClosestCTDisttoBomb int `json:"closestCTDisttoBomb"`
-	Kits                int `json:"kits"`
-	CtArmor             int `json:"ctArmor"`
-	TArmor              int `json:"TArmor"`
-	Winner              int `json:"winner"`
+	BombStartTick int `json:"bombStartTick"`
 }
 
 type playerStats struct {
@@ -287,17 +196,9 @@ type playerStats struct {
 	MostRecentFlashVal float64        `json:"mostRecentFlashVal"`
 	DamageList         map[uint64]int `json:"-"`
 
-	// ================================================================
-	// Additive eco-rating metrics (NOT part of demoScrape2).
-	// These are merged in by the export package from eco-rating's own
-	// pipeline. They never overwrite a demoScrape2 field above; where a
-	// concept exists in both parsers with a different calculation, the
-	// eco value lives here under a distinct name (per the field-merge
-	// decisions) so nothing is duplicated or silently replaced.
-	// ================================================================
+	// The eco stats, which engine/fold merges from engine/eco (#591: one definition per concept).
 
-	// Primary eco rating. Exported as swing_rating (the new rating),
-	// intentionally NOT as final_rating.
+	// Primary eco rating, stored as swing_rating.
 	SwingRating float64 `json:"swing_rating"`
 
 	// Probability-swing metrics (eco impact model).
@@ -366,34 +267,4 @@ type playerStats struct {
 	EarlyDeaths           int `json:"earlyDeaths"`
 	SavedByTeammate       int `json:"savedByTeammate"`
 	SavedTeammate         int `json:"savedTeammate"`
-}
-
-type Accolades struct {
-	Awp        int `json:"awp"`
-	Deagle     int `json:"deagle"`
-	Knife      int `json:"knife"`
-	Dinks      int `json:"dinks"`
-	BlindKills int `json:"blindKills"`
-	BombPlants int `json:"bombPlants"`
-	Jumps      int `json:"jumps"`
-	TeamDMG    int `json:"teamDMG"`
-	SelfDMG    int `json:"selfDMG"`
-	Ping       int `json:"ping"`
-	PingPoints int `json:"pingPoints"`
-	//footsteps         int //unnecessary processing?
-	BombTaps          int `json:"bombTaps"`
-	KillsThroughSmoke int `json:"killsThroughSmoke"`
-	Penetrations      int `json:"penetrations"`
-	NoScopes          int `json:"noScopes"`
-	MidairKills       int `json:"midairKills"`
-	CrouchedKills     int `json:"crouchedKills"`
-	BombzoneKills     int `json:"bombzoneKills"`
-	KillsWhileMoving  int `json:"killsWhileMoving"`
-	MostMoneySpent    int `json:"mostMoneySpent"`
-	MostShotsOnLegs   int `json:"mostShotsOnLegs"`
-	ShotsFired        int `json:"shotsFired"`
-	Ak                int `json:"ak"`
-	M4                int `json:"m4"`
-	Pistol            int `json:"pistol"`
-	Scout             int `json:"scout"`
 }

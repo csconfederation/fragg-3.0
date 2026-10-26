@@ -99,7 +99,7 @@ func TestPostRoundDeathIsNoSurvival(t *testing.T) {
 	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
 		Players: []fact.Player{killer, victim}}
 	c.Open(s, 2, s.Players, 1, 1)
-	c.Win(fact.SideT, s, s.Players)
+	c.Win(fact.SideT, s, s.Players, round.State{})
 	x := round.Context{Expected: true, Victim: true, Killer: true, Enemy: true,
 		Before: round.State{TAlive: 1, CTAlive: 1}, After: round.State{TAlive: 1}}
 	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}, x); err != nil {
@@ -123,7 +123,7 @@ func TestDisconnectedWinnerIsNoSave(t *testing.T) {
 		Players: []fact.Player{winner, loser}}
 	c.Open(s, 2, s.Players, 1, 1)
 	s.Players = []fact.Player{loser}
-	c.Win(fact.SideT, s, s.Players)
+	c.Win(fact.SideT, s, s.Players, round.State{})
 	r := c.Commit()
 	if w := r.stats[1]; !w.TeamWon || w.SavedWeapons {
 		t.Errorf("winner won %v, saved %v", w.TeamWon, w.SavedWeapons)
@@ -182,5 +182,22 @@ func TestBotTradesBot(t *testing.T) {
 	}
 	if r := c.Commit(); !r.stats[11].Traded {
 		t.Error("the human's death isn't traded")
+	}
+}
+
+// Clutch attempts are the round's slots (#591, D23), however the side got to its last player.
+func TestClutchFromRound(t *testing.T) {
+	c := New()
+	tp := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}
+	ctp := fact.Player{Steam64: 11, Side: fact.SideCT, Alive: true, Listed: true}
+	s := fact.Snapshot{T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT}, Players: []fact.Player{tp, ctp}}
+	c.Open(s, 2, s.Players, 1, 1)
+	c.Win(fact.SideT, s, s.Players, round.State{TClutch: round.Clutch{Size: 2, Steam: 1}})
+	r := c.Commit()
+	if p := r.stats[1]; !p.ClutchAttempt || p.ClutchSize != 2 || !p.ClutchWon {
+		t.Errorf("clutch attempt %v size %d won %v", p.ClutchAttempt, p.ClutchSize, p.ClutchWon)
+	}
+	if r.stats[11].ClutchAttempt {
+		t.Error("CT clutch without a slot")
 	}
 }

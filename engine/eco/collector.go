@@ -41,7 +41,6 @@ type Collector struct {
 	winTime       float64
 	roundDecided  bool
 	bombPlanted   bool
-	dead          map[uint64]bool // this round's victims
 }
 
 // Round is one committed round's eco stats (the oracle's RoundSnapshot).
@@ -103,7 +102,6 @@ func (c *Collector) row(steam uint64) *model.RoundStats {
 // count of opens.
 func (c *Collector) Open(s fact.Snapshot, num int, members []fact.Player, tAlive, ctAlive int) {
 	c.round = map[uint64]*model.RoundStats{}
-	c.dead = map[uint64]bool{}
 	c.trades.Reset()
 	c.roundDecided = false
 	c.winTime = 0
@@ -171,7 +169,7 @@ func (c *Collector) Join(steam uint64, name string, isBot bool, side fact.Side, 
 }
 
 // Win is the oracle's FinalizeRound: round-end trades, survival, clutches and residual swing.
-func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player) {
+func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player, st round.State) {
 	if !c.roundActive || s.Warmup {
 		return
 	}
@@ -193,13 +191,12 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player) 
 		if isAlive[p.Steam64] && aliveOn[p.Side] == 1 {
 			r.WasLastAlive = true
 		}
-		if r.ClutchEnteredSize > 0 {
-			r.ClutchAttempt = true
-			r.ClutchSize = r.ClutchEnteredSize
-			r.ClutchKills = r.Kills
-			if r.TeamWon {
-				r.ClutchWon = true
-			}
+	}
+	// Clutches are the round's, as CSC's (#591, D23): each side's last member alive, however the
+	// rest died, with the enemies alive then.
+	for _, cl := range []round.Clutch{st.TClutch, st.CTClutch} {
+		if r, ok := c.round[cl.Steam]; ok && cl.Size > 0 {
+			r.ClutchAttempt, r.ClutchSize, r.ClutchKills, r.ClutchWon = true, cl.Size, r.Kills, r.TeamWon
 		}
 	}
 
@@ -322,9 +319,6 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 			ar.GotAssist = true
 			ar.Assists++
 		}
-		if c.roundActive && f.Victim != nil {
-			c.dead[f.Victim.Steam64] = true // suicides and team kills too, which kill skips
-		}
 		if x.Victim && (x.After.TAlive == 0 || x.After.CTAlive == 0) {
 			c.roundDecided = true
 		}
@@ -434,9 +428,6 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 
 	// processVictimDeath
 	if victim != nil {
-		if f.Weapon == nil || *f.Weapon != eqBomb {
-			c.clutchEntry(victim, ps)
-		}
 		c.trades.RecordDeath(victim, attacker, tick, ps)
 	}
 
@@ -598,28 +589,4 @@ func alive(s round.State, side fact.Side) int {
 		return s.TAlive
 	}
 	return s.CTAlive
-}
-
-// clutchEntry is the oracle's checkClutchEntry: the victim's death leaves one teammate alive
-// against at least one enemy. As in CSC (corpus finding 6), a bomb death can't start a clutch, and
-// a player killed earlier in the tick isn't alive though their entity still says so.
-func (c *Collector) clutchEntry(victim *fact.Player, ps []fact.Player) {
-	mates, enemies := 0, 0
-	var last uint64
-	for _, p := range ps {
-		if p.Steam64 == victim.Steam64 || !p.Alive || c.dead[p.Steam64] {
-			continue
-		}
-		if p.Side == victim.Side {
-			mates++
-			last = p.Steam64
-		} else {
-			enemies++
-		}
-	}
-	if mates == 1 && enemies > 0 {
-		if r := c.row(last); r.ClutchEnteredSize == 0 {
-			r.ClutchEnteredSize = enemies
-		}
-	}
 }

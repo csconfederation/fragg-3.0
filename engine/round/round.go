@@ -80,7 +80,7 @@ type Tracker struct {
 	cur     *match.Round
 	members map[uint64]bool    // the open round's rows: members at the open and joins
 	deaths  map[uint64]int     // counted deaths this round
-	kills   map[uint64][]*kill // each killer's enemy kills this round, in order
+	kills   map[uint64][]*kill // each killer's enemy kills this round, in order, by actor
 }
 
 // New returns the state before any round.
@@ -266,14 +266,22 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 // trade is an enemy kill's trades (D22): the victim's untraded enemy kills of the killer's
 // teammates within the window, then the kill itself becomes tradeable.
 func (t *Tracker) trade(f fact.Kill, c *Context) {
-	for _, k := range t.kills[f.Victim.Steam64] {
+	for _, k := range t.kills[actor(f.Victim)] {
 		if !k.traded && k.team == *f.Killer.TeamStateID && f.Tick-k.Tick <= rating.TradeWindowTicks {
 			k.traded = true
 			c.Avenged = append(c.Avenged, k.Death)
 		}
 	}
-	t.kills[f.Killer.Steam64] = append(t.kills[f.Killer.Steam64],
+	t.kills[actor(f.Killer)] = append(t.kills[actor(f.Killer)],
 		&kill{Death: Death{f.Victim.Steam64, f.Tick}, team: *f.Victim.TeamStateID})
+}
+
+// actor tells players apart for trades: bots share Steam64 0, so they go by user ID.
+func actor(p *fact.Player) uint64 {
+	if p.IsBot {
+		return 1<<63 | uint64(p.UserID)
+	}
+	return p.Steam64
 }
 
 // Enemies is the oracle's TeamState.ID() comparison, which dereferences both team states.

@@ -186,6 +186,7 @@ func player(pl *common.Player, listed bool) fact.Player {
 		Name:          pl.Name,
 		Side:          fact.Side(pl.Team),
 		IsBot:         pl.IsBot,
+		UserID:        pl.UserID,
 		Alive:         pl.IsAlive(),
 		Connected:     pl.IsConnected,
 		Listed:        listed,

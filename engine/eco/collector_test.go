@@ -160,3 +160,27 @@ func TestTradesFromRound(t *testing.T) {
 		t.Errorf("trader: trade kills %d, fast %d, saved %v", k.TradeKills, k.FastTrades, k.SavedTeammate)
 	}
 }
+
+// A bot killing a bot isn't a suicide, though both are Steam64 0: its trade counts (review52).
+func TestBotTradesBot(t *testing.T) {
+	c := New()
+	ak := 7
+	h := fact.Player{Steam64: 11, Side: fact.SideCT, Listed: true}
+	tb := fact.Player{Steam64: 0, Side: fact.SideT, IsBot: true, UserID: 5, Listed: true}
+	cb := fact.Player{Steam64: 0, Side: fact.SideCT, IsBot: true, UserID: 6, Listed: true}
+	s := fact.Snapshot{T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT}, Players: []fact.Player{h, tb, cb}}
+	c.Open(s, 2, s.Players, 1, 2)
+	x := round.Context{Expected: true, Victim: true, Killer: true, Enemy: true}
+	s.Tick = 640
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &tb, Victim: &h, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	x.Avenged = []round.Death{{Steam: 11, Tick: 640}}
+	s.Tick = 700
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &cb, Victim: &tb, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	if r := c.Commit(); !r.stats[11].Traded {
+		t.Error("the human's death isn't traded")
+	}
+}

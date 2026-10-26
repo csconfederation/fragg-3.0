@@ -103,3 +103,24 @@ func TestTradedOnce(t *testing.T) {
 		t.Errorf("traded again: %v", c.Avenged)
 	}
 }
+
+// Bots share Steam64 0 but trade only their own kills (review52).
+func TestBotsTradeTheirOwnKills(t *testing.T) {
+	tr, m := newRound(), match.New()
+	tr.members[0] = true
+	a, b := player(1), player(2)
+	a.Steam64, a.IsBot, a.UserID = 0, true, 5
+	b.Steam64, b.IsBot, b.UserID = 0, true, 6
+	for _, f := range []fact.Kill{killAt(1000, a, player(11)), killAt(1100, b, player(12))} {
+		if err := tr.kill(m, f, &Context{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var c Context
+	if err := tr.kill(m, killAt(1200, player(13), a), &c); err != nil {
+		t.Fatal(err)
+	}
+	if want := []Death{{11, 1000}}; !reflect.DeepEqual(c.Avenged, want) {
+		t.Errorf("avenged %v, want %v", c.Avenged, want)
+	}
+}

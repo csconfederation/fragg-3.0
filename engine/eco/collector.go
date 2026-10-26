@@ -415,7 +415,8 @@ func (c *Collector) hurt(f fact.Hurt) {
 // kill is the oracle's handleKill. It reports whether the kill reached swing's kill transition.
 func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 	attacker, victim := f.Killer, f.Victim
-	if attacker != nil && victim != nil && (attacker.Steam64 == victim.Steam64 || attacker.Side == victim.Side) {
+	// A suicide is on its own side; bots share Steam64 0, so equal IDs alone don't make one.
+	if attacker != nil && victim != nil && (attacker.Steam64 == victim.Steam64 && !attacker.IsBot || attacker.Side == victim.Side) {
 		return false
 	}
 	tick := f.Tick

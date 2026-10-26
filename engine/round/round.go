@@ -51,6 +51,8 @@ type Context struct {
 	Expected, Victim, Killer, Enemy bool
 	// BombIgnored is a bomb kill or hurt that doesn't count (D10).
 	BombIgnored bool
+	// Alive is the members alive after a kill or bomb event, bots included (see Alive).
+	Alive []fact.Player
 }
 
 // Tracker computes the state over the lifecycle, before the collectors see each phase or fact.
@@ -104,7 +106,30 @@ func (t *Tracker) Fact(m *match.Match, f fact.Fact) (Context, error) {
 		}
 	}
 	c.After = t.s
+	switch f := f.(type) {
+	case fact.Kill:
+		if c.Expected {
+			c.Alive = t.Alive(m, f.Snapshot)
+		}
+	case fact.BombPlanted:
+		c.Alive = t.Alive(m, f.Snapshot)
+	case fact.BombDefused:
+		c.Alive = t.Alive(m, f.Snapshot)
+	}
 	return c, nil
+}
+
+// Alive is the open round's members alive in s, T then CT.
+func (t *Tracker) Alive(m *match.Match, s fact.Snapshot) []fact.Player {
+	var out []fact.Player
+	for _, side := range []fact.Side{fact.SideT, fact.SideCT} {
+		for _, p := range m.Members(s, side) {
+			if t.members[p.Steam64] && t.alive(p) {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 func (t *Tracker) apply(m *match.Match, f fact.Fact, c *Context) error {

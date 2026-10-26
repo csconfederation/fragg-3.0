@@ -91,7 +91,7 @@ func (s *stats) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
 	if err := s.csc.Win(m, r, f); err != nil {
 		return err
 	}
-	s.eco.Win(f.Winner, f.Snapshot)
+	s.eco.Win(f.Winner, f.Snapshot, s.round.Alive(m, f.Snapshot))
 	return nil
 }
 

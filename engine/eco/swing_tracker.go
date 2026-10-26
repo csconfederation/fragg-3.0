@@ -92,6 +92,23 @@ func (st *SwingTracker) advanceClock(currentTick int) {
 	st.lastClockTick = currentTick
 }
 
+// SetAlive sets the alive counts the probabilities read; engine/round counts them (#591).
+func (st *SwingTracker) SetAlive(tAlive, ctAlive int) {
+	if st.roundState != nil {
+		st.roundState.TAlive, st.roundState.CTAlive = min(tAlive, 5), min(ctAlive, 5)
+	}
+}
+
+// RecordDeath is a counted death that isn't an enemy kill (a team kill, suicide or world death):
+// the victim's advantage slots and damage go, as in RecordKill.
+func (st *SwingTracker) RecordDeath(victimID uint64, victimSide fact.Side) {
+	if !st.enabled || st.roundState == nil {
+		return
+	}
+	st.advantageTracker.RecordDeath(victimID, victimSide)
+	st.damageTracker.ClearVictimData(victimID)
+}
+
 // SetTickRate overrides the assumed tick rate used for clock advancement.
 func (st *SwingTracker) SetTickRate(tickRate float64) {
 	if tickRate > 0 {
@@ -196,7 +213,7 @@ func (st *SwingTracker) RecordKill(
 		}
 	}
 
-	st.roundState.RecordDeath(victimSide)
+	st.roundState.RecordDeath(victimSide) // the legacy parser's count; eco's collector resets it (SetAlive)
 	st.damageTracker.ClearVictimData(victimID)
 
 	return KillResult{

@@ -66,3 +66,26 @@ func TestDeathAtTimeZero(t *testing.T) {
 		t.Errorf("deaths %d, early deaths %d", p[2].Deaths, p[2].EarlyDeaths)
 	}
 }
+
+// A team kill is a death the round counts (#591), with no kill for the killer.
+func TestTeamKillIsADeath(t *testing.T) {
+	c := New()
+	ak := 7
+	killer := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}
+	victim := fact.Player{Steam64: 2, Side: fact.SideT, Listed: true}
+	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{killer, victim}}
+	c.Open(s, 2, s.Players, 2, 0)
+	s.Tick = 740
+	x := round.Context{Expected: true, Victim: true, Killer: true, Before: round.State{TAlive: 2}, After: round.State{TAlive: 1}}
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	r := c.Commit()
+	if v := r.stats[2]; v.Deaths != 1 || v.DeathTime != 10 {
+		t.Errorf("victim deaths %d at %v s", v.Deaths, v.DeathTime)
+	}
+	if k := r.stats[1]; k.Kills != 0 {
+		t.Errorf("killer kills %d", k.Kills)
+	}
+}

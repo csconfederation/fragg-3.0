@@ -8,6 +8,7 @@ import (
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
+	"github.com/csconfederation/fragg-3.0/rating"
 )
 
 const (
@@ -54,19 +55,38 @@ type Context struct {
 	BombIgnored bool
 	// Alive is the members alive after a kill or bomb event, bots included (see Alive).
 	Alive []fact.Player
+	// Avenged is the deaths an enemy kill trades, oldest first (D22): the victim's own enemy kills
+	// of the killer's teammates in the last 5 s, inclusive, each traded once. A kill avenging any is
+	// one trade kill.
+	Avenged []Death
+}
+
+// Death is a counted enemy kill's victim.
+type Death struct {
+	Steam uint64
+	Tick  int
+}
+
+// kill is an enemy kill, kept for trades.
+type kill struct {
+	Death
+	team   int // the victim's team state
+	traded bool
 }
 
 // Tracker computes the state over the lifecycle, before the collectors see each phase or fact.
 type Tracker struct {
 	s       State
 	cur     *match.Round
-	members map[uint64]bool // the open round's rows: members at the open and joins
-	deaths  map[uint64]int  // counted deaths this round
+	members map[uint64]bool    // the open round's rows: members at the open and joins
+	deaths  map[uint64]int     // counted deaths this round
+	kills   map[uint64][]*kill // each killer's enemy kills this round, in order
 }
 
 // New returns the state before any round.
 func New() *Tracker {
-	return &Tracker{s: State{Phase: PrePlant}, members: map[uint64]bool{}, deaths: map[uint64]int{}}
+	return &Tracker{s: State{Phase: PrePlant}, members: map[uint64]bool{}, deaths: map[uint64]int{},
+		kills: map[uint64][]*kill{}}
 }
 
 // State is the current state.
@@ -81,6 +101,7 @@ func (t *Tracker) Open(r *match.Round) {
 		t.members[id] = true
 	}
 	t.deaths = map[uint64]int{}
+	t.kills = map[uint64][]*kill{}
 }
 
 func (t *Tracker) Join(r *match.Round, steam uint64) {
@@ -230,6 +251,7 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 	}
 	if c.Enemy {
 		t.s.Opening = false
+		t.trade(f, c)
 	}
 	if c.Victim && f.Assister != nil && t.members[f.Assister.Steam64] {
 		assist, err := Enemies(f.Assister, f.Victim)
@@ -239,6 +261,19 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 		c.Assist = assist
 	}
 	return nil
+}
+
+// trade is an enemy kill's trades (D22): the victim's untraded enemy kills of the killer's
+// teammates within the window, then the kill itself becomes tradeable.
+func (t *Tracker) trade(f fact.Kill, c *Context) {
+	for _, k := range t.kills[f.Victim.Steam64] {
+		if !k.traded && k.team == *f.Killer.TeamStateID && f.Tick-k.Tick <= rating.TradeWindowTicks {
+			k.traded = true
+			c.Avenged = append(c.Avenged, k.Death)
+		}
+	}
+	t.kills[f.Killer.Steam64] = append(t.kills[f.Killer.Steam64],
+		&kill{Death: Death{f.Victim.Steam64, f.Tick}, team: *f.Victim.TeamStateID})
 }
 
 // Enemies is the oracle's TeamState.ID() comparison, which dereferences both team states.

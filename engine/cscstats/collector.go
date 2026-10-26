@@ -12,10 +12,9 @@ import (
 
 // The oracle's constants (csc/parser.go).
 const (
-	mr          = 12
-	tickRate    = 64
-	tradeCutoff = 4 // seconds
-	eqAWP       = 309
+	mr       = 12
+	tickRate = 64
+	eqAWP    = 309
 )
 
 var multiKillBonus = [...]float64{0, 0, 0.3, 0.7, 1.2, 2}
@@ -87,7 +86,7 @@ func (c *Collector) Open(m *match.Match, r *match.Round, s fact.Snapshot, pistol
 func newPlayer(mem match.Member) *playerStats {
 	return &playerStats{Name: mem.Name, SteamID: strconv.FormatUint(mem.Steam64, 10), IsBot: mem.IsBot,
 		Side: int(mem.Side), TeamENUM: mem.TeamID, TeamClanName: mem.Clan, Health: 100,
-		TradeList: map[uint64]int{}, DamageList: map[uint64]int{}}
+		DamageList: map[uint64]int{}}
 }
 
 func (c *Collector) Join(m *match.Match, r *match.Round, mem match.Member) error {
@@ -476,16 +475,14 @@ func (c *Collector) kill(f fact.Kill, x shared.Context) error {
 
 		// Summed, like Deaths, so atd stays paired with them if a row dies twice (bots share Steam64 0).
 		v.TicksAlive += tick - pr.StartingTick
-		for dead, deadTick := range v.TradeList {
-			if tick-deadTick < tradeCutoff*tickRate {
-				d := pS[dead]
-				if d == nil {
-					return missing("traded player", dead)
-				}
-				d.Traded = 1
-				d.Eac++
-				d.KastRounds = 1
+		for _, a := range x.Avenged {
+			d := pS[a.Steam]
+			if d == nil {
+				return missing("traded player", a.Steam)
 			}
+			d.Traded = 1
+			d.Eac++
+			d.KastRounds = 1
 		}
 	}
 
@@ -515,7 +512,6 @@ func (c *Collector) kill(f fact.Kill, x shared.Context) error {
 		k.Kills++
 		k.KastRounds = 1
 		k.Rwk = 1
-		k.TradeList[victim.Steam64] = tick
 		if *f.Weapon == eqAWP {
 			k.AwpKills++
 			if killer.Side == fact.SideCT {
@@ -525,12 +521,9 @@ func (c *Collector) kill(f fact.Kill, x shared.Context) error {
 		if f.Headshot {
 			k.Hs++
 		}
-		for _, deadTick := range v.TradeList {
-			if tick-deadTick < tradeCutoff*tickRate {
-				k.Trades++
-				traded = true
-				break
-			}
+		if len(x.Avenged) > 0 {
+			k.Trades++
+			traded = true
 		}
 
 		switch {

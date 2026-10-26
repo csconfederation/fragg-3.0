@@ -283,7 +283,6 @@ type playerStats struct {
 
 	//"flags"
 	Health             int            `json:"health"`
-	TradeList          map[uint64]int `json:"-"`
 	MostRecentFlasher  uint64         `json:"mostRecentFlasher,string"`
 	MostRecentFlashVal float64        `json:"mostRecentFlashVal"`
 	DamageList         map[uint64]int `json:"-"`

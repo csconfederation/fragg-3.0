@@ -415,7 +415,8 @@ func (c *Collector) hurt(f fact.Hurt) {
 // kill is the oracle's handleKill. It reports whether the kill reached swing's kill transition.
 func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 	attacker, victim := f.Killer, f.Victim
-	if attacker != nil && victim != nil && (attacker.Steam64 == victim.Steam64 || attacker.Side == victim.Side) {
+	// A suicide is on its own side; bots share Steam64 0, so equal IDs alone don't make one.
+	if attacker != nil && victim != nil && (attacker.Steam64 == victim.Steam64 && !attacker.IsBot || attacker.Side == victim.Side) {
 		return false
 	}
 	tick := f.Tick
@@ -423,12 +424,14 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 	ps := playing(f.Snapshot)
 	var attackerEquip, victimEquip int
 	var killValue, deathPenalty, tradeSpeed float64
-	isTradeKill := false
+	isTradeKill := len(x.Avenged) > 0 // engine/round's trades (D22); speed from the oldest avenged death
+	if isTradeKill {
+		tradeSpeed = t - c.timeInRound(x.Avenged[0].Tick)
+	}
 	if attacker != nil && victim != nil {
 		attackerEquip, victimEquip = attacker.EquipValue, victim.EquipValue
 		killValue = rating.EcoKillValue(float64(attackerEquip), float64(victimEquip))
 		deathPenalty = rating.EcoDeathPenalty(float64(victimEquip), float64(attackerEquip))
-		isTradeKill, tradeSpeed = c.trades.CheckTradeKill(attacker, victim, tick, t)
 	}
 
 	// processVictimDeath
@@ -436,34 +439,38 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 		if f.Weapon == nil || *f.Weapon != eqBomb {
 			c.clutchEntry(victim, ps)
 		}
-		c.trades.RecordDeath(victim, attacker, tick, t, ps)
+		c.trades.RecordDeath(victim, attacker, tick, ps)
 	}
 
-	// processTradeDetection
-	if attacker != nil && victim != nil {
-		tr := c.trades.CheckForTrade(attacker, victim, tick, t, c.players, c.round)
-		if tr.IsTrade {
-			ar := c.row(attacker.Steam64)
-			ar.SavedTeammate = true
-			ar.TradeDenials++
-			if tr.TradeReallocation {
-				mates := make([]uint64, 0)
-				for _, p := range ps {
-					if !p.IsBot && p.Side == attacker.Side && p.Steam64 != tr.TradedPlayerID {
-						mates = append(mates, p.Steam64)
-					}
-				}
-				c.applyLedger(c.swing.ApplyTradeReallocation(tr.TradedPlayerID, attacker.Side, tr.OriginalDeathPenalty,
-					mates), t, victim.Name)
-			}
+	// processTradeDetection: every death the kill avenges; swing reallocates the oldest's penalty.
+	if isTradeKill {
+		for _, a := range x.Avenged {
+			d := c.row(a.Steam)
+			d.Traded, d.TradeDeath, d.SavedByTeammate = true, true, true
 		}
+		ar := c.row(attacker.Steam64)
+		ar.SavedTeammate = true
+		ar.TradeDenials++
+		oldest := x.Avenged[0].Steam
+		if d, ok := c.round[oldest]; ok && d.LastDeathSwing < 0 {
+			mates := make([]uint64, 0)
+			for _, p := range ps {
+				if !p.IsBot && p.Side == attacker.Side && p.Steam64 != oldest {
+					mates = append(mates, p.Steam64)
+				}
+			}
+			c.applyLedger(c.swing.ApplyTradeReallocation(oldest, attacker.Side, d.LastDeathSwing, mates), t,
+				victim.Name)
+		}
+	}
+	if attacker != nil && victim != nil {
+		c.trades.Clear(victim.Steam64) // the victim's kills can't be traded any more
 	}
 	c.trades.ProcessExpiredTrades(tick, c.round)
 
 	if attacker == nil || victim == nil {
 		return false
 	}
-	c.trades.RecordKill(attacker, victim, tick)
 
 	// processKillerStats
 	r := c.row(attacker.Steam64)
@@ -527,8 +534,10 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 
 	// processSwingTracking
 	if isTradeKill {
-		r.TradeKill = true
-		r.TradeSpeed = tradeSpeed
+		r.TradeKills++
+		if tradeSpeed > 0 && tradeSpeed < 2.0 {
+			r.FastTrades++
+		}
 	}
 	// Swing's kill transition is the counted victim's death (#591): not a non-member's.
 	if x.Victim {

@@ -41,7 +41,9 @@ type RoundStats struct {
 	EcoKill            bool
 	AntiEcoKill        bool
 	FlashAssists       int
-	TradeKill          bool
+	TradeKill          bool // the legacy parser's; engine/eco counts TradeKills
+	TradeKills         int  // trade kills, each kill once (#591)
+	FastTrades         int  // trade kills within 2 s of the avenged death
 	TradeDeath         bool
 	FailedTrades       int
 	TradeDenials       int

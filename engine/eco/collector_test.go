@@ -132,3 +132,55 @@ func TestDisconnectedWinnerIsNoSave(t *testing.T) {
 		t.Errorf("loser won %v, saved %v", l.TeamWon, l.SavedWeapons)
 	}
 }
+
+// Eco takes engine/round's trades (D22): every avenged death is traded, and each trading kill counts.
+func TestTradesFromRound(t *testing.T) {
+	c := New()
+	ak := 7
+	a, b := fact.Player{Steam64: 1, Side: fact.SideT, Listed: true}, fact.Player{Steam64: 2, Side: fact.SideT, Listed: true}
+	d, e := fact.Player{Steam64: 3, Side: fact.SideT, Listed: true}, fact.Player{Steam64: 11, Side: fact.SideCT, Listed: true}
+	s := fact.Snapshot{Tick: 0, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{a, b, d, e}}
+	c.Open(s, 2, s.Players, 3, 1)
+	kill := func(tick int, k, v fact.Player, avenged ...round.Death) {
+		s.Tick = tick
+		x := round.Context{Expected: true, Victim: true, Killer: true, Enemy: true, Avenged: avenged}
+		if err := c.Fact(fact.Kill{Snapshot: s, Killer: &k, Victim: &v, Weapon: &ak}, x); err != nil {
+			t.Fatal(err)
+		}
+	}
+	kill(640, e, a)
+	kill(704, e, b)
+	kill(768, d, e, round.Death{Steam: 1, Tick: 640}, round.Death{Steam: 2, Tick: 704}) // 2 s after a's death
+	r := c.Commit()
+	if !r.stats[1].Traded || !r.stats[2].Traded || !r.stats[1].SavedByTeammate {
+		t.Errorf("traded %v %v", r.stats[1].Traded, r.stats[2].Traded)
+	}
+	if k := r.stats[3]; k.TradeKills != 1 || k.FastTrades != 0 || !k.SavedTeammate {
+		t.Errorf("trader: trade kills %d, fast %d, saved %v", k.TradeKills, k.FastTrades, k.SavedTeammate)
+	}
+}
+
+// A bot killing a bot isn't a suicide, though both are Steam64 0: its trade counts (review52).
+func TestBotTradesBot(t *testing.T) {
+	c := New()
+	ak := 7
+	h := fact.Player{Steam64: 11, Side: fact.SideCT, Listed: true}
+	tb := fact.Player{Steam64: 0, Side: fact.SideT, IsBot: true, UserID: 5, Listed: true}
+	cb := fact.Player{Steam64: 0, Side: fact.SideCT, IsBot: true, UserID: 6, Listed: true}
+	s := fact.Snapshot{T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT}, Players: []fact.Player{h, tb, cb}}
+	c.Open(s, 2, s.Players, 1, 2)
+	x := round.Context{Expected: true, Victim: true, Killer: true, Enemy: true}
+	s.Tick = 640
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &tb, Victim: &h, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	x.Avenged = []round.Death{{Steam: 11, Tick: 640}}
+	s.Tick = 700
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &cb, Victim: &tb, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	if r := c.Commit(); !r.stats[11].Traded {
+		t.Error("the human's death isn't traded")
+	}
+}

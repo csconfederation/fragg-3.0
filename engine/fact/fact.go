@@ -19,6 +19,7 @@ type Player struct {
 	Name      string
 	Side      Side
 	IsBot     bool
+	UserID    int // the game's user ID; tells bots apart, who share Steam64 0
 	Alive     bool
 	Connected bool
 	// Listed means the game's team member list holds this record (the oracle's first source of

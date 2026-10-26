@@ -201,3 +201,26 @@ func TestClutchFromRound(t *testing.T) {
 		t.Error("CT clutch without a slot")
 	}
 }
+
+// Flash stats are CSC's (#591): only counting flashes, and flash assists from kills, not every flash.
+func TestFlashesFromRound(t *testing.T) {
+	c := New()
+	ak := 7
+	a, b := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}, fact.Player{Steam64: 2, Side: fact.SideT, Alive: true, Listed: true}
+	v := fact.Player{Steam64: 11, Side: fact.SideCT, Alive: true, Listed: true}
+	s := fact.Snapshot{T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT}, Players: []fact.Player{a, b, v}}
+	c.Open(s, 2, s.Players, 2, 1)
+	for _, counted := range []bool{false, true} {
+		if err := c.Fact(fact.Flashed{Tick: 10, Attacker: &a, Player: &v, Duration: 2}, round.Context{Flash: counted}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	x := round.Context{Expected: true, Victim: true, Killer: true, Enemy: true, Assist: true, FlashAssister: 1, FlashAssisted: true}
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &b, Victim: &v, Assister: &a, Weapon: &ak}, x); err != nil {
+		t.Fatal(err)
+	}
+	r := c.Commit().stats[1]
+	if r.EnemiesFlashed != 1 || r.EnemyFlashDuration != 2 || r.FlashAssists != 1 {
+		t.Errorf("enemies flashed %d for %v s, flash assists %d", r.EnemiesFlashed, r.EnemyFlashDuration, r.FlashAssists)
+	}
+}

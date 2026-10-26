@@ -323,6 +323,9 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 			ar.GotAssist = true
 			ar.Assists++
 		}
+		if x.FlashAssisted { // CSC's flash assists (#591); eco counted every enemy flash
+			c.row(x.FlashAssister).FlashAssists++
+		}
 	case fact.Hurt:
 		if !f.Warmup && c.roundActive && x.Enemy && !x.BombIgnored {
 			c.hurt(f)
@@ -331,9 +334,10 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 		if c.roundActive && f.Attacker != nil && f.Player != nil {
 			r := c.row(f.Attacker.Steam64)
 			if f.Attacker.Side != f.Player.Side {
-				r.FlashAssists++
-				r.EnemyFlashDuration += f.Duration
-				r.EnemiesFlashed++
+				if x.Flash { // CSC's filter (#591); swing keeps its own flash credit below
+					r.EnemyFlashDuration += f.Duration
+					r.EnemiesFlashed++
+				}
 				c.swing.RecordFlash(f.Attacker.Steam64, f.Player.Steam64, f.Duration, f.Tick)
 			} else if f.Attacker.Steam64 != f.Player.Steam64 {
 				r.TeamFlashCount++

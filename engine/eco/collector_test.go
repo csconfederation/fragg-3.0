@@ -46,3 +46,21 @@ func TestRowsAreMembers(t *testing.T) {
 		t.Errorf("member's damage taken %d", r.stats[1].DamageTaken)
 	}
 }
+
+// A death at the open's tick (time 0) is a death (#591): presence is the count, not DeathTime > 0.
+func TestDeathAtTimeZero(t *testing.T) {
+	c := New()
+	ak := 1
+	killer := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true, Weapons: []int{ak}}
+	victim := fact.Player{Steam64: 2, Side: fact.SideCT, Listed: true}
+	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{killer, victim}}
+	c.Open(s, 2, s.Players, 1, 1)
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}); err != nil {
+		t.Fatal(err)
+	}
+	p := c.Players([]*Round{c.Commit()})
+	if p[2].Deaths != 1 || p[2].EarlyDeaths != 1 {
+		t.Errorf("deaths %d, early deaths %d", p[2].Deaths, p[2].EarlyDeaths)
+	}
+}

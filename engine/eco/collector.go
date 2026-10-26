@@ -323,7 +323,7 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 			ar.Assists++
 		}
 	case fact.Hurt:
-		if !f.Warmup && c.roundActive {
+		if !f.Warmup && c.roundActive && x.Enemy && !x.BombIgnored {
 			c.hurt(f)
 		}
 	case fact.Flashed:
@@ -378,10 +378,8 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 	return nil
 }
 
+// hurt is enemy damage the round counts.
 func (c *Collector) hurt(f fact.Hurt) {
-	if f.Attacker == nil || f.Player == nil || f.Attacker.Side == f.Player.Side {
-		return
-	}
 	dmg := f.HealthDamageTaken
 	r := c.row(f.Attacker.Steam64)
 	r.Damage += dmg

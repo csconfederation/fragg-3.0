@@ -35,7 +35,7 @@ func TestRowsAreMembers(t *testing.T) {
 		Players: []fact.Player{human, bot, late, enemy}}
 	c.Open(s, 2, []fact.Player{human, bot, enemy}, 1, 2)
 	for _, a := range []fact.Player{bot, late} {
-		if err := c.Fact(fact.Hurt{Snapshot: s, Attacker: &a, Player: &human, HealthDamageTaken: 10}, round.Context{}); err != nil {
+		if err := c.Fact(fact.Hurt{Snapshot: s, Attacker: &a, Player: &human, HealthDamageTaken: 10}, round.Context{Enemy: true}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -47,6 +47,7 @@ type State struct {
 // Context is one fact's view of the state: before the fact and after it.
 type Context struct {
 	Before, After State
+	// Hurts: Enemy is damage from the player's enemy, by side; damage taken counts only that (#591).
 	// Kills: Expected is the kill belonging to the open round. Victim and Killer are each player
 	// having a round row with the kill counting (D10); Enemy is both, on opposite teams. Assist is
 	// the assister having a row and being the counted victim's enemy (CSC's rule).
@@ -165,6 +166,7 @@ func (t *Tracker) apply(m *match.Match, f fact.Fact, c *Context) error {
 			w = *f.Weapon
 		}
 		c.BombIgnored = t.bombIgnored(w)
+		c.Enemy = f.Attacker != nil && f.Player != nil && f.Attacker.Side != f.Player.Side
 	case fact.BombPlanted:
 		if !decided {
 			if f.Player == nil {

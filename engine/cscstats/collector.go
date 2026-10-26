@@ -366,7 +366,9 @@ func (c *Collector) hurt(f fact.Hurt, x shared.Context) error {
 	bombAtHalf := x.BombIgnored
 	switch {
 	case f.Player != nil && pS[f.Player.Steam64] != nil && !bombAtHalf:
-		pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
+		if x.Enemy { // enemy damage only (#591): not teammates, the world, falls or the bomb
+			pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
+		}
 	case f.Player != nil && f.Player.Connected && !bombAtHalf && !f.FreezeTime:
 		// The oracle cancels the parse (errMissingPlayerStats).
 		return missing("connected hurt player", f.Player.Steam64)

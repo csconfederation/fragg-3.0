@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/round"
 	"github.com/csconfederation/fragg-3.0/model"
 	"github.com/csconfederation/fragg-3.0/rating"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
@@ -316,13 +317,14 @@ func (c *Collector) roundContext(s fact.Snapshot) map[uint64]swing.PlayerRoundCo
 	return players
 }
 
-// Fact runs the oracle's eco handlers for f. Kills run handleKill, then handleRoundDecisionKill.
-func (c *Collector) Fact(f fact.Fact) error {
+// Fact runs the oracle's eco handlers for f with its round context. Kills run handleKill, then
+// handleRoundDecisionKill; kills count as the round decides (#591): expected, not bomb-ignored.
+func (c *Collector) Fact(f fact.Fact, x round.Context) error {
 	switch f := f.(type) {
 	case fact.ServerInfo:
 		c.mapName = f.Map
 	case fact.Kill:
-		if !f.Warmup && c.roundActive {
+		if x.Expected && !x.BombIgnored {
 			c.kill(f)
 		}
 		if c.roundActive && f.Victim != nil {

@@ -117,7 +117,7 @@ func (s *stats) Fact(m *match.Match, f fact.Fact) error {
 	if err != nil {
 		return err
 	}
-	if err := s.eco.Fact(f); err != nil {
+	if err := s.eco.Fact(f, x); err != nil {
 		return err
 	}
 	return s.csc.Fact(m, f, x)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/round"
 )
 
 // A human who joins mid-round gets the side CSC gave them, so their side rounds count.
@@ -34,7 +35,7 @@ func TestRowsAreMembers(t *testing.T) {
 		Players: []fact.Player{human, bot, late, enemy}}
 	c.Open(s, 2, []fact.Player{human, bot, enemy}, 1, 2)
 	for _, a := range []fact.Player{bot, late} {
-		if err := c.Fact(fact.Hurt{Snapshot: s, Attacker: &a, Player: &human, HealthDamageTaken: 10}); err != nil {
+		if err := c.Fact(fact.Hurt{Snapshot: s, Attacker: &a, Player: &human, HealthDamageTaken: 10}, round.Context{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -56,7 +57,8 @@ func TestDeathAtTimeZero(t *testing.T) {
 	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
 		Players: []fact.Player{killer, victim}}
 	c.Open(s, 2, s.Players, 1, 1)
-	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak}); err != nil {
+	if err := c.Fact(fact.Kill{Snapshot: s, Killer: &killer, Victim: &victim, Weapon: &ak},
+		round.Context{Expected: true, Victim: true, Killer: true, Enemy: true}); err != nil {
 		t.Fatal(err)
 	}
 	p := c.Players([]*Round{c.Commit()})

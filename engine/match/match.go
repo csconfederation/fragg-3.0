@@ -61,8 +61,11 @@ type Round struct {
 	WinnerClan string
 	Knife      bool
 	Pistol     bool
-	InitT      int
-	InitCT     int
+	// FreezeEnd is the round opening at freeze end, after the buy; a round can commit from an
+	// earlier open without one.
+	FreezeEnd bool
+	InitT     int
+	InitCT    int
 	// TClan and CTClan are the round's team names by side, as the oracle names them at the open.
 	TClan, CTClan string
 	Members       map[uint64]Member
@@ -306,7 +309,7 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 	if !freezeEnd {
 		m.haveInit = true
 	}
-	m.potential.Pistol = pistol
+	m.potential.Pistol, m.potential.FreezeEnd = pistol, freezeEnd
 	if m.stats != nil {
 		if err := m.stats.Open(m, m.potential, s, pistol); err != nil {
 			return m.keep(err)

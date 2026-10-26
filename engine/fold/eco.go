@@ -66,7 +66,6 @@ func applyTotalEcoStats(dst *cscstats.PlayerStats, eco *model.PlayerStats) {
 	dst.EcoCTEcoRating = eco.CTEcoRating
 	dst.EcoTEcoRating = eco.TEcoRating
 	dst.EcoSwingDisplayRating = swingDisplayRating(eco.ProbabilitySwing, eco.RoundsPlayed)
-	dst.PistolRoundRating = eco.PistolRoundRating
 	dst.AssistedKills = eco.AssistedKills
 	dst.Clutch1v1Attempts = eco.Clutch1v1Attempts
 	dst.Clutch1v2Attempts = eco.Clutch1v2Attempts
@@ -119,7 +118,6 @@ func applyTEcoStats(dst *cscstats.PlayerStats, eco *model.PlayerStats) {
 	dst.EcoCTEcoRating = 0
 	dst.EcoTEcoRating = eco.TEcoRating
 	dst.EcoSwingDisplayRating = swingDisplayRating(eco.TProbabilitySwing, rounds)
-	dst.PistolRoundRating = 0
 	dst.AssistedKills = eco.TAssistedKills
 	dst.Clutch1v1Attempts = eco.TClutch1v1Attempts
 	dst.Clutch1v2Attempts = eco.TClutch1v2Attempts
@@ -172,7 +170,6 @@ func applyCTEcoStats(dst *cscstats.PlayerStats, eco *model.PlayerStats) {
 	dst.EcoCTEcoRating = eco.CTEcoRating
 	dst.EcoTEcoRating = 0
 	dst.EcoSwingDisplayRating = swingDisplayRating(eco.CTProbabilitySwing, rounds)
-	dst.PistolRoundRating = 0
 	dst.AssistedKills = eco.CTAssistedKills
 	dst.Clutch1v1Attempts = eco.CTClutch1v1Attempts
 	dst.Clutch1v2Attempts = eco.CTClutch1v2Attempts

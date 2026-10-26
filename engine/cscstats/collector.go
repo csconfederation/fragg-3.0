@@ -69,8 +69,10 @@ func (c *Collector) Open(m *match.Match, r *match.Round, s fact.Snapshot, pistol
 	for id, mem := range r.Members {
 		pr.PlayerStats[id] = newPlayer(mem)
 	}
-	pr.TeamStats[r.TClan] = &teamStats{TR: 1}
-	pr.TeamStats[r.CTClan] = &teamStats{CtR: 1}
+	t, ct := &teamStats{TR: 1, Buy: buy(m, r, s, fact.SideT)}, &teamStats{CtR: 1, Buy: buy(m, r, s, fact.SideCT)}
+	t.countBuy(ct.Buy)
+	ct.countBuy(t.Buy)
+	pr.TeamStats[r.TClan], pr.TeamStats[r.CTClan] = t, ct
 	if pistol {
 		for _, t := range pr.TeamStats {
 			t.Pistols = 1
@@ -119,6 +121,7 @@ func (c *Collector) Commit(m *match.Match, r *match.Round, tick int, s shared.St
 	if ts.Pistols == 1 {
 		ts.PistolsW = 1
 	}
+	ts.EcoBuysW, ts.ForceBuysW, ts.FullBuysW, ts.AntiEcosW = ts.EcoBuys, ts.ForceBuys, ts.FullBuys, ts.AntiEcos
 	if ts.FourVFiveS == 1 {
 		ts.FourVFiveW = 1
 	} else if ts.FiveVFourS == 1 {

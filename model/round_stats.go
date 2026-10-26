@@ -44,7 +44,6 @@ type RoundStats struct {
 	KnifeKill          bool
 	PistolVsRifleKill  bool
 	LostAWP            bool
-	IsPistolRound      bool
 	PlayerSide         string
 
 	// Damage taken this round

@@ -42,6 +42,16 @@ type teamStats struct {
 	TR             int     `json:"TR"`
 	TRW            int     `json:"TRW"`
 	Deaths         int     `json:"deaths"`
+	// Rounds and round wins by buy (Core-planning#590); pistols are Pistols and PistolsW.
+	EcoBuys    int `json:"ecoBuys"`
+	EcoBuysW   int `json:"ecoBuysW"`
+	ForceBuys  int `json:"forceBuys"`
+	ForceBuysW int `json:"forceBuysW"`
+	FullBuys   int `json:"fullBuys"`
+	FullBuysW  int `json:"fullBuysW"`
+	AntiEcos   int `json:"antiEcos"`
+	AntiEcosW  int `json:"antiEcosW"`
+	Buy        Buy `json:"-"` // a round's buy
 
 	//kinda garbo
 	Normalizer int `json:"normalizer"`
@@ -224,7 +234,24 @@ type playerStats struct {
 	// Eco display swing rating (1 + 10*swing/round). Distinct from
 	// swing_rating (which is eco FinalRating).
 	EcoSwingDisplayRating float64 `json:"ecoSwingDisplayRating"`
-	PistolRoundRating     float64 `json:"pistolRoundRating"`
+
+	// Rounds, round wins and the CSC rating over the rounds of each of the player's team's buys
+	// (Core-planning#589, #590); whole-match rows only. Anti-eco is a full buy against an eco.
+	PistolRounds      int     `json:"pistolRounds"`
+	PistolRoundsWon   int     `json:"pistolRoundsWon"`
+	PistolRoundRating float64 `json:"pistolRoundRating"`
+	EcoBuyRounds      int     `json:"ecoBuyRounds"`
+	EcoBuyRoundsWon   int     `json:"ecoBuyRoundsWon"`
+	EcoBuyRating      float64 `json:"ecoBuyRating"`
+	ForceBuyRounds    int     `json:"forceBuyRounds"`
+	ForceBuyRoundsWon int     `json:"forceBuyRoundsWon"`
+	ForceBuyRating    float64 `json:"forceBuyRating"`
+	FullBuyRounds     int     `json:"fullBuyRounds"`
+	FullBuyRoundsWon  int     `json:"fullBuyRoundsWon"`
+	FullBuyRating     float64 `json:"fullBuyRating"`
+	AntiEcoRounds     int     `json:"antiEcoRounds"`
+	AntiEcoRoundsWon  int     `json:"antiEcoRoundsWon"`
+	AntiEcoRating     float64 `json:"antiEcoRating"`
 
 	// Eco assisted kills (assist count only) — distinct from demoScrape2 eac.
 	AssistedKills int `json:"assistedKills"`

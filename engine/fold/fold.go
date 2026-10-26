@@ -44,6 +44,7 @@ func Game(g *cscstats.Game, e *eco.Collector, ecoRounds []*eco.Round) error {
 		derive(side, g.TickRate)
 	}
 	rate(g)
+	rateBuys(g)
 	project(g)
 	mergeEco(g, e.Players(ecoRounds))
 	return nil
@@ -101,6 +102,14 @@ func accumulate(g *cscstats.Game) {
 			dst := g.TotalTeamStats[name]
 			dst.Pistols += src.Pistols
 			dst.PistolsW += src.PistolsW
+			dst.EcoBuys += src.EcoBuys
+			dst.EcoBuysW += src.EcoBuysW
+			dst.ForceBuys += src.ForceBuys
+			dst.ForceBuysW += src.ForceBuysW
+			dst.FullBuys += src.FullBuys
+			dst.FullBuysW += src.FullBuysW
+			dst.AntiEcos += src.AntiEcos
+			dst.AntiEcosW += src.AntiEcosW
 			dst.FourVFiveS += src.FourVFiveS
 			dst.FourVFiveW += src.FourVFiveW
 			dst.FiveVFourS += src.FiveVFourS

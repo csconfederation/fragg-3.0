@@ -240,7 +240,6 @@ func (u *SideStatsUpdater) UpdateCommonRoundStats() {
 	u.updateSupportStats()
 	u.updateUtilityStats()
 	u.updateTradeStats()
-	u.updatePistolStats()
 }
 
 // updateAWPStats updates AWP-related statistics.
@@ -287,23 +286,5 @@ func (u *SideStatsUpdater) updateTradeStats() {
 
 	if u.roundStats.Deaths > 0 && u.roundStats.DeathTime < 30.0 {
 		u.player.EarlyDeaths++
-	}
-}
-
-// updatePistolStats updates pistol round statistics.
-func (u *SideStatsUpdater) updatePistolStats() {
-	if !u.roundStats.IsPistolRound {
-		return
-	}
-
-	u.player.PistolRoundsPlayed++
-	u.player.PistolRoundKills += u.roundStats.Kills
-
-	if u.roundStats.Deaths == 0 && u.roundStats.Survived {
-		u.player.PistolRoundSurvivals++
-	}
-
-	if u.roundStats.Kills >= 2 {
-		u.player.PistolRoundMultiKills++
 	}
 }

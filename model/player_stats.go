@@ -55,11 +55,6 @@ type PlayerStats struct {
 	EarlyDeaths            int
 	LowBuyKills            int
 	DisadvantagedBuyKills  int
-	PistolRoundsPlayed     int
-	PistolRoundKills       int
-	PistolRoundSurvivals   int
-	PistolRoundMultiKills  int
-	PistolRoundRating      float64
 	HLTVRating             float64
 	TRoundsPlayed          int
 	TKills                 int

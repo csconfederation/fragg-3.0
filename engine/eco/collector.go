@@ -33,7 +33,6 @@ type Collector struct {
 	round         map[uint64]*model.RoundStats
 	trades        *TradeDetector
 	swing         *SwingTracker
-	roundHasKill  bool
 	isPistolRound bool
 	roundNumber   int // eco's own count of opens, as in the oracle; labels only, not in the payload
 	roundActive   bool
@@ -105,7 +104,6 @@ func (c *Collector) row(steam uint64) *model.RoundStats {
 func (c *Collector) Open(s fact.Snapshot, num int, members []fact.Player, tAlive, ctAlive int) {
 	c.round = map[uint64]*model.RoundStats{}
 	c.dead = map[uint64]bool{}
-	c.roundHasKill = false
 	c.trades.Reset()
 	c.roundDecided = false
 	c.winTime = 0
@@ -522,14 +520,13 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 		}
 	}
 
-	// processOpeningKill
-	if !c.roundHasKill {
+	// processOpeningKill: the round's opening, as CSC's (#591)
+	if x.Before.Opening && x.Enemy {
 		r.OpeningKill, r.EntryFragger, r.InvolvedInOpening = true, true, true
 		if f.Weapon != nil && *f.Weapon == eqAWP {
 			r.AWPOpeningKill = true
 		}
 		vr.OpeningDeath, vr.InvolvedInOpening = true, true
-		c.roundHasKill = true
 	}
 
 	// processSwingTracking

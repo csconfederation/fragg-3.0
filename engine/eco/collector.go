@@ -190,7 +190,7 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot) {
 		if p.Alive {
 			r.Survived = true
 			r.TimeAlive = duration
-		} else if r.DeathTime > 0 {
+		} else if r.Deaths > 0 {
 			r.TimeAlive = r.DeathTime
 		}
 	}
@@ -430,6 +430,7 @@ func (c *Collector) kill(f fact.Kill) {
 	// processVictimDeath
 	if victim != nil {
 		vr := c.ensureRound(victim.Steam64)
+		vr.Deaths++
 		vr.DeathTime = t
 		if f.Weapon == nil || *f.Weapon != eqBomb {
 			c.clutchEntry(victim, ps)

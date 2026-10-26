@@ -38,7 +38,7 @@ func (u *SideStatsUpdater) updateTSide() {
 	if u.roundStats.Survived {
 		u.player.TSurvivals++
 	}
-	if u.roundStats.DeathTime > 0 {
+	if u.roundStats.Deaths > 0 {
 		u.player.TDeaths++
 	}
 	if u.roundStats.Kills >= 2 {
@@ -70,7 +70,7 @@ func (u *SideStatsUpdater) updateCTSide() {
 	if u.roundStats.Survived {
 		u.player.CTSurvivals++
 	}
-	if u.roundStats.DeathTime > 0 {
+	if u.roundStats.Deaths > 0 {
 		u.player.CTDeaths++
 	}
 	if u.roundStats.Kills >= 2 {
@@ -231,7 +231,7 @@ func (u *SideStatsUpdater) applySideEcoCounters(tSide bool) {
 			p.CTUtilityKills += rs.UtilityKills
 		}
 	}
-	if rs.DeathTime > 0 && rs.DeathTime < 30.0 {
+	if rs.Deaths > 0 && rs.DeathTime < 30.0 {
 		if tSide {
 			p.TEarlyDeaths++
 		} else {
@@ -345,7 +345,7 @@ func (u *SideStatsUpdater) updateTradeStats() {
 		}
 	}
 
-	if u.roundStats.DeathTime > 0 && u.roundStats.DeathTime < 30.0 {
+	if u.roundStats.Deaths > 0 && u.roundStats.DeathTime < 30.0 {
 		u.player.EarlyDeaths++
 	}
 }
@@ -360,7 +360,7 @@ func (u *SideStatsUpdater) updatePistolStats() {
 	u.player.PistolRoundKills += u.roundStats.Kills
 	u.player.PistolRoundDamage += u.roundStats.Damage
 
-	if u.roundStats.DeathTime > 0 {
+	if u.roundStats.Deaths > 0 {
 		u.player.PistolRoundDeaths++
 	} else if u.roundStats.Survived {
 		u.player.PistolRoundSurvivals++

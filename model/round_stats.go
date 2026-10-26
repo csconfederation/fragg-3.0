@@ -13,6 +13,7 @@ package model
 type RoundStats struct {
 	Kills              int
 	Assists            int
+	Deaths             int // death presence is Deaths > 0; DeathTime can be 0 or less (#591)
 	Damage             int
 	Survived           bool
 	Traded             bool

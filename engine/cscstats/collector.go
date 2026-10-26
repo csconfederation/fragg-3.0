@@ -313,7 +313,14 @@ func (c *Collector) lurk(m *match.Match, f fact.Frame, s shared.State) error {
 		return nil
 	}
 	pS := c.potential.PlayerStats
-	ts := m.Members(f.Sample(), fact.SideT)
+	// Only the round's players: a player who reconnects mid-round can be relisted alive at the origin
+	// without stats (S19 Combine mid7214), where the oracle dereferences nil.
+	var ts []fact.Player
+	for _, t := range m.Members(f.Sample(), fact.SideT) {
+		if pS[t.Steam64] != nil {
+			ts = append(ts, t)
+		}
+	}
 	for _, t := range ts {
 		if !t.Alive {
 			continue
@@ -324,20 +331,15 @@ func (c *Collector) lurk(m *match.Match, f fact.Frame, s shared.State) error {
 			}
 			dist := int(distance(t.Pos, mate.Pos))
 			if dist < 500 {
-				if pS[t.Steam64] == nil {
-					return missing("lurk candidate", t.Steam64)
-				}
 				pS[t.Steam64].DistanceToTeammates = -999999
 			}
-			if pS[t.Steam64] != nil {
-				pS[t.Steam64].DistanceToTeammates += dist
-			}
+			pS[t.Steam64].DistanceToTeammates += dist
 		}
 	}
 	var lurker uint64
 	best := 999999
 	for _, t := range ts {
-		if t.Alive && pS[t.Steam64] != nil {
+		if t.Alive {
 			if d := pS[t.Steam64].DistanceToTeammates; d < best && d > 0 {
 				best, lurker = d, t.Steam64
 			}

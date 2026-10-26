@@ -12,7 +12,6 @@ import (
 
 // The oracle's constants (csc/parser.go).
 const (
-	mr       = 12
 	tickRate = 64
 	eqAWP    = 309
 )
@@ -45,8 +44,8 @@ var roundEndReasons = map[int]string{
 }
 
 // Collector is the oracle's CSC stat pipeline (csc/parser.go handlers and processRoundFinal) over
-// facts, reading the shared round state (engine/round) the caller computes first. Game builds the
-// payload once the match finishes.
+// facts, reading the shared round state (engine/round) the caller computes first. Game returns the
+// committed rounds' stats once the match finishes.
 type Collector struct {
 	potential         *round
 	rounds            map[*match.Round]*round
@@ -65,7 +64,7 @@ func missing(what string, steam uint64) error {
 
 func (c *Collector) Open(m *match.Match, r *match.Round, s fact.Snapshot, pistol bool) error {
 	pr := &round{RoundNum: int8(r.Num), StartingTick: r.StartTick, PlayerStats: map[uint64]*playerStats{},
-		TeamStats: map[string]*teamStats{}, WPAlog: make([]*wpalog, 0),
+		TeamStats:          map[string]*teamStats{},
 		InitTerroristCount: r.InitT, InitCTerroristCount: r.InitCT}
 	for id, mem := range r.Members {
 		pr.PlayerStats[id] = newPlayer(mem)

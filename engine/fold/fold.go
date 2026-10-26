@@ -28,11 +28,9 @@ func Game(g *cscstats.Game, e *eco.Collector, ecoRounds []*eco.Round) error {
 	g.TPlayerStats = map[uint64]*cscstats.PlayerStats{}
 	g.CtPlayerStats = map[uint64]*cscstats.PlayerStats{}
 	g.TotalTeamStats = map[string]*cscstats.TeamStats{}
-	g.TotalWPAlog = []*cscstats.WPALog{}
 	if len(g.Rounds) == 0 {
 		return nil
 	}
-	g.EcoStatsOK = true // one model: eco covers every committed round and player
 	for _, r := range g.Rounds {
 		for _, p := range r.PlayerStats {
 			if p.Side != sideT && p.Side != sideCT {
@@ -95,7 +93,6 @@ func enrich(r *cscstats.Round) {
 func accumulate(g *cscstats.Game) {
 	for i := len(g.Rounds) - 1; i >= 0; i-- {
 		r := g.Rounds[i]
-		g.TotalWPAlog = append(g.TotalWPAlog, r.WPAlog...)
 		for _, name := range slices.Sorted(maps.Keys(r.TeamStats)) {
 			src := r.TeamStats[name]
 			if g.TotalTeamStats[name] == nil && name != "" {

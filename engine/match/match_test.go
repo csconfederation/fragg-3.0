@@ -457,7 +457,7 @@ func TestInvariantWinsOverTruncation(t *testing.T) {
 
 func TestReconnectReplacesListedRecord(t *testing.T) {
 	m := New()
-	m.reconnectedOracle[1] = true
+	m.reconnected[1] = true
 	s := fact.Snapshot{Players: []fact.Player{
 		{Steam64: 1, Side: fact.SideT, Listed: true, Money: 800},
 		{Steam64: 2, Side: fact.SideT, Listed: true, Money: 900},
@@ -483,8 +483,8 @@ func TestPlayerInfoMarksLateConnect(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if !m.connectedAfterStart[3] || !m.reconnectedOracle[3] {
-		t.Errorf("late connect %v reconnected %v", m.connectedAfterStart, m.reconnectedOracle)
+	if !m.connectedAfterStart[3] || !m.reconnected[3] {
+		t.Errorf("late connect %v reconnected %v", m.connectedAfterStart, m.reconnected)
 	}
 	// Until the next round opens, a late connect is left out of both member sources.
 	got := m.members(s.snapshot(1), fact.SideT)
@@ -591,22 +591,6 @@ func TestMidRoundJoin(t *testing.T) {
 	}
 	if got := r.Members[1]; got.Side != fact.SideT || got.Clan != "Alpha" {
 		t.Errorf("side switcher %+v", got)
-	}
-}
-
-func TestReconnect(t *testing.T) {
-	m := New()
-	for _, f := range []fact.Fact{
-		fact.Connect{Steam64: 7},
-		fact.Disconnect{Steam64: 7},
-		fact.Connect{Steam64: 7},
-		fact.Disconnect{Steam64: 8},
-	} {
-		_ = m.Fact(f)
-	}
-	res, _ := m.Finish(fact.Terminal{Kind: fact.Clean})
-	if !res.Reconnected[7] || res.Reconnected[8] || len(res.Reconnected) != 1 {
-		t.Errorf("reconnected %v", res.Reconnected)
 	}
 }
 

@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	mr     = 12
-	eqBomb = 404
+	mr       = 12
+	eqBomb   = 404
+	tickRate = 64
 )
 
 // Phase is where the round stands. Exactly one holds at a time.
@@ -47,6 +48,7 @@ type State struct {
 // Context is one fact's view of the state: before the fact and after it.
 type Context struct {
 	Before, After State
+	// Hurts: Enemy is damage from the player's enemy, by side; damage taken counts only that (#591).
 	// Kills: Expected is the kill belonging to the open round. Victim and Killer are each player
 	// having a round row with the kill counting (D10); Enemy is both, on opposite teams. Assist is
 	// the assister having a row and being the counted victim's enemy (CSC's rule).
@@ -55,10 +57,26 @@ type Context struct {
 	BombIgnored bool
 	// Alive is the members alive after a kill or bomb event, bots included (see Alive).
 	Alive []fact.Player
+	// Flash is a blind that counts (CSC's): an enemy's flash over 1 s on an alive player, past the
+	// overlap guard (the player isn't already blind for longer). Blind is the player's flash state
+	// after it.
+	Flash bool
+	Blind Blind
+	// FlashAssister has a kill's flash assist (CSC's), when FlashAssisted: an assist the game marks
+	// as a flash goes to the assister; any other assist, to the victim's latest flasher while the
+	// victim is still blind.
+	FlashAssister uint64
+	FlashAssisted bool
 	// Avenged is the deaths an enemy kill trades, oldest first (D22): the victim's own enemy kills
 	// of the killer's teammates in the last 5 s, inclusive, each traded once. A kill avenging any is
 	// one trade kill.
 	Avenged []Death
+}
+
+// Blind is a player's latest counting flash: who threw it and the tick it wears off.
+type Blind struct {
+	Flasher uint64
+	Until   float64
 }
 
 // Death is a counted enemy kill's victim.
@@ -81,12 +99,13 @@ type Tracker struct {
 	members map[uint64]bool    // the open round's rows: members at the open and joins
 	deaths  map[uint64]int     // counted deaths this round
 	kills   map[uint64][]*kill // each killer's enemy kills this round, in order, by actor
+	blind   map[uint64]Blind   // each player's latest counting flash this round
 }
 
 // New returns the state before any round.
 func New() *Tracker {
 	return &Tracker{s: State{Phase: PrePlant}, members: map[uint64]bool{}, deaths: map[uint64]int{},
-		kills: map[uint64][]*kill{}}
+		kills: map[uint64][]*kill{}, blind: map[uint64]Blind{}}
 }
 
 // State is the current state.
@@ -102,6 +121,7 @@ func (t *Tracker) Open(r *match.Round) {
 	}
 	t.deaths = map[uint64]int{}
 	t.kills = map[uint64][]*kill{}
+	t.blind = map[uint64]Blind{}
 }
 
 func (t *Tracker) Join(r *match.Round, steam uint64) {
@@ -165,6 +185,9 @@ func (t *Tracker) apply(m *match.Match, f fact.Fact, c *Context) error {
 			w = *f.Weapon
 		}
 		c.BombIgnored = t.bombIgnored(w)
+		c.Enemy = f.Attacker != nil && f.Player != nil && f.Attacker.Side != f.Player.Side
+	case fact.Flashed:
+		t.flashed(f, c)
 	case fact.BombPlanted:
 		if !decided {
 			if f.Player == nil {
@@ -260,7 +283,33 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 		}
 		c.Assist = assist
 	}
+	if c.Assist {
+		if f.AssistedFlash {
+			c.FlashAssister, c.FlashAssisted = f.Assister.Steam64, true
+		} else if b := t.blind[f.Victim.Steam64]; float64(f.Tick) < b.Until {
+			c.FlashAssister, c.FlashAssisted = b.Flasher, true
+		}
+	}
 	return nil
+}
+
+// flashed is CSC's flash filter and its latest-flash state (the longest blind wins).
+func (t *Tracker) flashed(f fact.Flashed, c *Context) {
+	if f.Player == nil || f.Attacker == nil {
+		return
+	}
+	blind := f.Duration * tickRate
+	v, a := f.Player, f.Attacker
+	if a.Side == v.Side || blind <= tickRate || !v.Alive || v.FlashDuration >= blind/tickRate+1 {
+		return
+	}
+	c.Flash = true
+	b := t.blind[v.Steam64]
+	if until := float64(f.Tick) + blind; until > b.Until {
+		b = Blind{a.Steam64, until}
+		t.blind[v.Steam64] = b
+	}
+	c.Blind = b
 }
 
 // trade is an enemy kill's trades (D22): the victim's untraded enemy kills of the killer's

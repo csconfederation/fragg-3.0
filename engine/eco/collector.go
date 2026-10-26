@@ -20,6 +20,7 @@ const (
 	eqAWP        = 309
 	eqBomb       = 404
 	eqKnife      = 405
+	eqGrenades   = 500 // the first grenade type
 	eqMolotov    = 502
 	eqIncendiary = 503
 	eqFlash      = 504
@@ -322,17 +323,21 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 			ar.GotAssist = true
 			ar.Assists++
 		}
+		if x.FlashAssisted { // CSC's flash assists (#591); eco counted every enemy flash
+			c.row(x.FlashAssister).FlashAssists++
+		}
 	case fact.Hurt:
-		if !f.Warmup && c.roundActive {
+		if !f.Warmup && c.roundActive && x.Enemy && !x.BombIgnored {
 			c.hurt(f)
 		}
 	case fact.Flashed:
 		if c.roundActive && f.Attacker != nil && f.Player != nil {
 			r := c.row(f.Attacker.Steam64)
 			if f.Attacker.Side != f.Player.Side {
-				r.FlashAssists++
-				r.EnemyFlashDuration += f.Duration
-				r.EnemiesFlashed++
+				if x.Flash { // CSC's filter (#591); swing keeps its own flash credit below
+					r.EnemyFlashDuration += f.Duration
+					r.EnemiesFlashed++
+				}
 				c.swing.RecordFlash(f.Attacker.Steam64, f.Player.Steam64, f.Duration, f.Tick)
 			} else if f.Attacker.Steam64 != f.Player.Steam64 {
 				r.TeamFlashCount++
@@ -378,21 +383,20 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 	return nil
 }
 
+// hurt is enemy damage the round counts.
 func (c *Collector) hurt(f fact.Hurt) {
-	if f.Attacker == nil || f.Player == nil || f.Attacker.Side == f.Player.Side {
-		return
-	}
 	dmg := f.HealthDamageTaken
 	r := c.row(f.Attacker.Steam64)
 	r.Damage += dmg
 	c.row(f.Player.Steam64).DamageTaken += dmg
 	if f.Weapon != nil {
+		if *f.Weapon >= eqGrenades && *f.Weapon <= eqHE { // any grenade, impact hits too, as CSC's (#591)
+			r.UtilityDamage += dmg
+		}
 		switch *f.Weapon {
 		case eqHE:
-			r.UtilityDamage += dmg
 			r.HEDamage += dmg
 		case eqMolotov, eqIncendiary:
-			r.UtilityDamage += dmg
 			r.FireDamage += dmg
 		}
 	}

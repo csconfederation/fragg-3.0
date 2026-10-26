@@ -248,7 +248,7 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact, x shared.Context) error {
 	case fact.Hurt:
 		return c.hurt(f, x)
 	case fact.Flashed:
-		return c.flashed(f)
+		return c.flashed(f, x)
 	case fact.BombPlanted:
 		if undecided {
 			c.potential.Planter = f.Player.Steam64
@@ -366,7 +366,9 @@ func (c *Collector) hurt(f fact.Hurt, x shared.Context) error {
 	bombAtHalf := x.BombIgnored
 	switch {
 	case f.Player != nil && pS[f.Player.Steam64] != nil && !bombAtHalf:
-		pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
+		if x.Enemy { // enemy damage only (#591): not teammates, the world, falls or the bomb
+			pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
+		}
 	case f.Player != nil && f.Player.Connected && !bombAtHalf && !f.FreezeTime:
 		// The oracle cancels the parse (errMissingPlayerStats).
 		return missing("connected hurt player", f.Player.Steam64)
@@ -391,29 +393,21 @@ func (c *Collector) hurt(f fact.Hurt, x shared.Context) error {
 	return nil
 }
 
-func (c *Collector) flashed(f fact.Flashed) error {
-	if f.Player == nil || f.Attacker == nil {
+func (c *Collector) flashed(f fact.Flashed, x shared.Context) error {
+	if !x.Flash {
 		return nil
 	}
-	tick := float64(f.Tick)
-	blindTicks := f.Duration * float64(tickRate)
-	victim, flasher := f.Player, f.Attacker
-	if flasher.Side != victim.Side && blindTicks > float64(tickRate) && victim.Alive && victim.FlashDuration < blindTicks/float64(tickRate)+1 {
-		pS := c.potential.PlayerStats
-		fp, vp := pS[flasher.Steam64], pS[victim.Steam64]
-		if fp == nil {
-			return missing("flasher", flasher.Steam64)
-		}
-		fp.Ef++
-		fp.EnemyFlashTime += blindTicks / float64(tickRate)
-		if vp == nil {
-			return missing("flashed player", victim.Steam64)
-		}
-		if tick+blindTicks > vp.MostRecentFlashVal {
-			vp.MostRecentFlashVal = tick + blindTicks
-			vp.MostRecentFlasher = flasher.Steam64
-		}
+	pS := c.potential.PlayerStats
+	fp, vp := pS[f.Attacker.Steam64], pS[f.Player.Steam64]
+	if fp == nil {
+		return missing("flasher", f.Attacker.Steam64)
 	}
+	fp.Ef++
+	fp.EnemyFlashTime += f.Duration * float64(tickRate) / float64(tickRate) // the oracle's arithmetic, bit for bit
+	if vp == nil {
+		return missing("flashed player", f.Player.Steam64)
+	}
+	vp.MostRecentFlashVal, vp.MostRecentFlasher = x.Blind.Until, x.Blind.Flasher
 	return nil
 }
 
@@ -495,10 +489,10 @@ func (c *Collector) kill(f fact.Kill, x shared.Context) error {
 		if f.AssistedFlash {
 			a.FAss++
 			flashAssisted = true
-		} else if float64(tick) < pS[victim.Steam64].MostRecentFlashVal {
-			fl := pS[pS[victim.Steam64].MostRecentFlasher]
+		} else if x.FlashAssisted {
+			fl := pS[x.FlashAssister]
 			if fl == nil {
-				return missing("flash assister", pS[victim.Steam64].MostRecentFlasher)
+				return missing("flash assister", x.FlashAssister)
 			}
 			fl.FAss++
 			fl.Eac++

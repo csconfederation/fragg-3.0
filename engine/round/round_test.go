@@ -124,3 +124,56 @@ func TestBotsTradeTheirOwnKills(t *testing.T) {
 		t.Errorf("avenged %v, want %v", c.Avenged, want)
 	}
 }
+
+func flash(tick int, by, on *fact.Player, seconds float64) fact.Flashed {
+	return fact.Flashed{Tick: tick, Attacker: by, Player: on, Duration: seconds}
+}
+
+// CSC's flash filter, its latest-flash state and its flash assists (#591).
+func TestFlashes(t *testing.T) {
+	tr := newRound()
+	blinded := player(11)
+	cases := []struct {
+		name string
+		f    fact.Flashed
+		want bool
+	}{
+		{"enemy over 1 s", flash(1000, player(1), blinded, 1.5), true},
+		{"1 s exactly", flash(1000, player(1), blinded, 1), false},
+		{"teammate", flash(1000, player(12), blinded, 2), false},
+		{"dead player", flash(1000, player(1), &fact.Player{Steam64: 11, Side: fact.SideCT}, 2), false},
+	}
+	for _, tc := range cases {
+		var c Context
+		tr.flashed(tc.f, &c)
+		if c.Flash != tc.want {
+			t.Errorf("%s: counted %v", tc.name, c.Flash)
+		}
+	}
+	if want := (Blind{1, 1096}); tr.blind[11] != want {
+		t.Fatalf("blind %v, want %v", tr.blind[11], want)
+	}
+	var c Context
+	tr.flashed(flash(1010, player(2), blinded, 1.2), &c) // wears off sooner: the state stays
+	if !c.Flash || c.Blind != (Blind{1, 1096}) {
+		t.Errorf("shorter flash: counted %v, blind %v", c.Flash, c.Blind)
+	}
+	already := player(11)
+	already.FlashDuration = 3
+	c = Context{}
+	if tr.flashed(flash(1020, player(1), already, 1.5), &c); c.Flash {
+		t.Error("counted a flash on a player already blind for longer")
+	}
+
+	// A plain assist while the victim is blind is a flash assist for the flasher.
+	m := match.New()
+	k := killAt(1090, player(2), player(11))
+	k.Assister = player(1)
+	c = Context{}
+	if err := tr.kill(m, k, &c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.FlashAssisted || c.FlashAssister != 1 {
+		t.Errorf("flash assist %v by %d", c.FlashAssisted, c.FlashAssister)
+	}
+}

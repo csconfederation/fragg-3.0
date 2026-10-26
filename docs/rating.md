@@ -8,7 +8,7 @@ Source of truth for implementation:
 - `rating/weights.go` — baselines and multipliers
 - `rating/swing/` — ledger, pool allocator, residual swing, config
 - `rating/probability/` — win probability engine and lookup tables
-- `parser/handlers.go`, `parser/swing_tracker.go` — live event tracking and ledger application
+- `engine/eco/collector.go`, `engine/eco/swing_tracker.go` — live event tracking and ledger application; alive counts and round state come from `engine/round`
 
 ---
 
@@ -156,7 +156,7 @@ At round end, `ValidateRoundSwingLedger` checks that `|sum(PlayerSwing)| ≤ swi
 1. **Event occurs** (kill, plant, defuse, trade reallocation)
 2. **`PoolAllocator`** computes pools and player weights
 3. **Ledger records** the event
-4. **`applyLedgerAllocations`** in `parser/handlers.go` updates `RoundStats.ProbabilitySwing`
+4. **`applyLedger`** in `engine/eco/collector.go` updates `RoundStats.ProbabilitySwing`
 5. **Round end:** residual swing applied, ledger validated, stats rolled up
 
 When `swing_survival_credit_enabled: false`, survival credit is off and conversion value is handled by end-of-round residual swing.

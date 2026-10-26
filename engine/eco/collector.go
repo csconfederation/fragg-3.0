@@ -181,11 +181,10 @@ func (c *Collector) Win(winner fact.Side, s fact.Snapshot, alive []fact.Player) 
 	c.winTime = duration
 	c.trades.ProcessRoundEndTrades(s.Tick, c.round)
 
-	ps := playing(s)
-	for _, p := range ps {
-		r := c.row(p.Steam64)
-		r.TeamWon = p.Side == winner
+	for _, r := range c.round { // every row, a disconnected member's too (#591)
+		r.TeamWon = r.PlayerSide == "T" && winner == fact.SideT || r.PlayerSide == "CT" && winner == fact.SideCT
 	}
+	ps := playing(s)
 	isAlive, aliveOn := map[uint64]bool{}, map[fact.Side]int{}
 	for _, p := range alive {
 		isAlive[p.Steam64] = true
@@ -531,30 +530,33 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 		r.TradeKill = true
 		r.TradeSpeed = tradeSpeed
 	}
-	losing := make([]uint64, 0)
-	for _, p := range x.Alive {
-		if !p.IsBot && p.Side == victim.Side {
-			losing = append(losing, p.Steam64)
+	// Swing's kill transition is the counted victim's death (#591): not a non-member's.
+	if x.Victim {
+		losing := make([]uint64, 0)
+		for _, p := range x.Alive {
+			if !p.IsBot && p.Side == victim.Side {
+				losing = append(losing, p.Steam64)
+			}
 		}
-	}
-	kr := c.swing.RecordKill(attacker.Steam64, victim.Steam64, attacker.Side, victim.Side, float64(attackerEquip),
-		float64(victimEquip), t, isTradeKill, f.Headshot, c.roundDecided, losing, tick)
-	c.applyLedger(kr.Allocations, t, victim.Name)
-	for _, a := range kr.Allocations {
-		if a.SteamID == victim.Steam64 && a.Reason == swing.SwingReasonVictimDeath {
-			vr.LastDeathSwing = a.Amount
+		kr := c.swing.RecordKill(attacker.Steam64, victim.Steam64, attacker.Side, victim.Side, float64(attackerEquip),
+			float64(victimEquip), t, isTradeKill, f.Headshot, c.roundDecided, losing, tick)
+		c.applyLedger(kr.Allocations, t, victim.Name)
+		for _, a := range kr.Allocations {
+			if a.SteamID == victim.Steam64 && a.Reason == swing.SwingReasonVictimDeath {
+				vr.LastDeathSwing = a.Amount
+			}
 		}
-	}
-	if kr.SurvivalCreditPerPlayer > 0 {
-		allocs := make([]swing.PlayerSwingAllocation, 0, len(kr.SurvivalBeneficiaries))
-		for _, id := range kr.SurvivalBeneficiaries {
-			allocs = append(allocs, swing.PlayerSwingAllocation{SteamID: id, Side: attacker.Side,
-				Amount: kr.SurvivalCreditPerPlayer, Reason: swing.SwingReasonSurvivalCredit})
+		if kr.SurvivalCreditPerPlayer > 0 {
+			allocs := make([]swing.PlayerSwingAllocation, 0, len(kr.SurvivalBeneficiaries))
+			for _, id := range kr.SurvivalBeneficiaries {
+				allocs = append(allocs, swing.PlayerSwingAllocation{SteamID: id, Side: attacker.Side,
+					Amount: kr.SurvivalCreditPerPlayer, Reason: swing.SwingReasonSurvivalCredit})
+			}
+			c.applyLedger(allocs, t, victim.Name)
 		}
-		c.applyLedger(allocs, t, victim.Name)
-	}
-	if kr.Swing.EcoMultiplier > 0 {
-		r.EcoAdjustedKills += kr.Swing.EcoMultiplier
+		if kr.Swing.EcoMultiplier > 0 {
+			r.EcoAdjustedKills += kr.Swing.EcoMultiplier
+		}
 	}
 
 	// processEcoKillFlags
@@ -569,7 +571,7 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 		r.PerfectKills++
 	}
 
-	return true
+	return x.Victim
 }
 
 // death records a death the round counts (#591): every death, team kills and suicides too.

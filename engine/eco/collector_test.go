@@ -113,3 +113,22 @@ func TestPostRoundDeathIsNoSurvival(t *testing.T) {
 		t.Errorf("killer survived %v, saved %v", k.Survived, k.SavedWeapons)
 	}
 }
+
+// A winner who disconnected without dying won the round: no save (#591, review50).
+func TestDisconnectedWinnerIsNoSave(t *testing.T) {
+	c := New()
+	winner := fact.Player{Steam64: 1, Side: fact.SideT, Alive: true, Listed: true}
+	loser := fact.Player{Steam64: 2, Side: fact.SideCT, Alive: true, Listed: true}
+	s := fact.Snapshot{Tick: 100, T: fact.Team{Side: fact.SideT}, CT: fact.Team{Side: fact.SideCT},
+		Players: []fact.Player{winner, loser}}
+	c.Open(s, 2, s.Players, 1, 1)
+	s.Players = []fact.Player{loser}
+	c.Win(fact.SideT, s, s.Players)
+	r := c.Commit()
+	if w := r.stats[1]; !w.TeamWon || w.SavedWeapons {
+		t.Errorf("winner won %v, saved %v", w.TeamWon, w.SavedWeapons)
+	}
+	if l := r.stats[2]; l.TeamWon || !l.SavedWeapons {
+		t.Errorf("loser won %v, saved %v", l.TeamWon, l.SavedWeapons)
+	}
+}

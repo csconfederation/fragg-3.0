@@ -1,7 +1,7 @@
 // Package match runs the round lifecycle over facts: when the match goes live, which rounds commit,
 // how the match ends, and the outcome (Core-planning#301, engine core design). The lifecycle ports
 // the oracle's (fragg csc/parser.go at tag oracle-v6port-rc.1) so rounds, sides, scores, and
-// player sets match it; the outcome rules (D8, D9, D12) are new.
+// player sets match it; the outcome rules (D8, D9) are new.
 package match
 
 import (
@@ -491,9 +491,9 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 			// The oracle panics here (TeamStats[WinnerClanName] is nil).
 			return m.fail(tick, "round %d winner %q isn't one of its teams %v", r.Num, r.WinnerClan, r.sideClans)
 		}
-		if n := len(m.rounds); n > 0 && r.Num <= m.rounds[n-1].Num {
-			return m.fail(tick, "round %d committed after round %d (no in-demo redo path, D12)", r.Num, m.rounds[n-1].Num)
-		}
+		// An in-demo restore (D12) replays from round r.Num: the rounds committed from it on are
+		// superseded, as the oracle's removeInvalidRounds keeps each round number's last commit.
+		m.rounds = slices.DeleteFunc(m.rounds, func(c *Round) bool { return c.Num >= r.Num })
 		if m.stats != nil {
 			if err := m.stats.Commit(m, r, tick); err != nil {
 				return m.keep(err)

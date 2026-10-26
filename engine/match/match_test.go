@@ -446,8 +446,8 @@ func TestInvariantWinsOverTruncation(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		s.play("Alpha")
 	}
-	s.played = 2
-	s.play("Bravo")
+	s.add(fact.ScoreUpdated{Tick: s.tick, Team: fact.Team{Side: fact.SideT, Clan: "Charlie", Score: 1},
+		Opponent: fact.Team{Side: fact.SideCT, Clan: "Bravo"}}) // a team that isn't in the match
 	_, err := s.run(t, fact.Terminal{Kind: fact.Truncated, Err: errors.New("eof")})
 	var inv *InvariantError
 	if !errors.As(err, &inv) {
@@ -493,17 +493,29 @@ func TestPlayerInfoMarksLateConnect(t *testing.T) {
 	}
 }
 
-func TestRoundRegressionIsInvariant(t *testing.T) {
+// An in-demo restore (D12; S19 mid7801 replays round 13) supersedes the rounds committed from the
+// restored round on: the replays commit in their place, as the oracle keeps each number's last commit.
+func TestInDemoRestoreReplaysRounds(t *testing.T) {
 	s := newSim()
 	for i := 0; i < 5; i++ {
 		s.play("Alpha")
 	}
-	s.played = 2 // an in-demo restore back to round 3
+	restoredAt := s.tick
+	s.played, s.score = 2, map[string]int{"Alpha": 2, "Bravo": 0} // the game restores round 3
 	s.play("Bravo")
-	_, err := s.run(t, fact.Terminal{Kind: fact.Clean})
-	var inv *InvariantError
-	if !errors.As(err, &inv) || !strings.Contains(inv.Reason, "round 3 committed after round 5") {
-		t.Errorf("error %v", err)
+	for i := 0; i < 10; i++ {
+		s.play("Alpha")
+	}
+	s.open()
+	s.end("Alpha", false)
+	s.gameEnded()
+	res, err := s.run(t, fact.Terminal{Kind: fact.Clean})
+	want(t, res, err, Ended, 14)
+	if got := nums(res.Rounds); !slices.Equal(got, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}) {
+		t.Fatalf("rounds %v", got)
+	}
+	if r := res.Rounds[2]; r.StartTick < restoredAt || r.WinnerClan != "Bravo" {
+		t.Errorf("round 3 is the original (start %d, winner %s), not the replay", r.StartTick, r.WinnerClan)
 	}
 }
 

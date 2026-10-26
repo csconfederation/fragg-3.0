@@ -47,7 +47,16 @@ type collector struct {
 	cur     roundRow
 	pending probability.PendingRound
 	end     round.State
-	rows    []roundRow
+	// committed holds each commit until Finish says which rounds count: an in-demo restore (D12)
+	// supersedes rounds after they commit.
+	committed map[*match.Round]commit
+}
+
+type commit struct {
+	pending         probability.PendingRound
+	tAlive, ctAlive int
+	planted         bool
+	row             roundRow
 }
 
 func buy(m *match.Match, s fact.Snapshot, side fact.Side) teamBuy {
@@ -84,9 +93,7 @@ func (c *collector) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
 }
 
 func (c *collector) Commit(m *match.Match, r *match.Round, tick int) error {
-	c.data.CommitPending(c.pending, min(c.end.TAlive, 5), min(c.end.CTAlive, 5), c.planted,
-		fact.Side(c.cur.Winner), c.mapName)
-	c.rows = append(c.rows, c.cur)
+	c.committed[r] = commit{c.pending, min(c.end.TAlive, 5), min(c.end.CTAlive, 5), c.planted, c.cur}
 	return nil
 }
 
@@ -148,7 +155,7 @@ func main() {
 		return
 	}
 	defer f.Close()
-	c := &collector{round: round.New(), data: probability.NewDataCollector()}
+	c := &collector{round: round.New(), data: probability.NewDataCollector(), committed: map[*match.Round]commit{}}
 	m := match.New(c)
 	term, _ := ingest.Run(context.Background(), f, sink{m, c})
 	res, err := m.Finish(term)
@@ -156,15 +163,21 @@ func main() {
 		status["error"] = err.Error()
 		return
 	}
-	status["outcome"], status["map"], status["rounds"] = res.Outcome.String(), res.Map, len(c.rows)
+	status["outcome"], status["map"], status["rounds"] = res.Outcome.String(), res.Map, len(res.Rounds)
 	if res.Outcome != match.Ended {
 		return // only whole matches feed the tables
+	}
+	rows := []roundRow{}
+	for _, r := range res.Rounds {
+		k := c.committed[r]
+		c.data.CommitPending(k.pending, k.tAlive, k.ctAlive, k.planted, fact.Side(k.row.Winner), c.mapName)
+		rows = append(rows, k.row)
 	}
 	if err := c.data.SaveToFile(os.Args[2] + ".prob.json"); err != nil {
 		status["error"] = err.Error()
 		return
 	}
-	b, err := json.Marshal(map[string]any{"map": res.Map, "rounds": c.rows})
+	b, err := json.Marshal(map[string]any{"map": res.Map, "rounds": rows})
 	if err == nil {
 		err = os.WriteFile(os.Args[2]+".rounds.json", b, 0o644)
 	}

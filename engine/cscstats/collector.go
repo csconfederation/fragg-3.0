@@ -430,11 +430,10 @@ func (c *Collector) kill(f fact.Kill, x shared.Context) error {
 	before := x.Before
 	killer, victim, assister := f.Killer, f.Victim, f.Assister
 	killerExists, victimExists := x.Killer, x.Victim
-	assisterExists := assister != nil && pS[assister.Steam64] != nil && !x.BombIgnored
+	assisted := x.Assist
 
 	killValue, multiplier := 1.0, 1.0
-	traded, assisted, flashAssisted := false, false, false
-	var err error
+	traded, flashAssisted := false, false
 
 	if victimExists {
 		v := pS[victim.Steam64]
@@ -490,11 +489,6 @@ func (c *Collector) kill(f fact.Kill, x shared.Context) error {
 		}
 	}
 
-	if assisterExists && victimExists {
-		if assisted, err = shared.Enemies(assister, victim); err != nil {
-			return err
-		}
-	}
 	if assisted {
 		a := pS[assister.Steam64]
 		a.Assists++

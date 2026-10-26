@@ -47,8 +47,9 @@ type State struct {
 type Context struct {
 	Before, After State
 	// Kills: Expected is the kill belonging to the open round. Victim and Killer are each player
-	// having a round row with the kill counting (D10); Enemy is both, on opposite teams.
-	Expected, Victim, Killer, Enemy bool
+	// having a round row with the kill counting (D10); Enemy is both, on opposite teams. Assist is
+	// the assister having a row and being the counted victim's enemy (CSC's rule).
+	Expected, Victim, Killer, Enemy, Assist bool
 	// BombIgnored is a bomb kill or hurt that doesn't count (D10).
 	BombIgnored bool
 	// Alive is the members alive after a kill or bomb event, bots included (see Alive).
@@ -229,6 +230,13 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 	}
 	if c.Enemy {
 		t.s.Opening = false
+	}
+	if c.Victim && f.Assister != nil && t.members[f.Assister.Steam64] {
+		assist, err := Enemies(f.Assister, f.Victim)
+		if err != nil {
+			return err
+		}
+		c.Assist = assist
 	}
 	return nil
 }

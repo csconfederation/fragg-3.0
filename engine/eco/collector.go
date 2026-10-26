@@ -320,6 +320,11 @@ func (c *Collector) fact(f fact.Fact, x round.Context) error {
 		if x.Victim && !swung {
 			c.swing.RecordDeath(f.Victim.Steam64, f.Victim.Side)
 		}
+		if x.Assist {
+			ar := c.row(f.Assister.Steam64)
+			ar.GotAssist = true
+			ar.Assists++
+		}
 		if c.roundActive && f.Victim != nil {
 			c.dead[f.Victim.Steam64] = true // suicides and team kills too, which kill skips
 		}
@@ -564,12 +569,6 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 		r.PerfectKills++
 	}
 
-	// processAssist
-	if f.Assister != nil {
-		ar := c.row(f.Assister.Steam64)
-		ar.GotAssist = true
-		ar.Assists++
-	}
 	return true
 }
 

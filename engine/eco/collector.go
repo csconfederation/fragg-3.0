@@ -20,6 +20,7 @@ const (
 	eqAWP        = 309
 	eqBomb       = 404
 	eqKnife      = 405
+	eqGrenades   = 500 // the first grenade type
 	eqMolotov    = 502
 	eqIncendiary = 503
 	eqFlash      = 504
@@ -385,12 +386,13 @@ func (c *Collector) hurt(f fact.Hurt) {
 	r.Damage += dmg
 	c.row(f.Player.Steam64).DamageTaken += dmg
 	if f.Weapon != nil {
+		if *f.Weapon >= eqGrenades && *f.Weapon <= eqHE { // any grenade, impact hits too, as CSC's (#591)
+			r.UtilityDamage += dmg
+		}
 		switch *f.Weapon {
 		case eqHE:
-			r.UtilityDamage += dmg
 			r.HEDamage += dmg
 		case eqMolotov, eqIncendiary:
-			r.UtilityDamage += dmg
 			r.FireDamage += dmg
 		}
 	}

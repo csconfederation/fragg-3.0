@@ -100,12 +100,6 @@ func Derive(p *model.PlayerStats, kdprModifier bool) {
 			MultiKills:   p.MultiKillsRaw,
 		})
 
-		// Pistol round rating
-		if p.PistolRoundsPlayed > 0 {
-			p.PistolRoundRating = rating.ComputePistolRoundRating(
-				p.PistolRoundsPlayed, p.PistolRoundKills, p.PistolRoundSurvivals, p.PistolRoundMultiKills)
-		}
-
 		// Side-specific HLTV ratings
 		if p.TRoundsPlayed > 0 {
 			p.TRating = rating.ComputeSideHLTVRating(

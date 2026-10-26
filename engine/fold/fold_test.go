@@ -30,3 +30,44 @@ func TestAtdIsPerDeath(t *testing.T) {
 		t.Errorf("atd %d, %d; want 30, 0", rows[1].Atd, rows[2].Atd)
 	}
 }
+
+// Each whole-match row gets rounds, wins and a rating per buy of its team; a full buy against an eco
+// also counts as anti-eco, and a round without a known buy counts in none (Core-planning#590).
+func TestBuyScopes(t *testing.T) {
+	type side struct {
+		clan string
+		buy  cscstats.Buy
+	}
+	round := func(num int, a, b side, aWon bool) *cscstats.Round {
+		rf := map[bool]int{true: 1, false: 0}
+		return &cscstats.Round{RoundNum: int8(num), InitTerroristCount: 1, InitCTerroristCount: 1,
+			PlayerStats: map[uint64]*cscstats.PlayerStats{
+				1: {SteamID: "1", Side: 2, TeamClanName: a.clan, Kills: 1, Damage: 100, RF: rf[aWon], KastRounds: 1, WinPoints: 1},
+				2: {SteamID: "2", Side: 3, TeamClanName: b.clan, Deaths: 1, RF: rf[!aWon]}},
+			TeamStats: map[string]*cscstats.TeamStats{a.clan: {Buy: a.buy}, b.clan: {Buy: b.buy}}}
+	}
+	g := &cscstats.Game{TickRate: 64, Rounds: []*cscstats.Round{
+		round(1, side{"A", cscstats.BuyPistol}, side{"B", cscstats.BuyPistol}, true),
+		round(2, side{"A", cscstats.BuyFull}, side{"B", cscstats.BuyEco}, true),
+		round(3, side{"A", cscstats.BuyForce}, side{"B", cscstats.BuyFull}, false),
+		round(4, side{"A", cscstats.BuyUnknown}, side{"B", cscstats.BuyFull}, true),
+	}}
+	if err := Game(g, eco.New(), nil); err != nil {
+		t.Fatal(err)
+	}
+	a, b := g.TotalPlayerStats[1], g.TotalPlayerStats[2]
+	type counts struct{ pistol, pistolW, eco, ecoW, force, forceW, full, fullW, anti, antiW int }
+	got := func(p *cscstats.PlayerStats) counts {
+		return counts{p.PistolRounds, p.PistolRoundsWon, p.EcoBuyRounds, p.EcoBuyRoundsWon, p.ForceBuyRounds,
+			p.ForceBuyRoundsWon, p.FullBuyRounds, p.FullBuyRoundsWon, p.AntiEcoRounds, p.AntiEcoRoundsWon}
+	}
+	if c := got(a); c != (counts{1, 1, 0, 0, 1, 0, 1, 1, 1, 1}) {
+		t.Errorf("A %+v", c)
+	}
+	if c := got(b); c != (counts{1, 0, 1, 0, 0, 0, 2, 1, 0, 0}) {
+		t.Errorf("B %+v", c)
+	}
+	if a.PistolRoundRating <= 0 || a.FullBuyRating <= 0 || a.EcoBuyRating != 0 {
+		t.Errorf("A ratings: pistol %v, full %v, eco %v", a.PistolRoundRating, a.FullBuyRating, a.EcoBuyRating)
+	}
+}

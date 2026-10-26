@@ -27,15 +27,14 @@ const (
 // handlers, and BeginRound, FinalizeRound and SnapshotRound, which the CSC pipeline drives. The
 // oracle's probability DataCollector is left out: it only feeds offline probability tables.
 type Collector struct {
-	players       map[uint64]*model.PlayerStats
-	round         map[uint64]*model.RoundStats
-	trades        *TradeDetector
-	swing         *SwingTracker
-	isPistolRound bool
-	roundActive   bool
-	mapName       string
-	startTick     int // the round clock starts at the open's tick, as CSC's
-	winTime       float64
+	players     map[uint64]*model.PlayerStats
+	round       map[uint64]*model.RoundStats
+	trades      *TradeDetector
+	swing       *SwingTracker
+	roundActive bool
+	mapName     string
+	startTick   int // the round clock starts at the open's tick, as CSC's
+	winTime     float64
 }
 
 // Round is one committed round's eco stats (the oracle's RoundSnapshot).
@@ -92,14 +91,11 @@ func (c *Collector) row(steam uint64) *model.RoundStats {
 
 // Open is the oracle's BeginRound, called on every round open; num is the match's round number
 // and members the round's members (bots included), whose alive counts are tAlive and ctAlive.
-// D13: the pistol rounds are rounds 1 and 13, where the oracle used IsPistolRound on eco's own
-// count of opens.
 func (c *Collector) Open(s fact.Snapshot, num int, members []fact.Player, tAlive, ctAlive int) {
 	c.round = map[uint64]*model.RoundStats{}
 	c.trades.Reset()
 	c.winTime = 0
 	c.roundActive = true
-	c.isPistolRound = num == rating.FirstHalfPistolRound || num == rating.SecondHalfPistolRound
 	c.startTick = s.Tick
 
 	tCount, ctCount, tEquip, ctEquip := 0, 0, 0, 0
@@ -141,7 +137,7 @@ func sideName(side fact.Side) string {
 
 // addRow gives a member a row on their side; late rows are pistol rows too (D13).
 func (c *Collector) addRow(steam uint64, side fact.Side) {
-	c.round[steam] = &model.RoundStats{IsPistolRound: c.isPistolRound, PlayerSide: sideName(side)}
+	c.round[steam] = &model.RoundStats{PlayerSide: sideName(side)}
 }
 
 // Join adds a human who joined the open round mid-round, on the side CSC gave them, so eco covers

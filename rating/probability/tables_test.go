@@ -107,3 +107,27 @@ func TestMapFactorRelativeToBaseline(t *testing.T) {
 		}
 	}
 }
+
+// The last kill never lowers the killer's side, even on a map whose factor is below 1 with a
+// near-certain state before it (review72: 5v1 → 5v0 on nuke).
+func TestDecidedRoundsAreTerminal(t *testing.T) {
+	e := NewDefaultEngine()
+	for _, tc := range []struct {
+		name          string
+		before, after RoundState
+		side          fact.Side
+	}{
+		{"last CT", RoundState{TAlive: 5, CTAlive: 1, Map: "de_nuke"}, RoundState{TAlive: 5, CTAlive: 0, Map: "de_nuke"}, fact.SideT},
+		{"last CT, planted", RoundState{TAlive: 5, CTAlive: 1, BombPlanted: true, Map: "de_nuke"}, RoundState{TAlive: 5, CTAlive: 0, BombPlanted: true, Map: "de_nuke"}, fact.SideT},
+		{"last T", RoundState{TAlive: 1, CTAlive: 5, Map: "de_anubis"}, RoundState{TAlive: 0, CTAlive: 5, Map: "de_anubis"}, fact.SideCT},
+	} {
+		before, after := e.GetWinProbability(&tc.before, tc.side), e.GetWinProbability(&tc.after, tc.side)
+		if after != 1 || after <= before {
+			t.Errorf("%s: %.4f → %.4f", tc.name, before, after)
+		}
+	}
+	// Ts all dead with the bomb planted is the defuse race, still measured.
+	if p := e.GetWinProbability(&RoundState{TAlive: 0, CTAlive: 1, BombPlanted: true}, fact.SideT); p <= 0 || p >= 1 {
+		t.Errorf("0v1 planted: %.4f", p)
+	}
+}

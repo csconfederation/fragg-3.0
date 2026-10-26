@@ -19,9 +19,18 @@ func NewDefaultEngine() *Engine {
 
 // GetWinProbability returns the probability that the specified side wins the round.
 func (e *Engine) GetWinProbability(state *RoundState, side fact.Side) float64 {
-	// Defuse is a terminal CT win — skip table/economy/time adjustments.
-	if state.BombDefused {
-		if side == fact.SideCT {
+	// Decided rounds skip the table and adjustments, which could otherwise put the state after the
+	// last kill below the state before it: a defuse or the last T dying without a plant is a CT win;
+	// the last CT dying is a T win. Ts all dead with the bomb planted is the defuse race, not decided.
+	decided, tWins := false, false
+	switch {
+	case state.BombDefused, state.TAlive == 0 && !state.BombPlanted:
+		decided = true
+	case state.CTAlive == 0:
+		decided, tWins = true, true
+	}
+	if decided {
+		if tWins == (side == fact.SideT) {
 			return 1.0
 		}
 		return 0.0

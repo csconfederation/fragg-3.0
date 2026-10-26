@@ -82,6 +82,10 @@ side_win_prob = T_win_prob           (if T)
 clamped to [0.01, 0.99]
 ```
 
+A decided round skips all of this: a defuse or the last T dying without a plant is a CT win (T 0.0),
+the last CT dying a T win (T 1.0). Otherwise a multiplier below 1 could rate the state after the
+last kill below the one before it.
+
 **Economy multiplier** (T econ tier minus CT econ tier):
 
 | Diff | Multiplier |
@@ -579,35 +583,33 @@ T-side win probability by alive counts. Rows = T alive, columns = CT alive.
 
 | T \ CT | 5 | 4 | 3 | 2 | 1 | 0 |
 |--------|------|------|------|------|------|------|
-| **5** | 0.489 | 0.708 | 0.891 | 0.978 | 0.999 | 0.990 |
-| **4** | 0.298 | 0.511 | 0.751 | 0.929 | 0.993 | 0.990 |
-| **3** | 0.130 | 0.280 | 0.515 | 0.785 | 0.965 | 0.990 |
-| **2** | 0.028 | 0.086 | 0.224 | 0.483 | 0.813 | 0.990 |
-| **1** | 0.002 | 0.008 | 0.037 | 0.130 | 0.401 | 0.990 |
-| **0** | 0.010 | 0.010 | 0.010 | 0.010 | 0.010 | 0.500 |
+| **5** | 0.489 | 0.708 | 0.891 | 0.978 | 0.999 | – |
+| **4** | 0.298 | 0.511 | 0.751 | 0.929 | 0.993 | – |
+| **3** | 0.130 | 0.280 | 0.515 | 0.785 | 0.965 | – |
+| **2** | 0.028 | 0.086 | 0.224 | 0.483 | 0.813 | – |
+| **1** | 0.002 | 0.008 | 0.037 | 0.130 | 0.401 | – |
+| **0** | – | – | – | – | – | – |
 
 Notes:
 
-- `5v0`, `4v0`, etc.: forced — all CTs dead, T wins.
-- `0v5`–`0v1`: forced — all Ts dead, CT wins.
-- `0v0`: draw state, should not occur.
+- `–`: a decided round never reads the table. The last CT dying is a T win (1.0), the last T dying
+  without a plant a CT win (0.0), before any adjustment.
 
 ### Base win probabilities — bomb planted
 
 | T \ CT | 5 | 4 | 3 | 2 | 1 | 0 |
 |--------|------|------|------|------|------|------|
-| **5** | 0.785 | 0.856 | 0.946 | 0.994 | 0.998 | 0.990 |
-| **4** | 0.512 | 0.663 | 0.856 | 0.971 | 0.998 | 0.990 |
-| **3** | 0.237 | 0.415 | 0.657 | 0.886 | 0.989 | 0.990 |
-| **2** | 0.071 | 0.146 | 0.341 | 0.645 | 0.915 | 0.990 |
-| **1** | 0.003 | 0.027 | 0.087 | 0.274 | 0.627 | 0.990 |
-| **0** | 0.000 | 0.005 | 0.007 | 0.040 | 0.220 | 1.000 |
+| **5** | 0.785 | 0.856 | 0.946 | 0.994 | 0.998 | – |
+| **4** | 0.512 | 0.663 | 0.856 | 0.971 | 0.998 | – |
+| **3** | 0.237 | 0.415 | 0.657 | 0.886 | 0.989 | – |
+| **2** | 0.071 | 0.146 | 0.341 | 0.645 | 0.915 | – |
+| **1** | 0.003 | 0.027 | 0.087 | 0.274 | 0.627 | – |
+| **0** | 0.000 | 0.005 | 0.007 | 0.040 | 0.220 | – |
 
 Notes:
 
-- `5v0`–`1v0`: forced — all CTs dead with bomb planted.
+- `–`: decided (all CTs dead), T win.
 - `0v5`–`0v1`: measured — the defuse race after the last T dies.
-- `0v0_planted`: forced — bomb explodes, T wins.
 
 ### Duel win rates
 

@@ -141,18 +141,12 @@ func (u *SideStatsUpdater) applySideEcoCounters(tSide bool) {
 			p.CTAssistedKills += rs.Assists
 		}
 	}
-	if rs.TradeKill {
-		if tSide {
-			p.TTradeKills++
-			if rs.TradeSpeed > 0 && rs.TradeSpeed < 2.0 {
-				p.TFastTrades++
-			}
-		} else {
-			p.CTTradeKills++
-			if rs.TradeSpeed > 0 && rs.TradeSpeed < 2.0 {
-				p.CTFastTrades++
-			}
-		}
+	if tSide {
+		p.TTradeKills += rs.TradeKills
+		p.TFastTrades += rs.FastTrades
+	} else {
+		p.CTTradeKills += rs.TradeKills
+		p.CTFastTrades += rs.FastTrades
 	}
 	if rs.TradeDenials > 0 {
 		if tSide {
@@ -338,12 +332,8 @@ func (u *SideStatsUpdater) updateTradeStats() {
 		u.player.PistolVsRifleKills++
 	}
 
-	if u.roundStats.TradeKill {
-		u.player.TradeKills++
-		if u.roundStats.TradeSpeed > 0 && u.roundStats.TradeSpeed < 2.0 {
-			u.player.FastTrades++
-		}
-	}
+	u.player.TradeKills += u.roundStats.TradeKills
+	u.player.FastTrades += u.roundStats.FastTrades
 
 	if u.roundStats.Deaths > 0 && u.roundStats.DeathTime < 30.0 {
 		u.player.EarlyDeaths++

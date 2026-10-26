@@ -637,6 +637,11 @@ func (d *DemoParser) processSwingTracking(ctx *killContext) {
 	if ctx.isTradeKill {
 		round.TradeKill = true
 		round.TradeSpeed = ctx.tradeSpeed
+		// engine/eco's side stats count these; the legacy parser counts one per round, by its last speed.
+		round.TradeKills, round.FastTrades = 1, 0
+		if ctx.tradeSpeed > 0 && ctx.tradeSpeed < 2.0 {
+			round.FastTrades = 1
+		}
 	}
 
 	if d.state.SwingTracker == nil {

@@ -10,8 +10,8 @@ import (
 type Buy uint8
 
 const (
-	BuyUnknown Buy = iota // the round committed without a freeze-end open, so before the buy
-	BuyPistol             // rounds 1 and 13 (D13)
+	BuyUnknown Buy = iota // a round that committed without a freeze-end open, so before the buy
+	BuyPistol             // rounds 1 and 13 (D13), by number: no buy snapshot needed, as the team pistols columns
 	BuyEco                // average equipment per player under $1,500 at freeze end
 	BuyForce              // $1,500-3,499
 	BuyFull               // $3,500 and up

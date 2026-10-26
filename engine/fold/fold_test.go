@@ -2,6 +2,7 @@ package fold
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/csconfederation/fragg-3.0/engine/cscstats"
@@ -67,7 +68,27 @@ func TestBuyScopes(t *testing.T) {
 	if c := got(b); c != (counts{1, 0, 1, 0, 0, 0, 2, 1, 0, 0}) {
 		t.Errorf("B %+v", c)
 	}
-	if a.PistolRoundRating <= 0 || a.FullBuyRating <= 0 || a.EcoBuyRating != 0 {
-		t.Errorf("A ratings: pistol %v, full %v, eco %v", a.PistolRoundRating, a.FullBuyRating, a.EcoBuyRating)
+	for _, r := range []float64{a.PistolRoundRating, a.FullBuyRating, a.ForceBuyRating, a.AntiEcoRating, b.EcoBuyRating, b.FullBuyRating} {
+		if math.IsNaN(r) || math.IsInf(r, 0) || r < 0 {
+			t.Errorf("rating %v", r)
+		}
+	}
+	if a.EcoBuyRating != 0 {
+		t.Errorf("A eco rating %v without eco rounds", a.EcoBuyRating)
+	}
+
+	// A scope holding every round is rated exactly as the whole match.
+	g = &cscstats.Game{TickRate: 64, Rounds: []*cscstats.Round{
+		round(2, side{"A", cscstats.BuyFull}, side{"B", cscstats.BuyFull}, true),
+		round(3, side{"A", cscstats.BuyFull}, side{"B", cscstats.BuyFull}, false),
+		round(4, side{"A", cscstats.BuyFull}, side{"B", cscstats.BuyFull}, true),
+	}}
+	if err := Game(g, eco.New(), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range g.TotalPlayerStats {
+		if p.FullBuyRating != p.Rating || p.FullBuyRounds != p.Rounds {
+			t.Errorf("player %s: full-buy rating %v over %d rounds, match rating %v over %d", p.SteamID, p.FullBuyRating, p.FullBuyRounds, p.Rating, p.Rounds)
+		}
 	}
 }

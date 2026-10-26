@@ -48,7 +48,6 @@ type Team struct {
 // new record, and the oracle keeps the last one.
 type Snapshot struct {
 	Tick         int
-	Frame        int // the parser's frame number, which the eco pipeline uses as its clock
 	RoundsPlayed int
 	Warmup       bool
 	FreezeTime   bool

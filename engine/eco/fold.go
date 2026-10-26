@@ -33,7 +33,7 @@ func FoldRound(player *model.PlayerStats, round *model.RoundStats, roundNumber i
 	player.MolotovsThrown += round.MolotovsThrown
 	player.TotalNadesThrown += round.SmokesThrown + round.HEsThrown + round.MolotovsThrown + round.FlashesThrown
 
-	if round.DeathTime > 0 {
+	if round.Deaths > 0 {
 		player.Deaths++
 		player.TotalTimeAlive += round.DeathTime
 		player.TotalDeathTime += round.DeathTime

@@ -76,7 +76,8 @@ func (s *stats) Open(m *match.Match, r *match.Round, snap fact.Snapshot, pistol 
 	if err := s.csc.Open(m, r, snap, pistol); err != nil {
 		return err
 	}
-	s.eco.Open(snap, r.Num)
+	st := s.round.State()
+	s.eco.Open(snap, r.Num, append(m.Members(snap, fact.SideT), m.Members(snap, fact.SideCT)...), st.TAlive, st.CTAlive)
 	return nil
 }
 

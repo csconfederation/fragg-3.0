@@ -691,3 +691,14 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 		})
 	}
 }
+
+// A bracketed clan without a "] " tag separator, or with nothing after it, is the team's name; the
+// oracle indexes past the split, or names the team "".
+func TestBracketedClanWithoutTag(t *testing.T) {
+	m := New()
+	for clan, want := range map[string]string{"[Example]": "[Example]", "[tag] ": "[tag] ", "[CSC] Hydras": "Hydras"} {
+		if got, err := m.teamName(0, clan, fact.SideT); err != nil || got != want {
+			t.Errorf("%q: %q, %v; want %q", clan, got, err, want)
+		}
+	}
+}

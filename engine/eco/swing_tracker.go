@@ -63,10 +63,12 @@ func (st *SwingTracker) advanceClock(currentTick int) {
 	st.lastClockTick = currentTick
 }
 
-// SetAlive sets the alive counts the probabilities read; engine/round counts them (#591).
+// SetAlive sets the alive counts the probabilities read; engine/round counts them (#591). Clamped
+// to 0-5: a miscount (an alive join, which doesn't add to the counts) mustn't reach the table
+// fallback's division by the total, whose NaN breaks the payload's JSON.
 func (st *SwingTracker) SetAlive(tAlive, ctAlive int) {
 	if st.roundState != nil {
-		st.roundState.TAlive, st.roundState.CTAlive = min(tAlive, 5), min(ctAlive, 5)
+		st.roundState.TAlive, st.roundState.CTAlive = min(max(tAlive, 0), 5), min(max(ctAlive, 0), 5)
 	}
 }
 

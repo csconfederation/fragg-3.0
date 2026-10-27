@@ -79,6 +79,9 @@ func Run(ctx context.Context, r io.Reader, sink fact.Sink) (fact.Terminal, error
 	p.RegisterEventHandler(func(e events.Kill) {
 		f := fact.Kill{Snapshot: snap(), Killer: actor(e.Killer), Victim: actor(e.Victim), Assister: actor(e.Assister),
 			Weapon: equipment(e.Weapon), Headshot: e.IsHeadshot, AssistedFlash: e.AssistedFlash}
+		if f.Weapon == nil { // demoinfocs v6 can leave a grenade's weapon unresolved; the oracle dereferences nil
+			f.Weapon = equipment(&common.Equipment{Type: common.EqUnknown})
+		}
 		if f.Victim != nil {
 			for _, w := range e.Victim.Weapons() {
 				if w != nil {

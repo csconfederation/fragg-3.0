@@ -522,8 +522,8 @@ func (m *Match) teamName(tick int, clan string, side fact.Side) (string, error) 
 			return clan, nil
 		}
 		parts := strings.Split(clan, "] ")
-		if len(parts) < 2 {
-			return "", m.fail(tick, "clan %q has a tag but no name", clan)
+		if len(parts) < 2 || parts[1] == "" {
+			return clan, nil // "[Name]" or "[tag] ": no tag to strip (the oracle indexes past the split, or names the team "")
 		}
 		name := parts[1]     // the oracle's split: "[t] A] B" is "A"
 		if len(clan) == 31 { // truncated by the game: match a known team that contains it

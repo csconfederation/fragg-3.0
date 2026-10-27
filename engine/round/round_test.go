@@ -197,3 +197,48 @@ func TestDisconnectRecountsMembersOnly(t *testing.T) {
 		t.Errorf("alive %dv%d, want 2v2", tr.s.TAlive, tr.s.CTAlive)
 	}
 }
+
+// Bots share Steam64 0, so deaths go by actor: one bot's death leaves another bot alive at a
+// disconnect recount (keyed by Steam64, every bot counted dead, and the counts went negative).
+func TestBotDeathsByActor(t *testing.T) {
+	tr, m := New(), match.New()
+	ms := map[uint64]match.Member{1: {Steam64: 1}, 0: {Steam64: 0, IsBot: true}, 11: {Steam64: 11}, 12: {Steam64: 12}, 13: {Steam64: 13}}
+	tr.Open(&match.Round{Num: 1, Members: ms, InitT: 3, InitCT: 3})
+	bot := func(user int, alive bool) *fact.Player {
+		p := player(0)
+		p.IsBot, p.UserID, p.Alive = true, user, alive
+		return p
+	}
+	var c Context
+	if err := tr.kill(m, killAt(1000, player(11), bot(5, true)), &c); err != nil {
+		t.Fatal(err)
+	}
+	var s fact.Snapshot
+	for _, p := range []*fact.Player{player(1), bot(5, false), bot(6, true), player(11), player(12), player(13)} {
+		p.Listed = true
+		s.Players = append(s.Players, *p)
+	}
+	if err := tr.apply(m, fact.Disconnect{Snapshot: s, Steam64: 99}, &c); err != nil {
+		t.Fatal(err)
+	}
+	if tr.s.TAlive != 2 {
+		t.Errorf("T alive %d, want 2 (the human and the living bot)", tr.s.TAlive)
+	}
+}
+
+// A flash counts only between round members (rows in every collector); the oracle dereferences
+// nil for a player relisted without joining the round.
+func TestFlashNeedsMembers(t *testing.T) {
+	tr := newRound()
+	for _, tc := range []struct {
+		name    string
+		by, on  uint64
+		counted bool
+	}{{"members", 1, 11, true}, {"non-member flasher", 3, 11, false}, {"non-member victim", 1, 14, false}} {
+		var c Context
+		tr.flashed(flash(1000, player(tc.by), player(tc.on), 3), &c)
+		if c.Flash != tc.counted {
+			t.Errorf("%s: flash counted %v, want %v", tc.name, c.Flash, tc.counted)
+		}
+	}
+}

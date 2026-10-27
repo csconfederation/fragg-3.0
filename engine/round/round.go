@@ -248,7 +248,7 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 	c.Victim = f.Victim != nil && t.members[f.Victim.Steam64] && !c.BombIgnored
 	c.Killer = f.Killer != nil && t.members[f.Killer.Steam64] && !c.BombIgnored
 	if c.Victim {
-		t.deaths[f.Victim.Steam64]++
+		t.deaths[actor(f.Victim)]++
 		switch f.Victim.Side {
 		case fact.SideT:
 			t.s.TAlive--
@@ -302,6 +302,11 @@ func (t *Tracker) flashed(f fact.Flashed, c *Context) {
 	}
 	blind := f.Duration * tickRate
 	v, a := f.Player, f.Attacker
+	// Both must be round members (rows in every collector): a mid-round reconnect can be relisted
+	// without joining the round (S19 Combine mid7214), and the oracle dereferences nil for it.
+	if !t.members[v.Steam64] || !t.members[a.Steam64] {
+		return
+	}
 	if a.Side == v.Side || blind <= tickRate || !v.Alive || v.FlashDuration >= blind/tickRate+1 {
 		return
 	}
@@ -344,9 +349,10 @@ func Enemies(a, b *fact.Player) (bool, error) {
 }
 
 // alive is p alive at the start of the tick with no death this round: entity state is applied
-// after the tick's events, so it still shows earlier victims of the tick alive.
+// after the tick's events, so it still shows earlier victims of the tick alive. Deaths go by actor:
+// keyed by Steam64, one bot's death made every bot (Steam64 0) dead at a disconnect recount.
 func (t *Tracker) alive(p fact.Player) bool {
-	return p.Alive && t.deaths[p.Steam64] == 0
+	return p.Alive && t.deaths[actor(&p)] == 0
 }
 
 // survivor is the last alive member with a round row.

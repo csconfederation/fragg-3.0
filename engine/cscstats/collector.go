@@ -141,13 +141,15 @@ func (c *Collector) Commit(m *match.Match, r *match.Round, tick int, s shared.St
 		if pr.WinnerENUM != cl.side || cl.steam == 0 {
 			continue
 		}
+		// A size outside 1v0-1v5 has no bonus (the oracle indexes out of range): bots share one row,
+		// and a miscounted roster can't make a clutch.
+		if cl.val < 0 || cl.val >= len(clutchBonus) {
+			break
+		}
 		ts.Clutches = 1
 		p := pr.PlayerStats[cl.steam]
 		if p == nil {
 			return missing("clutcher", cl.steam)
-		}
-		if cl.val >= len(clutchBonus) {
-			return fmt.Errorf("round %d: clutch 1v%d", r.Num, cl.val)
 		}
 		p.ImpactPoints += clutchBonus[cl.val]
 		switch cl.val {
@@ -180,10 +182,8 @@ func (c *Collector) Commit(m *match.Match, r *match.Round, tick int, s shared.St
 		}
 		p.ImpactPoints += p.KillPoints
 		p.ImpactPoints += float64(p.Damage) / float64(250)
-		if int(p.Kills) >= len(multiKillBonus) {
-			return fmt.Errorf("round %d: %d kills by %s", r.Num, p.Kills, p.SteamID)
-		}
-		p.ImpactPoints += multiKillBonus[p.Kills]
+		// Bots share one row, so it can hold more than five kills; they get the five-kill bonus.
+		p.ImpactPoints += multiKillBonus[min(int(p.Kills), len(multiKillBonus)-1)]
 		switch p.Kills {
 		case 2:
 			p.TwoK = 1
@@ -260,20 +260,15 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact, x shared.Context) error {
 		if undecided {
 			c.potential.EndDueToBombEvent = true
 			c.potential.Defuser = f.Player.Steam64
-			p := c.potential.PlayerStats[f.Player.Steam64]
-			if p == nil {
-				return missing("defuser", f.Player.Steam64)
+			// A player without round stats gets no credit (the oracle dereferences nil); see actorStats.
+			if p := c.potential.PlayerStats[f.Player.Steam64]; p != nil {
+				p.ImpactPoints += 0.5
 			}
-			p.ImpactPoints += 0.5
 		}
 	case fact.BombExplode:
 		if undecided {
 			c.potential.EndDueToBombEvent = true
-			if c.potential.Planter != 0 {
-				p := c.potential.PlayerStats[c.potential.Planter]
-				if p == nil {
-					return missing("planter", c.potential.Planter)
-				}
+			if p := c.potential.PlayerStats[c.potential.Planter]; c.potential.Planter != 0 && p != nil {
 				p.ImpactPoints += 0.5
 			}
 		}
@@ -283,12 +278,14 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact, x shared.Context) error {
 		}
 		switch *f.Weapon {
 		case 506, 505, 504, 502, 503:
+			// demoinfocs v6 can leave the thrower unresolved, and a thrower without round stats gets
+			// no count (the oracle dereferences nil for both).
 			if f.Thrower == nil {
-				return fmt.Errorf("grenade without a thrower at tick %d", f.Tick)
+				return nil
 			}
 			p := c.potential.PlayerStats[f.Thrower.Steam64]
 			if p == nil {
-				return missing("thrower", f.Thrower.Steam64)
+				return nil
 			}
 			switch *f.Weapon {
 			case 506:
@@ -368,19 +365,15 @@ func (c *Collector) hurt(f fact.Hurt, x shared.Context) error {
 		equipment = *f.Weapon
 	}
 	bombAtHalf := x.BombIgnored
-	switch {
-	case f.Player != nil && pS[f.Player.Steam64] != nil && !bombAtHalf:
-		if x.Enemy { // enemy damage only (#591): not teammates, the world, falls or the bomb
-			pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
-		}
-	case f.Player != nil && f.Player.Connected && !bombAtHalf && !f.FreezeTime:
-		// The oracle cancels the parse (errMissingPlayerStats).
-		return missing("connected hurt player", f.Player.Steam64)
+	if f.Player != nil && pS[f.Player.Steam64] != nil && !bombAtHalf && x.Enemy { // enemy damage only (#591)
+		pS[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
 	}
+	// A victim or attacker without round stats (a mid-round reconnect relisted without joining the
+	// round) gets no damage credit; the oracle cancels the parse or dereferences nil.
 	if f.Player != nil && pS[f.Player.Steam64] != nil && f.Attacker != nil && f.Player.Side != f.Attacker.Side {
 		a := pS[f.Attacker.Steam64]
 		if a == nil {
-			return missing("attacker", f.Attacker.Steam64)
+			return nil
 		}
 		a.Damage += f.HealthDamageTaken
 		pS[f.Player.Steam64].DamageList[f.Attacker.Steam64] += f.HealthDamageTaken

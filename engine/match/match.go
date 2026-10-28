@@ -121,6 +121,7 @@ type Match struct {
 	reconnected                                     map[uint64]bool // the oracle's ReconnectedPlayers, which drives membership
 	gameEnded                                       bool
 	pendingFinal                                    *fact.RoundEnd // the deciding round, until it commits (D15)
+	pendingWin                                      *pendingWin    // an explosion round's Win, until the bomb's facts are in (D27)
 	mapName, serverName                             string
 	err                                             *InvariantError
 }
@@ -182,6 +183,11 @@ func (m *Match) fail(tick int, format string, a ...any) error {
 func (m *Match) Fact(f fact.Fact) error {
 	if m.err != nil {
 		return m.err
+	}
+	if m.pendingWin != nil && endsBombWave(f) {
+		if err := m.win(); err != nil {
+			return err
+		}
 	}
 	switch f := f.(type) {
 	case fact.Header:
@@ -278,6 +284,9 @@ func (m *Match) Fact(f fact.Fact) error {
 // also detects knife rounds and always reopens).
 func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 	if err := m.flush(); err != nil {
+		return err
+	}
+	if err := m.win(); err != nil {
 		return err
 	}
 	pistol := false
@@ -397,6 +406,9 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if err := m.flush(); err != nil {
 		return err
 	}
+	if err := m.win(); err != nil {
+		return err
+	}
 	if !m.isGameLive {
 		return nil
 	}
@@ -426,7 +438,12 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 		}
 	}
 	if m.stats != nil {
-		if err := m.stats.Win(m, m.potential, f); err != nil {
+		// Since CS2's bomb shockwave (July 2026), the explosion's damage and kills arrive after
+		// RoundEnd; before, they came first. Win waits for them, so collectors see the round as they
+		// did (D27).
+		if f.Reason == reasonTargetBombed {
+			m.pendingWin = &pendingWin{m.potential, f}
+		} else if err := m.stats.Win(m, m.potential, f); err != nil {
 			return m.keep(err)
 		}
 	}
@@ -472,6 +489,40 @@ func bombFact(f fact.Fact) bool {
 	return w != nil && *w == eqBomb
 }
 
+// endsBombWave reports whether f ends the wait for an explosion's facts: any other kill, damage or
+// flash, or a change to the round's members, each of which came after Win before the update. A
+// kill between the bomb's facts still ends it early (seen in 3 of 906 explosion rounds); holding
+// facts back would replay them out of order.
+func endsBombWave(f fact.Fact) bool {
+	switch f := f.(type) {
+	case fact.Kill, fact.Hurt, fact.Flashed:
+		return !bombFact(f)
+	case fact.PlayerInfo:
+		return f.Found
+	case fact.Disconnect, fact.TeamChange:
+		return true
+	}
+	return false
+}
+
+type pendingWin struct {
+	r *Round
+	f fact.RoundEnd
+}
+
+// win runs the pending explosion round's Win.
+func (m *Match) win() error {
+	w := m.pendingWin
+	if w == nil {
+		return nil
+	}
+	m.pendingWin = nil
+	if err := m.stats.Win(m, w.r, w.f); err != nil {
+		return m.keep(err)
+	}
+	return nil
+}
+
 // flush commits the pending deciding round and ends the match.
 func (m *Match) flush() error {
 	f := m.pendingFinal
@@ -488,6 +539,9 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 	m.inRound = false
 	m.potential.EndTick = tick
 	m.integrityOfficial = roundsPlayed
+	if err := m.win(); err != nil {
+		return err
+	}
 	if m.integrityStart == m.integrityEnd && m.integrityEnd == m.integrityOfficial && !m.potential.committed {
 		r := m.potential
 		if r.WinnerClan != r.sideClans[fact.SideT] && r.WinnerClan != r.sideClans[fact.SideCT] {

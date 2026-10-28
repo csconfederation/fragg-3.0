@@ -617,7 +617,10 @@ type recorder struct{ log []string }
 
 func (c *recorder) Open(*Match, *Round, fact.Snapshot, bool) error { return nil }
 func (c *recorder) RoundEnd(*Match, fact.RoundEnd) error           { return nil }
-func (c *recorder) Win(*Match, *Round, fact.RoundEnd) error        { return nil }
+func (c *recorder) Win(_ *Match, r *Round, _ fact.RoundEnd) error {
+	c.log = append(c.log, fmt.Sprintf("win %d", r.Num))
+	return nil
+}
 func (c *recorder) Join(_ *Match, _ *Round, mem Member) error {
 	c.log = append(c.log, fmt.Sprintf("join %d", mem.Steam64))
 	return nil
@@ -672,7 +675,8 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			wantTail := "hurt 404,kill 404"
+			// The world damage after the bomb's facts runs the deciding round's Win (D27).
+			wantTail := "hurt 404,kill 404,win 13"
 			if tc.winPanel {
 				wantTail += ",commit"
 			}
@@ -682,8 +686,8 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 			res, err := m.Finish(fact.Terminal{Kind: tc.term, Err: errors.New("stream"),
 				End: fact.Snapshot{Tick: s.tick + 500, RoundsPlayed: 13}})
 			want(t, res, err, Ended, 13)
-			if got := strings.Join(rec.log[len(rec.log)-3:], ","); got != "hurt 404,kill 404,commit" {
-				t.Errorf("last calls %v; want the bomb's facts, then the commit", rec.log[len(rec.log)-3:])
+			if got := strings.Join(rec.log[len(rec.log)-4:], ","); got != "hurt 404,kill 404,win 13,commit" {
+				t.Errorf("last calls %v; want the bomb's facts, then the win and the commit", rec.log[len(rec.log)-4:])
 			}
 			if r := res.Rounds[12]; r.EndTick != end.Tick {
 				t.Errorf("end tick %d; want the RoundEnd's %d", r.EndTick, end.Tick)
@@ -700,5 +704,53 @@ func TestBracketedClanWithoutTag(t *testing.T) {
 		if got, err := m.teamName(0, clan, fact.SideT); err != nil || got != want {
 			t.Errorf("%q: %q, %v; want %q", clan, got, err, want)
 		}
+	}
+}
+
+// Since CS2's bomb shockwave, an explosion's damage and kills arrive after RoundEnd. Win waits for
+// them and runs before any other kill, damage or flash, or the commit; other rounds win at RoundEnd
+// (D27).
+func TestExplosionWinWaitsForTheBomb(t *testing.T) {
+	bomb, rifle := eqBomb, 303
+	s := newSim()
+	s.open()
+	s.end("Alpha", true) // round 1 by elimination
+	s.facts = s.facts[:len(s.facts)-1]
+	exitKill := fact.Kill{Snapshot: fact.Snapshot{Tick: s.tick + 10, RoundsPlayed: 1}, Weapon: &rifle}
+	s.add(exitKill, fact.RoundEndOfficial{Tick: s.tick + 300, RoundsPlayed: 1})
+	s.tick += 300
+
+	s.open()
+	s.end("Alpha", true) // round 2 by the explosion
+	official := s.facts[len(s.facts)-1]
+	s.facts = s.facts[:len(s.facts)-1]
+	end := s.facts[len(s.facts)-1].(fact.RoundEnd)
+	end.Reason = reasonTargetBombed
+	s.facts[len(s.facts)-1] = end
+	wave := fact.Snapshot{Tick: end.Tick + 37, RoundsPlayed: 2}
+	s.add(fact.Frame{Tick: end.Tick + 1}, fact.PlayerInfo{Tick: end.Tick + 2}, fact.Hurt{Snapshot: wave, Weapon: &bomb},
+		fact.Kill{Snapshot: wave, Weapon: &bomb},
+		fact.Kill{Snapshot: fact.Snapshot{Tick: end.Tick + 60, RoundsPlayed: 2}, Weapon: &rifle}, official)
+
+	s.open()
+	s.end("Alpha", true) // round 3 by the explosion; a reconnect before the bomb's kill
+	official = s.facts[len(s.facts)-1]
+	s.facts = s.facts[:len(s.facts)-1]
+	end3 := s.facts[len(s.facts)-1].(fact.RoundEnd)
+	end3.Reason = reasonTargetBombed
+	s.facts[len(s.facts)-1] = end3
+	s.add(fact.PlayerInfo{Tick: end3.Tick + 5, Found: true, Resolved: 3},
+		fact.Kill{Snapshot: fact.Snapshot{Tick: end3.Tick + 30, RoundsPlayed: 3}, Weapon: &bomb}, official)
+
+	rec := &recorder{}
+	m := New(rec)
+	for _, f := range s.facts {
+		if err := m.Fact(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := "win 1,kill 303,commit,hurt 404,kill 404,win 2,kill 303,commit,win 3,kill 404,commit"
+	if got := strings.Join(rec.log, ","); got != want {
+		t.Errorf("calls %s; want %s", got, want)
 	}
 }

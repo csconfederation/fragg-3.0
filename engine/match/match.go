@@ -489,12 +489,16 @@ func bombFact(f fact.Fact) bool {
 	return w != nil && *w == eqBomb
 }
 
-// endsBombWave reports whether f ends the wait for an explosion's facts: any other kill, damage,
-// flash, disconnect or team change, each of which the round's Win reads.
+// endsBombWave reports whether f ends the wait for an explosion's facts: any other kill, damage or
+// flash, or a change to the round's members, each of which came after Win before the update. A
+// kill between the bomb's facts still ends it early: rare (3 rounds in 906), and holding facts back
+// would replay them out of order.
 func endsBombWave(f fact.Fact) bool {
-	switch f.(type) {
+	switch f := f.(type) {
 	case fact.Kill, fact.Hurt, fact.Flashed:
 		return !bombFact(f)
+	case fact.PlayerInfo:
+		return f.Found
 	case fact.Disconnect, fact.TeamChange:
 		return true
 	}

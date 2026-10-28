@@ -728,14 +728,19 @@ func TestExplosionWinWaitsForTheBomb(t *testing.T) {
 	end.Reason = reasonTargetBombed
 	s.facts[len(s.facts)-1] = end
 	wave := fact.Snapshot{Tick: end.Tick + 37, RoundsPlayed: 2}
-	s.add(fact.Frame{Tick: end.Tick + 1}, fact.Hurt{Snapshot: wave, Weapon: &bomb}, fact.Kill{Snapshot: wave, Weapon: &bomb},
+	s.add(fact.Frame{Tick: end.Tick + 1}, fact.PlayerInfo{Tick: end.Tick + 2}, fact.Hurt{Snapshot: wave, Weapon: &bomb},
+		fact.Kill{Snapshot: wave, Weapon: &bomb},
 		fact.Kill{Snapshot: fact.Snapshot{Tick: end.Tick + 60, RoundsPlayed: 2}, Weapon: &rifle}, official)
 
 	s.open()
-	s.end("Alpha", true) // round 3 by the explosion, with no other facts before the official end
-	end3 := s.facts[len(s.facts)-2].(fact.RoundEnd)
+	s.end("Alpha", true) // round 3 by the explosion; a reconnect before the bomb's kill
+	official = s.facts[len(s.facts)-1]
+	s.facts = s.facts[:len(s.facts)-1]
+	end3 := s.facts[len(s.facts)-1].(fact.RoundEnd)
 	end3.Reason = reasonTargetBombed
-	s.facts[len(s.facts)-2] = end3
+	s.facts[len(s.facts)-1] = end3
+	s.add(fact.PlayerInfo{Tick: end3.Tick + 5, Found: true, Resolved: 3},
+		fact.Kill{Snapshot: fact.Snapshot{Tick: end3.Tick + 30, RoundsPlayed: 3}, Weapon: &bomb}, official)
 
 	rec := &recorder{}
 	m := New(rec)
@@ -744,7 +749,7 @@ func TestExplosionWinWaitsForTheBomb(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	want := "win 1,kill 303,commit,hurt 404,kill 404,win 2,kill 303,commit,win 3,commit"
+	want := "win 1,kill 303,commit,hurt 404,kill 404,win 2,kill 303,commit,win 3,kill 404,commit"
 	if got := strings.Join(rec.log, ","); got != want {
 		t.Errorf("calls %s; want %s", got, want)
 	}

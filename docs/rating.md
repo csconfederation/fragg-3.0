@@ -8,7 +8,7 @@ Source of truth for implementation:
 - `rating/weights.go` — baselines and multipliers
 - `rating/swing/` — ledger, pool allocator, residual swing, config
 - `rating/probability/` — win probability engine and lookup tables
-- `parser/handlers.go`, `parser/swing_tracker.go` — live event tracking and ledger application
+- `engine/eco/collector.go`, `engine/eco/swing_tracker.go` — live event tracking and ledger application; alive counts and round state come from `engine/round`
 
 ---
 
@@ -82,6 +82,10 @@ side_win_prob = T_win_prob           (if T)
 clamped to [0.01, 0.99]
 ```
 
+A decided round skips all of this: a defuse or the last T dying without a plant is a CT win (T 0.0),
+the last CT dying a T win (T 1.0). Otherwise a multiplier below 1 could rate the state after the
+last kill below the one before it.
+
 **Economy multiplier** (T econ tier minus CT econ tier):
 
 | Diff | Multiplier |
@@ -96,7 +100,7 @@ clamped to [0.01, 0.99]
 | −3 | 0.85 |
 | −4 | 0.80 |
 
-**Map factor:** `map_T_win_rate / 0.50` (see [Map T-side win rates](#map-t-side-win-rates) below).
+**Map factor:** `map_T_win_rate / map_baseline`, where `map_baseline` (0.489) is the all-maps T win rate the base table already carries (see [Map T-side win rates](#map-t-side-win-rates) below).
 
 **Time multiplier** (bomb planted only):
 
@@ -135,11 +139,9 @@ Each round maintains a `RoundSwingLedger`:
 
 | Field | Purpose |
 |-------|---------|
-| `Events[]` | Every swing allocation before it hits player stats |
 | `PlayerSwing` | Running per-player totals for the round |
-| `PositiveTotal` / `NegativeTotal` | Team-level accounting |
+| `TeamPositive` / `TeamNegative` | Team-level accounting |
 | `ResidualApplied` | Whether end-of-round residual was applied |
-| `ExitFragsIgnored` | Count of exit frags skipped |
 | `DebugWarnings` | Zero-sum validation failures |
 
 Each ledger event records:
@@ -149,17 +151,17 @@ Each ledger event records:
 - Negative allocations (victim death, team responsibility, objective loss, residual loss)
 - A `SwingReason` tag per allocation (e.g. `kill_final_hit`, `round_residual_loss`)
 
-At round end, `ValidateRoundSwingLedger` checks that `|sum(PlayerSwing)| ≤ swing_zero_sum_tolerance` (default 0.005).
+At round end, `ValidateRoundSwingLedger` checks that `|sum(PlayerSwing)| ≤ ZeroSumTolerance` (0.005).
 
 ### Live parsing flow
 
 1. **Event occurs** (kill, plant, defuse, trade reallocation)
 2. **`PoolAllocator`** computes pools and player weights
-3. **Ledger records** the event
-4. **`applyLedgerAllocations`** in `parser/handlers.go` updates `RoundStats.ProbabilitySwing`
+3. **Ledger applies** the allocations
+4. **`applyLedger`** in `engine/eco/collector.go` updates `RoundStats.ProbabilitySwing`
 5. **Round end:** residual swing applied, ledger validated, stats rolled up
 
-When `swing_survival_credit_enabled: false`, survival credit is off and conversion value is handled by end-of-round residual swing.
+With `SurvivalCreditEnabled` false (the default), survival credit is off and conversion value is handled by end-of-round residual swing.
 
 ---
 
@@ -189,10 +191,10 @@ Duel win rate comes from equipment matchup tables (see [Duel win rates](#duel-wi
 **Killer weight** (economy as weight, not pool multiplier):
 
 ```
-killer_credit = swing_kill_final_hit_base
-              + swing_kill_damage_share_weight × (killer_damage / total_damage)
+killer_credit = KillFinalHitBase
+              + KillDamageShareWeight × (killer_damage / total_damage)
 
-if trade kill: killer_credit ×= swing_trade_kill_multiplier   // default 0.80
+if trade kill: killer_credit ×= TradeKillMultiplier   // default 0.80
 
 killer_weight = killer_credit × killer_eco_weight
 killer_eco_weight = 0.50 / duel_win_rate   (capped at 2.0)
@@ -209,11 +211,11 @@ All positive-side weights (killer + helpers) are **normalized** to sum to `posit
 
 Default attribution constants:
 
-| Config key | Default | Old value |
+| Config field | Default | Old value |
 |------------|---------|-----------|
-| `swing_kill_final_hit_base` | 0.35 | 0.60 |
-| `swing_kill_damage_share_weight` | 0.45 | 0.25 |
-| `swing_trade_kill_multiplier` | 0.80 | 0.70 penalty subtract |
+| `KillFinalHitBase` | 0.35 | 0.60 |
+| `KillDamageShareWeight` | 0.45 | 0.25 |
+| `TradeKillMultiplier` | 0.80 | 0.70 penalty subtract |
 
 ### Kills — negative pool (hurt side)
 
@@ -253,9 +255,9 @@ Trade death reallocation runs through `SwingTracker.ApplyTradeReallocation` and 
 
 ### Kills — man-advantage survival credit
 
-**Disabled by default** (`swing_survival_credit_enabled: false`).
+**Disabled by default** (`SurvivalCreditEnabled` false).
 
-When enabled, prior advantage creators receive up to `swing_survival_credit_max_share` (default 5%) of the kill’s raw delta. Conversion value is otherwise handled by end-of-round residual swing.
+When enabled, prior advantage creators receive up to `SurvivalCreditMaxShare` (default 5%) of the kill’s raw delta. Conversion value is otherwise handled by end-of-round residual swing.
 
 ### Bomb plant
 
@@ -267,7 +269,7 @@ positive_pool = negative_pool = |plant_delta|
 **Positive pool (T side):**
 
 ```
-planter_share = plant_delta × swing_plant_planter_share     // default 45%
+planter_share = plant_delta × PlantPlanterShare     // default 45%
 support_pool  = plant_delta × (1 - planter_share)           // default 55%
 ```
 
@@ -285,7 +287,7 @@ positive_pool = negative_pool = |defuse_delta|
 **Positive pool (CT side):**
 
 ```
-defuser_share = defuse_delta × swing_defuse_defuser_share   // default 60%
+defuser_share = defuse_delta × DefuseDefuserShare   // default 60%
 support_pool  = defuse_delta × (1 - defuser_share)          // default 40%
 ```
 
@@ -301,7 +303,7 @@ No extra swing attribution; outcome is already reflected in planted-state probab
 
 After bomb defuse, bomb explode, or team elimination, `RoundDecided` is set. Kills after that point are tagged as exit frags for stats.
 
-Exit frag swing behavior is controlled by `swing_exit_frags`:
+Exit frag swing behavior is controlled by `ExitFrags`:
 
 | Value | Behavior |
 |-------|----------|
@@ -315,7 +317,7 @@ The elimination kill itself still receives normal swing — `RoundDecided` is se
 When a round ends, remaining uncredited probability is distributed so the outcome is fully represented:
 
 ```
-residual = min(1.0 - current_winner_win_prob, swing_residual_max)   // default cap 0.35
+residual = min(1.0 - current_winner_win_prob, ResidualMax)   // default cap 0.35
 ```
 
 **Winning side** (positive residual), weighted by:
@@ -333,11 +335,11 @@ If all scores are zero, split evenly among alive winners.
 
 ```
 score = |round_negative_swing| × 1.0
-      + swing_save_penalty_weight if alive at round end   // default 0.35
+      + SavePenaltyWeight if alive at round end   // default 0.35
 minimum score = 1.0
 ```
 
-This credits entry players who force saves and penalizes saving players on lost rounds. Controlled by `swing_residual_enabled` (default true).
+This credits entry players who force saves and penalizes saving players on lost rounds. Controlled by `ResidualEnabled` (default true).
 
 ### What does NOT add swing
 
@@ -390,7 +392,7 @@ ProbabilitySwingPerRound = ProbabilitySwing / RoundsPlayed
 
 ## Part 5: Final rating formula
 
-Implemented in `rating.ComputeFinalRating`:
+Implemented in `rating.ComputeFinalRating`; Stats stores it as `swing_rating` (the side ratings as the T and CT rows' `swing_rating`):
 
 ```
 adr  = total_damage / rounds_played
@@ -426,7 +428,7 @@ final_rating clamped to [0.20, 3.00]
 | `BaselineKPR` | 0.72 | KPR baseline (optional modifier) |
 | `BaselineDPR` | 0.68 | DPR baseline (optional modifier) |
 
-### Optional KPR/DPR modifier (`kdpr_modifier` in config)
+### Optional KPR/DPR modifier (off)
 
 When enabled:
 
@@ -451,10 +453,9 @@ KPR/DPR is a small secondary nudge. Kills/deaths are **not** directly in the rat
 | Probability swing | Yes (primary driver) |
 | ADR | Yes |
 | KAST | Yes |
-| KPR/DPR | Only if `kdpr_modifier` enabled |
-| `SwingRating` | No (export/display only) |
+| KPR/DPR | No (the modifier is off) |
 | `EcoKillValue` / `EcoDeathValue` | No (separate export stats) |
-| Multi-kills, clutches | No (passed to side rating but unused there) |
+| Multi-kills, clutches | No (multi-kills feed the HLTV ratings) |
 | HLTV rating | No (parallel comparison stat) |
 
 ### Side ratings (`TEcoRating`, `CTEcoRating`)
@@ -529,19 +530,7 @@ final_rating ≈ 1.0 + 0.05 + 0.009 + 0.075 = 1.134
 
 ## Part 7: Derived metrics (informational)
 
-**SwingRating** (stored on player, not used in final rating):
-
-```
-SwingRating = 1.0 + (ProbabilitySwingPerRound × 10.0)
-clamped to [0.5, 1.5]
-
-Interpretation:
-  0% avg swing/round  → 1.00
-  +4% avg swing/round → 1.40
-  -3% avg swing/round → 0.70
-```
-
-**DuelSwing** (also not in final rating):
+**DuelSwing** (not in final rating; stored as `ecoDuelSwing`):
 
 ```
 DuelSwing = EcoKillValue - EcoDeathValue   // legacy-style eco point totals
@@ -584,7 +573,9 @@ DuelSwing = EcoKillValue - EcoDeathValue   // legacy-style eco point totals
 
 ## Probability tables (`rating/probability/tables_data.go`)
 
-Empirically derived from **54,584 rounds** and **390,522 kills** across competitive CS2 demos.
+Measured on 3,131 CSC S19–S20 league (BO1/BO3, playoffs) and Combine maps: 68,872 rounds and 483,374
+kills, with `engine/cmd/probtables` (Core-planning#305). Each cell's sample (wins / total) is the
+comment beside it in the source. `EnforceMonotonicity` runs after the base table loads.
 
 ### Base win probabilities — no bomb planted
 
@@ -592,219 +583,89 @@ T-side win probability by alive counts. Rows = T alive, columns = CT alive.
 
 | T \ CT | 5 | 4 | 3 | 2 | 1 | 0 |
 |--------|------|------|------|------|------|------|
-| **5** | 0.494 | 0.525 | 0.715 | 0.902 | 0.989 | 0.990 |
-| **4** | 0.475 | 0.473 | 0.545 | 0.752 | 0.951 | 0.990 |
-| **3** | 0.305 | 0.393 | 0.429 | 0.554 | 0.829 | 0.990 |
-| **2** | 0.124 | 0.231 | 0.299 | 0.337 | 0.511 | 0.990 |
-| **1** | 0.018 | 0.100 | 0.299 | 0.558 | 0.462 | 0.990 |
-| **0** | 0.010 | 0.010 | 0.010 | 0.010 | 0.010 | 0.500 |
+| **5** | 0.489 | 0.708 | 0.891 | 0.978 | 0.999 | – |
+| **4** | 0.298 | 0.511 | 0.751 | 0.929 | 0.993 | – |
+| **3** | 0.130 | 0.280 | 0.515 | 0.785 | 0.965 | – |
+| **2** | 0.028 | 0.086 | 0.224 | 0.483 | 0.813 | – |
+| **1** | 0.002 | 0.008 | 0.037 | 0.130 | 0.401 | – |
+| **0** | – | – | – | – | – | – |
 
 Notes:
 
-- `5v0`, `4v0`, etc.: forced — all CTs dead, T wins.
-- `0v5`–`0v1`: forced — all Ts dead, CT wins.
-- `0v0`: draw state, should not occur.
-
-Sample sizes (wins / total from source comments):
-
-| Key | Wins / Total |
-|-----|--------------|
-| 5v5_none | 39679 / 80398 |
-| 5v4_none | 17158 / 32701 |
-| 5v3_none | 11957 / 16730 |
-| 5v2_none | 6695 / 7425 |
-| 5v1_none | 2522 / 2549 |
-| 4v5_none | 16027 / 33736 |
-| 4v4_none | 9036 / 19099 |
-| 4v3_none | 7495 / 13763 |
-| 4v2_none | 5951 / 7910 |
-| 4v1_none | 3001 / 3154 |
-| 3v5_none | 6235 / 20406 |
-| 3v4_none | 6048 / 15379 |
-| 3v3_none | 5565 / 12978 |
-| 3v2_none | 4720 / 8518 |
-| 3v1_none | 3165 / 3816 |
-| 2v5_none | 1408 / 11385 |
-| 2v4_none | 2587 / 11180 |
-| 2v3_none | 3190 / 10687 |
-| 2v2_none | 2627 / 7786 |
-| 2v1_none | 1886 / 3689 |
-| 1v5_none | 93 / 5257 |
-| 1v4_none | 415 / 4162 |
-| 1v3_none | 978 / 3271 |
-| 1v2_none | 1229 / 2203 |
-| 1v1_none | 666 / 1442 |
+- `–`: a decided round never reads the table. The last CT dying is a T win (1.0), the last T dying
+  without a plant a CT win (0.0), before any adjustment.
 
 ### Base win probabilities — bomb planted
 
 | T \ CT | 5 | 4 | 3 | 2 | 1 | 0 |
 |--------|------|------|------|------|------|------|
-| **5** | 0.794 | 0.751 | 0.825 | 0.954 | 0.995 | 0.990 |
-| **4** | 0.742 | 0.733 | 0.741 | 0.860 | 0.970 | 0.990 |
-| **3** | 0.543 | 0.669 | 0.683 | 0.729 | 0.860 | 0.990 |
-| **2** | 0.241 | 0.467 | 0.650 | 0.662 | 0.499 | 0.990 |
-| **1** | 0.052 | 0.162 | 0.500 | 0.932 | 0.549 | 0.990 |
-| **0** | 0.000 | 0.004 | 0.005 | 0.020 | 0.118 | 1.000 |
+| **5** | 0.785 | 0.856 | 0.946 | 0.994 | 0.998 | – |
+| **4** | 0.512 | 0.663 | 0.856 | 0.971 | 0.998 | – |
+| **3** | 0.237 | 0.415 | 0.657 | 0.886 | 0.989 | – |
+| **2** | 0.071 | 0.146 | 0.341 | 0.645 | 0.915 | – |
+| **1** | 0.003 | 0.027 | 0.087 | 0.274 | 0.627 | – |
+| **0** | 0.000 | 0.005 | 0.007 | 0.040 | 0.220 | – |
 
 Notes:
 
-- `5v0`–`1v0`: forced — all CTs dead with bomb planted.
-- `0v0_planted`: bomb explodes, T wins (249 / 249).
-
-Sample sizes (wins / total from source comments):
-
-| Key | Wins / Total |
-|-----|--------------|
-| 5v5_planted | 910 / 1146 |
-| 5v4_planted | 1508 / 2007 |
-| 5v3_planted | 2779 / 3369 |
-| 5v2_planted | 3904 / 4091 |
-| 5v1_planted | 2963 / 2978 |
-| 4v5_planted | 991 / 1335 |
-| 4v4_planted | 2061 / 2813 |
-| 4v3_planted | 3585 / 4841 |
-| 4v2_planted | 5538 / 6437 |
-| 4v1_planted | 4096 / 4224 |
-| 4v0_planted | 11 / 11 |
-| 3v5_planted | 649 / 1195 |
-| 3v4_planted | 2130 / 3184 |
-| 3v3_planted | 4104 / 6011 |
-| 3v2_planted | 6038 / 8284 |
-| 3v1_planted | 4717 / 5486 |
-| 3v0_planted | 17 / 17 |
-| 2v5_planted | 201 / 835 |
-| 2v4_planted | 1173 / 2510 |
-| 2v3_planted | 3520 / 5418 |
-| 2v2_planted | 5316 / 8034 |
-| 2v1_planted | 2328 / 4663 |
-| 2v0_planted | 27 / 27 |
-| 1v5_planted | 23 / 441 |
-| 1v4_planted | 214 / 1321 |
-| 1v3_planted | 1395 / 2789 |
-| 1v2_planted | 3787 / 4063 |
-| 1v1_planted | 825 / 1503 |
-| 1v0_planted | 52 / 52 |
-| 0v5_planted | 0 / 99 |
-| 0v4_planted | 2 / 517 |
-| 0v3_planted | 8 / 1478 |
-| 0v2_planted | 56 / 2746 |
-| 0v1_planted | 309 / 2620 |
+- `–`: decided (all CTs dead), T win.
+- `0v5`–`0v1`: measured — the defuse race after the last T dies.
 
 ### Duel win rates
 
-Attacker win probability by equipment category. Rows = attacker, columns = defender.
+Attacker win probability by equipment category. Rows = attacker, columns = defender. Mirror
+matchups are fixed at 0.500.
 
 | Attacker ↓ / Defender → | Starter pistol | Upgraded pistol | SMG | Rifle | AWP |
 |-------------------------|---------------:|----------------:|----:|------:|----:|
-| **Starter pistol** | 0.500 | 0.520 | 0.257 | 0.248 | 0.270 |
-| **Upgraded pistol** | 0.480 | 0.500 | 0.348 | 0.360 | 0.349 |
-| **SMG** | 0.743 | 0.652 | 0.500 | 0.431 | 0.401 |
-| **Rifle** | 0.752 | 0.640 | 0.569 | 0.500 | 0.468 |
-| **AWP** | 0.730 | 0.651 | 0.599 | 0.532 | 0.500 |
-
-Full key → value mapping (as stored in code):
-
-| Key | Win rate | Sample (wins / total) |
-|-----|----------|------------------------|
-| starter_pistol_vs_starter_pistol | 0.500 | 30039 / 30039 |
-| starter_pistol_vs_upgraded_pistol | 0.520 | 3335 / 6415 |
-| starter_pistol_vs_smg | 0.257 | 2338 / 9109 |
-| starter_pistol_vs_rifle | 0.248 | 3748 / 15102 |
-| starter_pistol_vs_awp | 0.270 | 6037 / 22368 |
-| upgraded_pistol_vs_starter_pistol | 0.480 | 3080 / 6415 |
-| upgraded_pistol_vs_upgraded_pistol | 0.500 | 334 / 334 |
-| upgraded_pistol_vs_smg | 0.348 | 872 / 2508 |
-| upgraded_pistol_vs_rifle | 0.360 | 2532 / 7040 |
-| upgraded_pistol_vs_awp | 0.349 | 7108 / 20393 |
-| smg_vs_starter_pistol | 0.743 | 6771 / 9109 |
-| smg_vs_upgraded_pistol | 0.652 | 1636 / 2508 |
-| smg_vs_smg | 0.500 | 4738 / 4738 |
-| smg_vs_rifle | 0.431 | 8134 / 18879 |
-| smg_vs_awp | 0.401 | 14262 / 35511 |
-| rifle_vs_starter_pistol | 0.752 | 11354 / 15102 |
-| rifle_vs_upgraded_pistol | 0.640 | 4508 / 7040 |
-| rifle_vs_smg | 0.569 | 10745 / 18879 |
-| rifle_vs_rifle | 0.500 | 24356 / 24356 |
-| rifle_vs_awp | 0.468 | 48771 / 104315 |
-| awp_vs_starter_pistol | 0.730 | 16331 / 22368 |
-| awp_vs_upgraded_pistol | 0.651 | 13285 / 20393 |
-| awp_vs_smg | 0.599 | 21249 / 35511 |
-| awp_vs_rifle | 0.532 | 55544 / 104315 |
-| awp_vs_awp | 0.500 | 89415 / 89415 |
+| **Starter pistol** | 0.500 | 0.523 | 0.265 | 0.242 | 0.258 |
+| **Upgraded pistol** | 0.477 | 0.500 | 0.366 | 0.354 | 0.345 |
+| **SMG** | 0.735 | 0.634 | 0.500 | 0.427 | 0.399 |
+| **Rifle** | 0.758 | 0.646 | 0.573 | 0.500 | 0.462 |
+| **AWP** | 0.742 | 0.655 | 0.601 | 0.538 | 0.500 |
 
 These values drive `GetDuelWinRate()` and therefore killer/victim **economy weights** on each kill (weights in the zero-sum allocator, not pool multipliers).
 
 ### Map T-side win rates
 
-Empirically derived round-level T win rate per map. Used as `map_factor = value / 0.50`.
+Round-level T win rate per map. Used as `map_factor = value / map_baseline`; `MapBaseline` = 0.489 (33703 / 68872, all maps).
 
-| Map | T win rate | Sample (T wins / total) | Map factor (÷ 0.50) |
+| Map | T win rate | Sample (T wins / total) | Map factor (÷ 0.489) |
 |-----|------------|-------------------------|---------------------|
-| de_ancient | 0.513 | 4120 / 8027 | 1.026 |
-| de_anubis | 0.564 | 2623 / 4652 | 1.128 |
-| de_dust2 | 0.519 | 3822 / 7366 | 1.038 |
-| de_inferno | 0.512 | 3848 / 7517 | 1.024 |
-| de_mirage | 0.498 | 3711 / 7457 | 0.996 |
-| de_nuke | 0.480 | 3832 / 7984 | 0.960 |
-| de_overpass | 0.488 | 2665 / 5457 | 0.976 |
-| de_train | 0.456 | 2793 / 6124 | 0.912 |
+| de_ancient | 0.489 | 5466 / 11179 | 1.000 |
+| de_anubis | 0.526 | 4776 / 9086 | 1.076 |
+| de_dust2 | 0.509 | 4895 / 9626 | 1.041 |
+| de_inferno | 0.505 | 4838 / 9576 | 1.033 |
+| de_mirage | 0.465 | 5268 / 11324 | 0.951 |
+| de_nuke | 0.463 | 4451 / 9613 | 0.947 |
+| de_overpass | 0.473 | 3597 / 7597 | 0.967 |
+| de_train | 0.473 | 412 / 871 | 0.967 |
 
-Maps not in this table default to **0.500** T win rate (factor **1.00**).
-
-### Swing normalization constants
-
-From the bottom of `tables_data.go` — used for `SwingRating` display, not final rating:
-
-| Constant | Value | Meaning |
-|----------|-------|---------|
-| `SwingToRatingScale` | 10.0 | Multiplier on avg swing per round |
-| `SwingRatingBaseline` | 1.0 | Zero swing → 1.0 |
-| `MinSwingRating` | 0.40 | Floor (integration helper) |
-| `MaxSwingRating` | 1.80 | Ceiling (integration helper) |
-
-Parser clamp for exported `SwingRating`: **[0.5, 1.5]**.
+Maps not in this table default to `MapBaseline` (factor **1.00**).
 
 ---
 
 ## Config
 
-### Swing parser settings (`config.json`)
+### Swing settings
 
-All swing settings have defaults in `config.DefaultConfig()` / `rating/swing.DefaultConfig()`.
+`swing.DefaultConfig()` (`rating/swing/config.go`); nothing overrides it.
 
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `swing_exit_frags` | `"zero"` | Exit frag swing: `zero` or `tiny` (5%) |
-| `swing_residual_enabled` | `true` | Apply end-of-round residual swing |
-| `swing_residual_max` | `0.35` | Cap on residual correction per round |
-| `swing_save_penalty_weight` | `0.35` | Penalty weight for alive losers at round end |
-| `swing_plant_planter_share` | `0.45` | Planter’s share of plant positive pool |
-| `swing_defuse_defuser_share` | `0.60` | Defuser’s share of defuse positive pool |
-| `swing_kill_final_hit_base` | `0.35` | Base killer credit before damage share |
-| `swing_kill_damage_share_weight` | `0.45` | Damage share component of killer credit |
-| `swing_trade_kill_multiplier` | `0.80` | Trade kill credit multiplier |
-| `swing_survival_credit_enabled` | `false` | Man-advantage survival credit |
-| `swing_survival_credit_max_share` | `0.05` | Max survival credit per event (if enabled) |
-| `swing_zero_sum_tolerance` | `0.005` | Ledger validation tolerance |
-
-Example block:
-
-```json
-{
-  "swing_exit_frags": "zero",
-  "swing_residual_enabled": true,
-  "swing_residual_max": 0.35,
-  "swing_save_penalty_weight": 0.35,
-  "swing_plant_planter_share": 0.45,
-  "swing_defuse_defuser_share": 0.60,
-  "swing_kill_final_hit_base": 0.35,
-  "swing_kill_damage_share_weight": 0.45,
-  "swing_trade_kill_multiplier": 0.80,
-  "swing_survival_credit_enabled": false,
-  "swing_zero_sum_tolerance": 0.005
-}
-```
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `ExitFrags` | `"zero"` | Exit frag swing: `zero` or `tiny` (5%) |
+| `ResidualEnabled` | `true` | Apply end-of-round residual swing |
+| `ResidualMax` | `0.35` | Cap on residual correction per round |
+| `SavePenaltyWeight` | `0.35` | Penalty weight for alive losers at round end |
+| `PlantPlanterShare` | `0.45` | Planter’s share of plant positive pool |
+| `DefuseDefuserShare` | `0.60` | Defuser’s share of defuse positive pool |
+| `KillFinalHitBase` | `0.35` | Base killer credit before damage share |
+| `KillDamageShareWeight` | `0.45` | Damage share component of killer credit |
+| `TradeKillMultiplier` | `0.80` | Trade kill credit multiplier |
+| `SurvivalCreditEnabled` | `false` | Man-advantage survival credit |
+| `SurvivalCreditMaxShare` | `0.05` | Max survival credit per event (if enabled) |
+| `ZeroSumTolerance` | `0.005` | Ledger validation tolerance |
 
 ### Rating modifier
 
-In `config.json`, `"kdpr_modifier": true` adds the KPR/DPR adjustment described in Part 5. With it off, final rating is purely swing + ADR + KAST.
+The KPR/DPR modifier (Part 5) is off: `engine/eco` calls `Derive(p, false)`, so the final rating is swing + ADR + KAST.

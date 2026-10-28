@@ -4,11 +4,11 @@ import (
 	"math"
 	"testing"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 func TestValidateRoundSwingLedgerZeroSum(t *testing.T) {
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 	ledger.PlayerSwing[1] = 0.08
 	ledger.PlayerSwing[2] = -0.05
 	ledger.PlayerSwing[3] = -0.03
@@ -20,7 +20,7 @@ func TestValidateRoundSwingLedgerZeroSum(t *testing.T) {
 }
 
 func TestValidateRoundSwingLedgerDetectsImbalance(t *testing.T) {
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 	ledger.PlayerSwing[1] = 0.10
 	ledger.PlayerSwing[2] = -0.05
 
@@ -31,13 +31,13 @@ func TestValidateRoundSwingLedgerDetectsImbalance(t *testing.T) {
 }
 
 func TestRecordEventUpdatesTotals(t *testing.T) {
-	ledger := NewRoundSwingLedger(1)
+	ledger := NewRoundSwingLedger()
 	event := SwingLedgerEvent{
 		PositiveAlloc: []PlayerSwingAllocation{{
-			SteamID: 1, Side: common.TeamTerrorists, Amount: 0.08, Reason: SwingReasonKillFinalHit,
+			SteamID: 1, Side: fact.SideT, Amount: 0.08, Reason: SwingReasonKillFinalHit,
 		}},
 		NegativeAlloc: []PlayerSwingAllocation{{
-			SteamID: 2, Side: common.TeamCounterTerrorists, Amount: -0.08, Reason: SwingReasonVictimDeath,
+			SteamID: 2, Side: fact.SideCT, Amount: -0.08, Reason: SwingReasonVictimDeath,
 		}},
 	}
 	ledger.RecordEvent(event)

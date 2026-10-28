@@ -1,14 +1,16 @@
 package swing
 
 import (
+	"maps"
 	"math"
+	"slices"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 // ResidualInput holds round-end context for residual swing allocation.
 type ResidualInput struct {
-	Winner           common.Team
+	Winner           fact.Side
 	CurrentWinProb   float64
 	Players          map[uint64]PlayerRoundContext
 	MaxDamageInRound int
@@ -19,7 +21,7 @@ func ApplyRoundResidual(ledger *RoundSwingLedger, input ResidualInput, cfg Confi
 	if ledger == nil || ledger.ResidualApplied || !cfg.ResidualEnabled {
 		return nil
 	}
-	if input.Winner != common.TeamTerrorists && input.Winner != common.TeamCounterTerrorists {
+	if input.Winner != fact.SideT && input.Winner != fact.SideCT {
 		return nil
 	}
 
@@ -31,24 +33,19 @@ func ApplyRoundResidual(ledger *RoundSwingLedger, input ResidualInput, cfg Confi
 		residual = cfg.ResidualMax
 	}
 
-	losingSide := common.TeamCounterTerrorists
-	if input.Winner == common.TeamCounterTerrorists {
-		losingSide = common.TeamTerrorists
+	losingSide := fact.SideCT
+	if input.Winner == fact.SideCT {
+		losingSide = fact.SideT
 	}
 
-	positiveAllocs := allocatePositiveResidual(input, input.Winner, residual, cfg)
+	positiveAllocs := allocatePositiveResidual(input, input.Winner, residual)
 	negativeAllocs := allocateNegativeResidual(input, losingSide, residual, cfg)
 
 	event := SwingLedgerEvent{
-		Type:           SwingEventResidual,
-		BenefitingSide: input.Winner,
-		HurtSide:       losingSide,
-		RawDelta:       residual,
-		PositivePool:   residual,
-		NegativePool:   residual,
-		PositiveAlloc:  positiveAllocs,
-		NegativeAlloc:  negativeAllocs,
-		IsResidual:     true,
+		RawDelta:      residual,
+		NegativePool:  residual,
+		PositiveAlloc: positiveAllocs,
+		NegativeAlloc: negativeAllocs,
 	}
 	ledger.RecordEvent(event)
 	ledger.ResidualApplied = true
@@ -59,7 +56,7 @@ func ApplyRoundResidual(ledger *RoundSwingLedger, input ResidualInput, cfg Confi
 	return allocs
 }
 
-func allocatePositiveResidual(input ResidualInput, winner common.Team, residual float64, cfg Config) []PlayerSwingAllocation {
+func allocatePositiveResidual(input ResidualInput, winner fact.Side, residual float64) []PlayerSwingAllocation {
 	weights := make(map[uint64]float64)
 	aliveWinners := make([]uint64, 0)
 
@@ -68,7 +65,8 @@ func allocatePositiveResidual(input ResidualInput, winner common.Team, residual 
 		maxDamage = 1
 	}
 
-	for steamID, ctx := range input.Players {
+	for _, steamID := range slices.Sorted(maps.Keys(input.Players)) {
+		ctx := input.Players[steamID]
 		if ctx.Side != winner {
 			continue
 		}
@@ -91,7 +89,8 @@ func allocatePositiveResidual(input ResidualInput, winner common.Team, residual 
 	}
 
 	total := 0.0
-	for _, w := range weights {
+	for _, id := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[id]
 		total += w
 	}
 
@@ -113,7 +112,8 @@ func allocatePositiveResidual(input ResidualInput, winner common.Team, residual 
 	}
 
 	allocs := make([]PlayerSwingAllocation, 0, len(weights))
-	for steamID, w := range weights {
+	for _, steamID := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[steamID]
 		allocs = append(allocs, PlayerSwingAllocation{
 			SteamID: steamID,
 			Side:    winner,
@@ -124,10 +124,11 @@ func allocatePositiveResidual(input ResidualInput, winner common.Team, residual 
 	return allocs
 }
 
-func allocateNegativeResidual(input ResidualInput, losingSide common.Team, residual float64, cfg Config) []PlayerSwingAllocation {
+func allocateNegativeResidual(input ResidualInput, losingSide fact.Side, residual float64, cfg Config) []PlayerSwingAllocation {
 	weights := make(map[uint64]float64)
 
-	for steamID, ctx := range input.Players {
+	for _, steamID := range slices.Sorted(maps.Keys(input.Players)) {
+		ctx := input.Players[steamID]
 		if ctx.Side != losingSide {
 			continue
 		}
@@ -143,7 +144,8 @@ func allocateNegativeResidual(input ResidualInput, losingSide common.Team, resid
 	}
 
 	total := 0.0
-	for _, w := range weights {
+	for _, id := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[id]
 		total += w
 	}
 	if total <= 0 {
@@ -151,7 +153,8 @@ func allocateNegativeResidual(input ResidualInput, losingSide common.Team, resid
 	}
 
 	allocs := make([]PlayerSwingAllocation, 0, len(weights))
-	for steamID, w := range weights {
+	for _, steamID := range slices.Sorted(maps.Keys(weights)) {
+		w := weights[steamID]
 		allocs = append(allocs, PlayerSwingAllocation{
 			SteamID: steamID,
 			Side:    losingSide,

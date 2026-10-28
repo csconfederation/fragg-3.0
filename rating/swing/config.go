@@ -10,18 +10,18 @@ const (
 
 // Config holds tunable parameters for round swing calculation.
 type Config struct {
-	ExitFrags              ExitFragMode `json:"swing_exit_frags"`
-	ResidualEnabled        bool         `json:"swing_residual_enabled"`
-	ResidualMax            float64      `json:"swing_residual_max"`
-	SavePenaltyWeight      float64      `json:"swing_save_penalty_weight"`
-	PlantPlanterShare      float64      `json:"swing_plant_planter_share"`
-	DefuseDefuserShare     float64      `json:"swing_defuse_defuser_share"`
-	KillFinalHitBase       float64      `json:"swing_kill_final_hit_base"`
-	KillDamageShareWeight  float64      `json:"swing_kill_damage_share_weight"`
-	TradeKillMultiplier    float64      `json:"swing_trade_kill_multiplier"`
-	SurvivalCreditEnabled  bool         `json:"swing_survival_credit_enabled"`
-	SurvivalCreditMaxShare float64      `json:"swing_survival_credit_max_share"`
-	ZeroSumTolerance       float64      `json:"swing_zero_sum_tolerance"`
+	ExitFrags              ExitFragMode
+	ResidualEnabled        bool
+	ResidualMax            float64
+	SavePenaltyWeight      float64
+	PlantPlanterShare      float64
+	DefuseDefuserShare     float64
+	KillFinalHitBase       float64
+	KillDamageShareWeight  float64
+	TradeKillMultiplier    float64
+	SurvivalCreditEnabled  bool
+	SurvivalCreditMaxShare float64
+	ZeroSumTolerance       float64
 }
 
 // DefaultConfig returns the recommended defaults from the swing improvement design.

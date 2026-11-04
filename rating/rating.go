@@ -80,8 +80,7 @@ func ComputeFinalRating(p *model.PlayerStats, kdprModifier bool) float64 {
 // - KAST: Rewards round involvement
 //
 // Kills/deaths are captured entirely through swing to avoid double-counting.
-func ComputeSideRating(rounds int, kills int, deaths int, damage int, ecoKillValue float64,
-	probabilitySwing float64, kast float64, multiKills [6]int, clutchRounds int, clutchWins int, kdprModifier bool) float64 {
+func ComputeSideRating(rounds, kills, deaths, damage int, probabilitySwing, kast float64, kdprModifier bool) float64 {
 
 	roundsF := float64(rounds)
 	if roundsF == 0 {

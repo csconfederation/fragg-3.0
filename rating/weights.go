@@ -72,14 +72,6 @@ const (
 const (
 	RatingBaseline = 1.0 // Starting point for rating calculation
 
-	// KPR contribution multipliers (asymmetric - rewards high KPR more)
-	KPRContribAbove = 0.35 // Multiplier when KPR >= baseline
-	KPRContribBelow = 0.30 // Multiplier when KPR < baseline
-
-	// DPR contribution multipliers (asymmetric - penalizes high DPR more)
-	DPRContribBelow = 0.08 // Multiplier when DPR <= baseline (good)
-	DPRContribAbove = 0.25 // Multiplier when DPR > baseline (bad)
-
 	// ADR contribution multipliers
 	ADRContribAbove = 0.01  // Multiplier when ADR >= baseline
 	ADRContribBelow = 0.012 // Multiplier when ADR < baseline
@@ -101,21 +93,5 @@ const (
 const (
 	FirstHalfPistolRound  = 1  // First pistol round of the match
 	SecondHalfPistolRound = 13 // Second half pistol round (MR12)
-	RoundsPerHalf         = 12 // Rounds per half in regulation
-	RegulationRounds      = 24 // Total regulation rounds (MR12)
-	OvertimeLength        = 6  // Rounds per overtime (MR3)
 	TickRate              = 64 // Server tick rate for time calculations
 )
-
-// IsPistolRound determines if a round number is a pistol round.
-// Handles regulation and overtime pistol rounds for MR12 format.
-func IsPistolRound(roundNumber int) bool {
-	if roundNumber == FirstHalfPistolRound || roundNumber == SecondHalfPistolRound {
-		return true
-	}
-	// Overtime pistol rounds: 25, 31, 37, etc.
-	if roundNumber > RegulationRounds && (roundNumber-RegulationRounds-1)%OvertimeLength == 0 {
-		return true
-	}
-	return false
-}

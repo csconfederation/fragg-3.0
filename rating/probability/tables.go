@@ -17,6 +17,10 @@ type ProbabilityTables struct {
 	// MapAdjustments maps map names to T-side win rate adjustments.
 	// Value is the T-side win percentage (0.0-1.0) for that map.
 	MapAdjustments map[string]float64
+
+	// MapBaseline is the T-side round win rate over all maps. BaseWinProb already carries it, so a
+	// map's factor is its rate relative to this, not to 0.50.
+	MapBaseline float64
 }
 
 // NewProbabilityTables creates a new ProbabilityTables with empty maps.
@@ -25,6 +29,7 @@ func NewProbabilityTables() *ProbabilityTables {
 		BaseWinProb:    make(map[string]float64),
 		DuelWinRates:   make(map[string]float64),
 		MapAdjustments: make(map[string]float64),
+		MapBaseline:    0.50,
 	}
 }
 
@@ -169,12 +174,12 @@ func (t *ProbabilityTables) calculateFallbackDuelRate(attackerEcon, defenderEcon
 	return clamp(0.50+adjustment, 0.20, 0.80)
 }
 
-// GetMapAdjustment returns the T-side win rate for a map (default 0.50).
+// GetMapAdjustment returns the T-side win rate for a map (default MapBaseline, a factor of 1).
 func (t *ProbabilityTables) GetMapAdjustment(mapName string) float64 {
 	if adj, ok := t.MapAdjustments[mapName]; ok {
 		return adj
 	}
-	return 0.50 // Default balanced
+	return t.MapBaseline
 }
 
 // clamp restricts a value to the range [min, max].

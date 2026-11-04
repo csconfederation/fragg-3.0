@@ -1,0 +1,290 @@
+package eco
+
+import (
+	"github.com/csconfederation/fragg-3.0/model"
+)
+
+// SideStatsUpdater handles updating side-specific statistics for a player.
+type SideStatsUpdater struct {
+	player     *model.PlayerStats
+	roundStats *model.RoundStats
+}
+
+// NewSideStatsUpdater creates a new updater for the given player and round.
+func NewSideStatsUpdater(player *model.PlayerStats, roundStats *model.RoundStats) *SideStatsUpdater {
+	return &SideStatsUpdater{
+		player:     player,
+		roundStats: roundStats,
+	}
+}
+
+// UpdateSideStats updates the appropriate side statistics based on the player's side.
+func (u *SideStatsUpdater) UpdateSideStats() {
+	switch u.roundStats.PlayerSide {
+	case "T":
+		u.updateTSide()
+	case "CT":
+		u.updateCTSide()
+	}
+}
+
+// updateTSide updates T-side specific statistics.
+func (u *SideStatsUpdater) updateTSide() {
+	u.player.TRoundsPlayed++
+	u.player.TKills += u.roundStats.Kills
+	u.player.TDamage += u.roundStats.Damage
+	u.player.TEcoKillValue += u.roundStats.EconImpact
+
+	if u.roundStats.Survived {
+		u.player.TSurvivals++
+	}
+	if u.roundStats.Deaths > 0 {
+		u.player.TDeaths++
+	}
+	if u.roundStats.Kills >= 0 && u.roundStats.Kills <= 5 {
+		u.player.TMultiKills[u.roundStats.Kills]++
+	}
+	if u.roundStats.GotKill || u.roundStats.GotAssist || u.roundStats.Survived || u.roundStats.Traded {
+		u.player.TKAST++
+	}
+	if u.roundStats.ClutchAttempt {
+		u.recordSideClutchAttempts(true)
+	}
+	u.applySideEcoCounters(true)
+}
+
+// updateCTSide updates CT-side specific statistics.
+func (u *SideStatsUpdater) updateCTSide() {
+	u.player.CTRoundsPlayed++
+	u.player.CTKills += u.roundStats.Kills
+	u.player.CTDamage += u.roundStats.Damage
+	u.player.CTEcoKillValue += u.roundStats.EconImpact
+
+	if u.roundStats.Survived {
+		u.player.CTSurvivals++
+	}
+	if u.roundStats.Deaths > 0 {
+		u.player.CTDeaths++
+	}
+	if u.roundStats.Kills >= 0 && u.roundStats.Kills <= 5 {
+		u.player.CTMultiKills[u.roundStats.Kills]++
+	}
+	if u.roundStats.GotKill || u.roundStats.GotAssist || u.roundStats.Survived || u.roundStats.Traded {
+		u.player.CTKAST++
+	}
+	if u.roundStats.ClutchAttempt {
+		u.recordSideClutchAttempts(false)
+	}
+	u.applySideEcoCounters(false)
+}
+
+func (u *SideStatsUpdater) recordSideClutchAttempts(tSide bool) {
+	switch u.roundStats.ClutchSize {
+	case 1:
+		if tSide {
+			u.player.TClutch1v1Attempts++
+		} else {
+			u.player.CTClutch1v1Attempts++
+		}
+	case 2:
+		if tSide {
+			u.player.TClutch1v2Attempts++
+		} else {
+			u.player.CTClutch1v2Attempts++
+		}
+	case 3:
+		if tSide {
+			u.player.TClutch1v3Attempts++
+		} else {
+			u.player.CTClutch1v3Attempts++
+		}
+	case 4:
+		if tSide {
+			u.player.TClutch1v4Attempts++
+		} else {
+			u.player.CTClutch1v4Attempts++
+		}
+	case 5:
+		if tSide {
+			u.player.TClutch1v5Attempts++
+		} else {
+			u.player.CTClutch1v5Attempts++
+		}
+	}
+}
+
+func (u *SideStatsUpdater) applySideEcoCounters(tSide bool) {
+	rs := u.roundStats
+	p := u.player
+	if rs.GotAssist {
+		if tSide {
+			p.TAssistedKills += rs.Assists
+		} else {
+			p.CTAssistedKills += rs.Assists
+		}
+	}
+	if tSide {
+		p.TTradeKills += rs.TradeKills
+		p.TFastTrades += rs.FastTrades
+	} else {
+		p.CTTradeKills += rs.TradeKills
+		p.CTFastTrades += rs.FastTrades
+	}
+	if rs.TradeDenials > 0 {
+		if tSide {
+			p.TTradeDenials += rs.TradeDenials
+		} else {
+			p.CTTradeDenials += rs.TradeDenials
+		}
+	}
+	if rs.OpeningDeath && rs.Traded {
+		if tSide {
+			p.TOpeningDeathsTraded++
+		} else {
+			p.CTOpeningDeathsTraded++
+		}
+	}
+	if rs.AWPKills > 0 {
+		if tSide {
+			p.TAWPKills += rs.AWPKills
+		} else {
+			p.CTAWPKills += rs.AWPKills
+		}
+	}
+	if rs.AWPKill {
+		if tSide {
+			p.TRoundsWithAWPKill++
+		} else {
+			p.CTRoundsWithAWPKill++
+		}
+	}
+	if rs.AWPOpeningKill {
+		if tSide {
+			p.TAWPOpeningKills++
+		} else {
+			p.CTAWPOpeningKills++
+		}
+	}
+	if rs.AWPKills >= 2 {
+		if tSide {
+			p.TAWPMultiKillRounds++
+		} else {
+			p.CTAWPMultiKillRounds++
+		}
+	}
+	if rs.LostAWP {
+		if tSide {
+			p.TAWPDeaths++
+		} else {
+			p.CTAWPDeaths++
+		}
+	}
+	if rs.ExitFrags > 0 {
+		if tSide {
+			p.TExitFrags += rs.ExitFrags
+		} else {
+			p.CTExitFrags += rs.ExitFrags
+		}
+	}
+	if rs.KnifeKill {
+		if tSide {
+			p.TKnifeKills++
+		} else {
+			p.CTKnifeKills++
+		}
+	}
+	if rs.PistolVsRifleKill {
+		if tSide {
+			p.TPistolVsRifleKills++
+		} else {
+			p.CTPistolVsRifleKills++
+		}
+	}
+	if rs.UtilityKills > 0 {
+		if tSide {
+			p.TUtilityKills += rs.UtilityKills
+		} else {
+			p.CTUtilityKills += rs.UtilityKills
+		}
+	}
+	if rs.Deaths > 0 && rs.DeathTime < 30.0 {
+		if tSide {
+			p.TEarlyDeaths++
+		} else {
+			p.CTEarlyDeaths++
+		}
+	}
+	if rs.SavedByTeammate {
+		if tSide {
+			p.TSavedByTeammate++
+		} else {
+			p.CTSavedByTeammate++
+		}
+	}
+	if rs.SavedTeammate {
+		if tSide {
+			p.TSavedTeammate++
+		} else {
+			p.CTSavedTeammate++
+		}
+	}
+}
+
+// UpdateCommonRoundStats updates statistics that are common to both sides.
+func (u *SideStatsUpdater) UpdateCommonRoundStats() {
+	if u.roundStats.GotKill || u.roundStats.GotAssist || u.roundStats.Survived || u.roundStats.Traded {
+		u.player.KAST++
+	}
+
+	u.updateAWPStats()
+	u.updateSupportStats()
+	u.updateUtilityStats()
+	u.updateTradeStats()
+}
+
+// updateAWPStats updates AWP-related statistics.
+func (u *SideStatsUpdater) updateAWPStats() {
+	if u.roundStats.AWPKill {
+		u.player.RoundsWithAWPKill++
+	}
+	if u.roundStats.AWPKills >= 2 {
+		u.player.AWPMultiKillRounds++
+	}
+	if u.roundStats.LostAWP {
+		u.player.AWPDeaths++
+	}
+}
+
+// updateSupportStats updates support-related statistics.
+func (u *SideStatsUpdater) updateSupportStats() {
+	if u.roundStats.GotAssist {
+		u.player.AssistedKills += u.roundStats.Assists
+	}
+}
+
+// updateUtilityStats updates utility-related statistics.
+func (u *SideStatsUpdater) updateUtilityStats() {
+	u.player.ExitFrags += u.roundStats.ExitFrags
+
+	if u.roundStats.SavedByTeammate {
+		u.player.SavedByTeammate++
+	}
+}
+
+// updateTradeStats updates trade-related statistics.
+func (u *SideStatsUpdater) updateTradeStats() {
+	if u.roundStats.KnifeKill {
+		u.player.KnifeKills++
+	}
+
+	if u.roundStats.PistolVsRifleKill {
+		u.player.PistolVsRifleKills++
+	}
+
+	u.player.TradeKills += u.roundStats.TradeKills
+	u.player.FastTrades += u.roundStats.FastTrades
+
+	if u.roundStats.Deaths > 0 && u.roundStats.DeathTime < 30.0 {
+		u.player.EarlyDeaths++
+	}
+}

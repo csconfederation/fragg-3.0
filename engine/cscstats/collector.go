@@ -43,6 +43,14 @@ var roundEndReasons = map[int]string{
 	20: "CTsReachedHostage",
 }
 
+// Host is the lifecycle's view the collector reads. The replay of a buffered round supplies it from
+// each event, until the calculators replace the collector.
+type Host interface {
+	Live() bool
+	InRound() bool
+	Members(s fact.Snapshot, side fact.Side) []fact.Player
+}
+
 // Collector is the oracle's CSC stat pipeline (csc/parser.go handlers and processRoundFinal) over
 // facts, reading the shared round state (engine/round) the caller computes first. Game returns the
 // committed rounds' stats once the match finishes.
@@ -62,7 +70,7 @@ func missing(what string, steam uint64) error {
 	return fmt.Errorf("no player stats for %s %d", what, steam) // the oracle dereferences nil here
 }
 
-func (c *Collector) Open(m *match.Match, r *match.Round, s fact.Snapshot, pistol bool) error {
+func (c *Collector) Open(m Host, r *match.Round, s fact.Snapshot, pistol bool) error {
 	pr := &round{RoundNum: int8(r.Num), StartingTick: r.StartTick, PlayerStats: map[uint64]*playerStats{},
 		TeamStats:          map[string]*teamStats{},
 		InitTerroristCount: r.InitT, InitCTerroristCount: r.InitCT}
@@ -90,7 +98,7 @@ func newPlayer(mem match.Member) *playerStats {
 		DamageList: map[uint64]int{}}
 }
 
-func (c *Collector) Join(m *match.Match, r *match.Round, mem match.Member) error {
+func (c *Collector) Join(m Host, r *match.Round, mem match.Member) error {
 	if pr := c.rounds[r]; pr != nil {
 		pr.PlayerStats[mem.Steam64] = newPlayer(mem)
 	}
@@ -98,7 +106,7 @@ func (c *Collector) Join(m *match.Match, r *match.Round, mem match.Member) error
 }
 
 // Win is the stats part of the oracle's processRoundOnWinCon.
-func (c *Collector) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
+func (c *Collector) Win(m Host, r *match.Round, f fact.RoundEnd) error {
 	pr := c.potential
 	pr.WinnerENUM = int(f.Winner)
 	pr.RoundEndReason = roundEndReasons[f.Reason]
@@ -107,7 +115,7 @@ func (c *Collector) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
 }
 
 // Commit is the integrity branch of the oracle's processRoundFinal; s is the round's final state.
-func (c *Collector) Commit(m *match.Match, r *match.Round, tick int, s shared.State) error {
+func (c *Collector) Commit(m Host, r *match.Round, tick int, s shared.State) error {
 	pr := c.rounds[r]
 	if pr == nil {
 		return fmt.Errorf("round %d committed without an open", r.Num)
@@ -237,7 +245,7 @@ func (c *Collector) Commit(m *match.Match, r *match.Round, tick int, s shared.St
 }
 
 // Fact applies f with its shared context x (engine/round rejects a bomb event without a player).
-func (c *Collector) Fact(m *match.Match, f fact.Fact, x shared.Context) error {
+func (c *Collector) Fact(m Host, f fact.Fact, x shared.Context) error {
 	if !m.Live() {
 		return nil
 	}
@@ -304,7 +312,7 @@ func (c *Collector) Fact(m *match.Match, f fact.Fact, x shared.Context) error {
 
 // lurk is the oracle's FrameDone lurker sampler: every 4 s of a round after the first 18 s, the
 // live T furthest from... nearest-but-not-close to their teammates gets a blip.
-func (c *Collector) lurk(m *match.Match, f fact.Frame, s shared.State) error {
+func (c *Collector) lurk(m Host, f fact.Frame, s shared.State) error {
 	if !m.InRound() || c.lastTickProcessed+4*tickRate >= f.Tick {
 		return nil
 	}

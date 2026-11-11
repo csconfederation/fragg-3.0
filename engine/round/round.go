@@ -1,10 +1,13 @@
 // Package round owns the round state the stat collectors share (Core-planning#591): roster,
-// alive counts, phase, opening and clutch slots, and which facts count. For each fact it returns a
-// Context; collectors read it and never change the state. Step 1 ports CSC's rules unchanged.
+// alive counts, phase, opening and clutch slots, and which facts count. The Deriver computes a
+// Context for each fact, buffers the live ones, and hands each committed round to the collectors;
+// they read the contexts and never change the state. It ports CSC's rules unchanged.
 package round
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
@@ -12,9 +15,10 @@ import (
 )
 
 const (
-	mr       = 12
-	eqBomb   = 404
-	tickRate = 64
+	mr                 = 12
+	eqBomb             = 404
+	tickRate           = 64
+	reasonTargetBombed = 1 // RoundEnd.Reason when the bomb exploded
 )
 
 // Phase is where the round stands. Exactly one holds at a time.
@@ -92,81 +96,292 @@ type kill struct {
 	traded bool
 }
 
-// Tracker computes the state over the lifecycle, before the collectors see each phase or fact.
-type Tracker struct {
-	s       State
-	cur     *match.Round
-	members map[uint64]bool    // the open round's rows: members at the open and joins
-	deaths  map[uint64]int     // counted deaths this round
-	kills   map[uint64][]*kill // each killer's enemy kills this round, in order, by actor
-	blind   map[uint64]Blind   // each player's latest counting flash this round
+// Round is one committed round as the deriver saw it, with everything the collectors read. It
+// never refers to the lifecycle's mutable round.
+type Round struct {
+	// Key identifies the lifecycle's round for the caller; nothing reads through it.
+	Key                           *match.Round
+	Num, StartTick, InitT, InitCT int
+	Pistol, FreezeEnd             bool
+	TClan, CTClan, Map            string // Map: ServerInfo's map at the open
+	Open                          fact.Snapshot
+	Roster                        match.Roster
+	OpenMembers                   map[uint64]match.Member // r.Members at the open, before any join
+	EndTick                       int
+	// Events are the round's live events, then the tail after the commit; joins are Events with Join.
+	Events []Event
+	// Commit is the index of the first event after the commit.
+	Commit int
+	// OldWins are the round's Wins where today's hold runs them (PR 18 deletes them).
+	OldWins []OldWin
+	End     State // at the commit
+	// committed is set by Commit; the deriver hands over only committed rounds.
+	committed bool
 }
 
-// New returns the state before any round.
-func New() *Tracker {
-	return &Tracker{s: State{Phase: PrePlant}, members: map[uint64]bool{}, deaths: map[uint64]int{},
-		kills: map[uint64][]*kill{}, blind: map[uint64]Blind{}}
+// OldWin is a Win as today's hold runs it: before event At (len(Events) after the last), for the
+// RoundEnd at index Event, with the residual alive members and the state at that moment.
+type OldWin struct {
+	At, Event  int
+	PostCommit bool // ran after the round's commit
+	Alive      []fact.Player
+	State      State
+}
+
+// Event is a buffered fact with its context.
+type Event struct {
+	match.Event
+	Context
+}
+
+// Handover receives each committed round once, in commit order.
+type Handover interface{ Round(r *Round) error }
+
+// Deriver is the lifecycle's stats (match.Stats). It computes each fact's Context in the oracle's
+// order, returns the errors the old collectors returned, at the same fact, and buffers the live
+// events of the open round. At the next open, or Close, it hands a committed round to the Handover.
+type Deriver struct {
+	out       Handover
+	s         State
+	cur       *Round
+	members   map[uint64]match.Member // the open round's rows: members at the open and joins
+	deaths    map[uint64]int          // counted deaths this round, by actor
+	cscDeaths map[uint64]int          // the same by Steam64, as CSC's rows count them
+	kills     map[uint64][]*kill      // each killer's enemy kills this round, in order, by actor
+	blind     map[uint64]Blind        // each player's latest counting flash this round
+	mapName   string
+	opened    bool // a round has opened: the eco pipeline is active
+	winner    fact.Side
+	post      bool // the open round has committed
+	pending   *int // an explosion's Win, as the index of its RoundEnd, until the bomb's facts are in (D27)
+	last      Context
+}
+
+// NewDeriver returns the state before any round.
+func NewDeriver(out Handover) *Deriver {
+	return &Deriver{out: out, s: State{Phase: PrePlant}, members: map[uint64]match.Member{}, deaths: map[uint64]int{},
+		cscDeaths: map[uint64]int{}, kills: map[uint64][]*kill{}, blind: map[uint64]Blind{}}
 }
 
 // State is the current state.
-func (t *Tracker) State() State { return t.s }
+func (d *Deriver) State() State { return d.s }
 
-func (t *Tracker) Open(r *match.Round) {
+// Last is the context of the latest event; derivediff reads it.
+func (d *Deriver) Last() Context { return d.last }
+
+func (d *Deriver) Open(r *match.Round, s fact.Snapshot, roster match.Roster) error {
+	d.endWave()
+	if err := d.handover(); err != nil {
+		return err
+	}
 	// Num wraps like CSC's int8 roundNum past round 127, as the gates always read it.
-	t.s = State{Num: int(int8(r.Num)), Phase: PrePlant, Opening: true, TAlive: r.InitT, CTAlive: r.InitCT}
-	t.cur = r
-	t.members = map[uint64]bool{}
-	for id := range r.Members {
-		t.members[id] = true
-	}
-	t.deaths = map[uint64]int{}
-	t.kills = map[uint64][]*kill{}
-	t.blind = map[uint64]Blind{}
+	d.s = State{Num: int(int8(r.Num)), Phase: PrePlant, Opening: true, TAlive: r.InitT, CTAlive: r.InitCT}
+	d.members = maps.Clone(r.Members)
+	d.deaths = map[uint64]int{}
+	d.cscDeaths = map[uint64]int{}
+	d.kills = map[uint64][]*kill{}
+	d.blind = map[uint64]Blind{}
+	d.opened, d.winner, d.post = true, 0, false
+	d.cur = &Round{Key: r, Num: r.Num, StartTick: r.StartTick, InitT: r.InitT, InitCT: r.InitCT, Pistol: r.Pistol,
+		FreezeEnd: r.FreezeEnd, TClan: r.TClan, CTClan: r.CTClan, Map: d.mapName, Open: s, Roster: roster,
+		OpenMembers: maps.Clone(r.Members)}
+	return nil
 }
 
-func (t *Tracker) Join(r *match.Round, steam uint64) {
-	if r == t.cur {
-		t.members[steam] = true
-	}
-}
-
-// RoundEnd is every round end while the match is live.
-func (t *Tracker) RoundEnd(f fact.RoundEnd) {
-	if f.Winner == fact.SideT {
-		t.s.TMoney = true
-	}
-}
-
-func (t *Tracker) Win() { t.s.Phase = Decided }
-
-// Fact applies f and returns its context. Nothing changes while the match isn't live.
-func (t *Tracker) Fact(m *match.Match, f fact.Fact) (Context, error) {
-	c := Context{Before: t.s}
-	if m.Live() {
-		if err := t.apply(m, f, &c); err != nil {
-			return Context{}, err
+// Commit is the round's commit. CSC's saves check is the only one left that can fail here.
+func (d *Deriver) Commit(r *match.Round, tick int) error {
+	for _, id := range slices.Sorted(maps.Keys(d.members)) {
+		m := d.members[id]
+		if d.cscDeaths[id] == 0 && m.TeamID != int(d.winner) && m.Clan != d.cur.TClan && m.Clan != d.cur.CTClan {
+			return fmt.Errorf("round %d: no team stats for %q", r.Num, m.Clan)
 		}
 	}
-	c.After = t.s
-	switch f := f.(type) {
-	case fact.Kill:
-		if c.Expected {
-			c.Alive = t.Alive(m, f.Snapshot)
+	d.cur.committed, d.cur.Commit, d.cur.EndTick, d.cur.End = true, len(d.cur.Events), tick, d.s
+	d.post = true
+	return nil
+}
+
+// Close hands over the last round, once the lifecycle has finished.
+func (d *Deriver) Close() error { return d.handover() }
+
+func (d *Deriver) handover() error {
+	r := d.cur
+	d.cur = nil
+	if r == nil || !r.committed {
+		return nil
+	}
+	return d.out.Round(r)
+}
+
+// Event applies one fact: the checks the old pipeline made (round, then eco, then CSC), the state,
+// and the context. Live events join the open round's buffer.
+func (d *Deriver) Event(e match.Event) error {
+	if d.pending != nil && (e.Final || endsBombWave(e.Fact)) {
+		d.endWave()
+	}
+	d.last = Context{}
+	var c Context
+	switch f := e.Fact.(type) {
+	case nil: // Final
+		return nil
+	case fact.ServerInfo:
+		if !e.Dropped {
+			d.mapName = f.Map
 		}
+		return nil
+	case fact.PlayerInfo:
+		return nil
+	case fact.TeamChange:
+		if e.Join != nil {
+			d.members[e.Join.Steam64] = *e.Join
+		}
+		c = Context{Before: d.s, After: d.s}
+	case fact.RoundEnd:
+		c.Before = d.s
+		if f.Winner == fact.SideT {
+			d.s.TMoney = true
+		}
+		c.After = d.s
+		d.add(e, c)
+		if e.Win {
+			if i := len(d.cur.Events) - 1; f.Reason == reasonTargetBombed {
+				d.pending = &i
+			} else {
+				d.win(i)
+			}
+		}
+		return nil
+	default:
+		if e.Dropped {
+			d.add(e, c)
+			return nil
+		}
+		c.Before = d.s
+		if e.Live {
+			if err := d.apply(e, &c); err != nil {
+				return err
+			}
+		}
+		c.After = d.s
+		switch f := f.(type) {
+		case fact.Kill:
+			if c.Expected {
+				c.Alive = d.Alive(e.Roster, f.Snapshot)
+			}
+		case fact.BombPlanted:
+			c.Alive = d.Alive(e.Roster, f.Snapshot)
+		case fact.BombDefused:
+			c.Alive = d.Alive(e.Roster, f.Snapshot)
+		}
+		d.last = c
+		if err := d.checks(e, c); err != nil {
+			return err
+		}
+	}
+	d.add(e, c)
+	return nil
+}
+
+// add buffers a live event. A Hurt keeps only the snapshot fields the collectors read.
+func (d *Deriver) add(e match.Event, c Context) {
+	if !e.Live || d.cur == nil {
+		return
+	}
+	if h, ok := e.Fact.(fact.Hurt); ok {
+		h.Snapshot = fact.Snapshot{Tick: h.Tick, RoundsPlayed: h.RoundsPlayed, Warmup: h.Warmup}
+		e.Fact = h
+	}
+	d.cur.Events = append(d.cur.Events, Event{e, c})
+}
+
+// checks are the eco and CSC steps' errors, after the round step passed (the old pipeline ran its
+// collectors in that order).
+func (d *Deriver) checks(e match.Event, c Context) error {
+	if e.Dropped {
+		return nil
+	}
+	switch f := e.Fact.(type) {
 	case fact.BombPlanted:
-		c.Alive = t.Alive(m, f.Snapshot)
+		if d.opened && f.Player == nil {
+			return fmt.Errorf("bomb planted by nobody at tick %d", f.Tick) // the oracle dereferences nil
+		}
 	case fact.BombDefused:
-		c.Alive = t.Alive(m, f.Snapshot)
+		if d.opened && f.Player == nil {
+			return fmt.Errorf("bomb defused by nobody at tick %d", f.Tick)
+		}
 	}
-	return c, nil
+	if !e.Live {
+		return nil
+	}
+	switch f := e.Fact.(type) {
+	case fact.GrenadeThrow:
+		if f.Weapon == nil {
+			return fmt.Errorf("grenade without a weapon at tick %d", f.Tick)
+		}
+	case fact.Kill:
+		// A victim whose clan isn't one of the round's teams: a joiner (inferred unreachable).
+		if c.Victim && c.Before.Opening && d.cur.InitT+d.cur.InitCT == 10 {
+			if clan := d.members[f.Victim.Steam64].Clan; clan != d.cur.TClan && clan != d.cur.CTClan {
+				return fmt.Errorf("round %d: no team stats for %q", d.s.Num, clan)
+			}
+		}
+	}
+	return nil
+}
+
+// endsBombWave reports whether f ends the wait for an explosion's facts: any other kill, damage or
+// flash, a change to the round's members, or the next round end. A kill between the bomb's facts
+// still ends it early (seen in 3 of 906 explosion rounds); holding facts back would replay them
+// out of order.
+func endsBombWave(f fact.Fact) bool {
+	switch f := f.(type) {
+	case fact.Kill, fact.Hurt, fact.Flashed:
+		return !bombFact(f)
+	case fact.PlayerInfo:
+		return f.Found
+	case fact.Disconnect, fact.TeamChange, fact.RoundEnd:
+		return true
+	}
+	return false
+}
+
+// bombFact reports whether f is the bomb's damage or kill.
+func bombFact(f fact.Fact) bool {
+	var w *int
+	switch f := f.(type) {
+	case fact.Hurt:
+		w = f.Weapon
+	case fact.Kill:
+		w = f.Weapon
+	}
+	return w != nil && *w == eqBomb
+}
+
+// win is the Win of the RoundEnd at event i, where today's hold runs it.
+func (d *Deriver) win(i int) {
+	d.s.Phase = Decided
+	e := d.cur.Events[i]
+	re := e.Fact.(fact.RoundEnd)
+	d.winner = re.Winner
+	d.cur.OldWins = append(d.cur.OldWins, OldWin{At: len(d.cur.Events), Event: i, PostCommit: d.post,
+		Alive: d.Alive(e.Roster, re.Snapshot), State: d.s})
+}
+
+// endWave runs the explosion's Win that is waiting for its wave to end.
+func (d *Deriver) endWave() {
+	if d.pending != nil {
+		i := *d.pending
+		d.pending = nil
+		d.win(i)
+	}
 }
 
 // Alive is the open round's members alive in s, T then CT.
-func (t *Tracker) Alive(m *match.Match, s fact.Snapshot) []fact.Player {
+func (d *Deriver) Alive(r match.Roster, s fact.Snapshot) []fact.Player {
 	var out []fact.Player
 	for _, side := range []fact.Side{fact.SideT, fact.SideCT} {
-		for _, p := range m.Members(s, side) {
-			if t.members[p.Steam64] && t.alive(p) {
+		for _, p := range r.Members(s, side) {
+			if d.isMember(p.Steam64) && d.alive(p) {
 				out = append(out, p)
 			}
 		}
@@ -174,50 +389,50 @@ func (t *Tracker) Alive(m *match.Match, s fact.Snapshot) []fact.Player {
 	return out
 }
 
-func (t *Tracker) apply(m *match.Match, f fact.Fact, c *Context) error {
-	decided := t.s.Phase == Decided
-	switch f := f.(type) {
+func (d *Deriver) apply(e match.Event, c *Context) error {
+	decided := d.s.Phase == Decided
+	switch f := e.Fact.(type) {
 	case fact.Kill:
-		return t.kill(m, f, c)
+		return d.kill(f, e.Roster, c)
 	case fact.Hurt:
 		w := -999
 		if f.Weapon != nil {
 			w = *f.Weapon
 		}
-		c.BombIgnored = t.bombIgnored(w)
+		c.BombIgnored = d.bombIgnored(w)
 		c.Enemy = f.Attacker != nil && f.Player != nil && f.Attacker.Side != f.Player.Side
 	case fact.Flashed:
-		t.flashed(f, c)
+		d.flashed(f, c)
 	case fact.BombPlanted:
 		if !decided {
 			if f.Player == nil {
 				return fmt.Errorf("bomb planted by nobody")
 			}
-			t.s.Phase, t.s.TMoney = PostPlant, true
+			d.s.Phase, d.s.TMoney = PostPlant, true
 		}
 	case fact.BombDefused:
 		if !decided {
 			if f.Player == nil {
 				return fmt.Errorf("bomb defused by nobody")
 			}
-			t.s.Phase, t.s.BombDecided = Decided, true
+			d.s.Phase, d.s.BombDecided = Decided, true
 		}
 	case fact.BombExplode:
 		if !decided {
-			t.s.Phase, t.s.BombDecided = Decided, true
+			d.s.Phase, d.s.BombDecided = Decided, true
 		}
 	case fact.Disconnect:
 		// Only the round's members, as Alive: a mid-round reconnect can be relisted alive without
 		// joining the round (S19 Combine mid7214).
-		t.s.TAlive, t.s.CTAlive = 0, 0
-		for _, p := range m.Members(f.Snapshot, fact.SideT) {
-			if t.members[p.Steam64] && t.alive(p) {
-				t.s.TAlive++
+		d.s.TAlive, d.s.CTAlive = 0, 0
+		for _, p := range e.Roster.Members(f.Snapshot, fact.SideT) {
+			if d.isMember(p.Steam64) && d.alive(p) {
+				d.s.TAlive++
 			}
 		}
-		for _, p := range m.Members(f.Snapshot, fact.SideCT) {
-			if t.members[p.Steam64] && t.alive(p) {
-				t.s.CTAlive++
+		for _, p := range e.Roster.Members(f.Snapshot, fact.SideCT) {
+			if d.isMember(p.Steam64) && d.alive(p) {
+				d.s.CTAlive++
 			}
 		}
 	}
@@ -231,39 +446,37 @@ func isRoundFinalInHalf(round int) bool {
 // bombIgnored is the filter on bomb kills and damage in a half's final round, where a bomb can
 // explode after the round was won by elimination. D10: the bomb still counts when it ends the
 // round, or when the round is undecided (v5 delivered the bomb's kills before the explosion).
-func (t *Tracker) bombIgnored(weapon int) bool {
-	return weapon == eqBomb && isRoundFinalInHalf(t.s.Num) && t.s.Phase == Decided && !t.s.BombDecided
+func (d *Deriver) bombIgnored(weapon int) bool {
+	return weapon == eqBomb && isRoundFinalInHalf(d.s.Num) && d.s.Phase == Decided && !d.s.BombDecided
 }
 
-func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
+func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 	// The kill belongs to the open round.
-	if t.s.Num != f.RoundsPlayed+1 && (t.s.Num != f.RoundsPlayed || t.s.Phase != Decided) {
+	if d.s.Num != f.RoundsPlayed+1 && (d.s.Num != f.RoundsPlayed || d.s.Phase != Decided) {
 		return nil
 	}
 	c.Expected = true
-	if f.Weapon == nil {
-		return fmt.Errorf("kill without a weapon at tick %d", f.Tick) // the oracle reads e.Weapon.Type
-	}
-	c.BombIgnored = t.bombIgnored(*f.Weapon)
-	c.Victim = f.Victim != nil && t.members[f.Victim.Steam64] && !c.BombIgnored
-	c.Killer = f.Killer != nil && t.members[f.Killer.Steam64] && !c.BombIgnored
+	c.BombIgnored = d.bombIgnored(*f.Weapon)
+	c.Victim = f.Victim != nil && d.isMember(f.Victim.Steam64) && !c.BombIgnored
+	c.Killer = f.Killer != nil && d.isMember(f.Killer.Steam64) && !c.BombIgnored
 	if c.Victim {
-		t.deaths[actor(f.Victim)]++
+		d.deaths[actor(f.Victim)]++
+		d.cscDeaths[f.Victim.Steam64]++
 		switch f.Victim.Side {
 		case fact.SideT:
-			t.s.TAlive--
+			d.s.TAlive--
 		case fact.SideCT:
-			t.s.CTAlive--
+			d.s.CTAlive--
 		}
 		// Clutches (corpus finding 6): a bomb death at the explosion can't start one, and the
 		// clutcher is the side's member with no death this round, not the entity's IsAlive(),
 		// which lags the kill.
-		if t.s.Phase != Decided && *f.Weapon != eqBomb {
-			if t.s.TAlive == 1 && t.s.TClutch.Size == 0 {
-				t.s.TClutch = Clutch{t.s.CTAlive, t.survivor(m.Members(f.Snapshot, fact.SideT))}
+		if d.s.Phase != Decided && *f.Weapon != eqBomb {
+			if d.s.TAlive == 1 && d.s.TClutch.Size == 0 {
+				d.s.TClutch = Clutch{d.s.CTAlive, d.survivor(roster.Members(f.Snapshot, fact.SideT))}
 			}
-			if t.s.CTAlive == 1 && t.s.CTClutch.Size == 0 {
-				t.s.CTClutch = Clutch{t.s.TAlive, t.survivor(m.Members(f.Snapshot, fact.SideCT))}
+			if d.s.CTAlive == 1 && d.s.CTClutch.Size == 0 {
+				d.s.CTClutch = Clutch{d.s.TAlive, d.survivor(roster.Members(f.Snapshot, fact.SideCT))}
 			}
 		}
 	}
@@ -275,10 +488,10 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 		c.Enemy = enemy
 	}
 	if c.Enemy {
-		t.s.Opening = false
-		t.trade(f, c)
+		d.s.Opening = false
+		d.trade(f, c)
 	}
-	if c.Victim && f.Assister != nil && t.members[f.Assister.Steam64] {
+	if c.Victim && f.Assister != nil && d.isMember(f.Assister.Steam64) {
 		assist, err := Enemies(f.Assister, f.Victim)
 		if err != nil {
 			return err
@@ -288,7 +501,7 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 	if c.Assist {
 		if f.AssistedFlash {
 			c.FlashAssister, c.FlashAssisted = f.Assister.Steam64, true
-		} else if b := t.blind[f.Victim.Steam64]; float64(f.Tick) < b.Until {
+		} else if b := d.blind[f.Victim.Steam64]; float64(f.Tick) < b.Until {
 			c.FlashAssister, c.FlashAssisted = b.Flasher, true
 		}
 	}
@@ -296,7 +509,7 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 }
 
 // flashed is CSC's flash filter and its latest-flash state (the longest blind wins).
-func (t *Tracker) flashed(f fact.Flashed, c *Context) {
+func (d *Deriver) flashed(f fact.Flashed, c *Context) {
 	if f.Player == nil || f.Attacker == nil {
 		return
 	}
@@ -304,31 +517,31 @@ func (t *Tracker) flashed(f fact.Flashed, c *Context) {
 	v, a := f.Player, f.Attacker
 	// Both must be round members (rows in every collector): a mid-round reconnect can be relisted
 	// without joining the round (S19 Combine mid7214), and the oracle dereferences nil for it.
-	if !t.members[v.Steam64] || !t.members[a.Steam64] {
+	if !d.isMember(v.Steam64) || !d.isMember(a.Steam64) {
 		return
 	}
 	if a.Side == v.Side || blind <= tickRate || !v.Alive || v.FlashDuration >= blind/tickRate+1 {
 		return
 	}
 	c.Flash = true
-	b := t.blind[v.Steam64]
+	b := d.blind[v.Steam64]
 	if until := float64(f.Tick) + blind; until > b.Until {
 		b = Blind{a.Steam64, until}
-		t.blind[v.Steam64] = b
+		d.blind[v.Steam64] = b
 	}
 	c.Blind = b
 }
 
 // trade is an enemy kill's trades (D22): the victim's untraded enemy kills of the killer's
 // teammates within the window, then the kill itself becomes tradeable.
-func (t *Tracker) trade(f fact.Kill, c *Context) {
-	for _, k := range t.kills[actor(f.Victim)] {
+func (d *Deriver) trade(f fact.Kill, c *Context) {
+	for _, k := range d.kills[actor(f.Victim)] {
 		if !k.traded && k.team == *f.Killer.TeamStateID && f.Tick-k.Tick <= rating.TradeWindowTicks {
 			k.traded = true
 			c.Avenged = append(c.Avenged, k.Death)
 		}
 	}
-	t.kills[actor(f.Killer)] = append(t.kills[actor(f.Killer)],
+	d.kills[actor(f.Killer)] = append(d.kills[actor(f.Killer)],
 		&kill{Death: Death{f.Victim.Steam64, f.Tick}, team: *f.Victim.TeamStateID})
 }
 
@@ -351,17 +564,22 @@ func Enemies(a, b *fact.Player) (bool, error) {
 // alive is p alive at the start of the tick with no death this round: entity state is applied
 // after the tick's events, so it still shows earlier victims of the tick alive. Deaths go by actor:
 // keyed by Steam64, one bot's death made every bot (Steam64 0) dead at a disconnect recount.
-func (t *Tracker) alive(p fact.Player) bool {
-	return p.Alive && t.deaths[actor(&p)] == 0
+func (d *Deriver) alive(p fact.Player) bool {
+	return p.Alive && d.deaths[actor(&p)] == 0
 }
 
 // survivor is the last alive member with a round row.
-func (t *Tracker) survivor(members []fact.Player) uint64 {
+func (d *Deriver) survivor(members []fact.Player) uint64 {
 	var id uint64
 	for _, p := range members {
-		if t.members[p.Steam64] && t.alive(p) {
+		if d.isMember(p.Steam64) && d.alive(p) {
 			id = p.Steam64
 		}
 	}
 	return id
+}
+
+func (d *Deriver) isMember(steam uint64) bool {
+	_, ok := d.members[steam]
+	return ok
 }

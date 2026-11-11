@@ -612,29 +612,30 @@ func TestMidRoundJoin(t *testing.T) {
 	}
 }
 
-// recorder logs the lifecycle calls a collector sees.
+// recorder logs the lifecycle calls a stats sees.
 type recorder struct{ log []string }
 
-func (c *recorder) Open(*Match, *Round, fact.Snapshot, bool) error { return nil }
-func (c *recorder) RoundEnd(*Match, fact.RoundEnd) error           { return nil }
-func (c *recorder) Win(_ *Match, r *Round, _ fact.RoundEnd) error {
-	c.log = append(c.log, fmt.Sprintf("win %d", r.Num))
-	return nil
-}
-func (c *recorder) Join(_ *Match, _ *Round, mem Member) error {
-	c.log = append(c.log, fmt.Sprintf("join %d", mem.Steam64))
-	return nil
-}
-func (c *recorder) Commit(*Match, *Round, int) error {
+func (c *recorder) Open(*Round, fact.Snapshot, Roster) error { return nil }
+func (c *recorder) Commit(*Round, int) error {
 	c.log = append(c.log, "commit")
 	return nil
 }
-func (c *recorder) Fact(_ *Match, f fact.Fact) error {
-	switch f := f.(type) {
+func (c *recorder) Event(e Event) error {
+	if e.Join != nil {
+		c.log = append(c.log, fmt.Sprintf("join %d", e.Join.Steam64))
+	}
+	if e.Dropped {
+		return nil
+	}
+	switch f := e.Fact.(type) {
 	case fact.Hurt:
 		c.log = append(c.log, fmt.Sprintf("hurt %d", *f.Weapon))
 	case fact.Kill:
 		c.log = append(c.log, fmt.Sprintf("kill %d", *f.Weapon))
+	case fact.RoundEnd:
+		if e.Win {
+			c.log = append(c.log, fmt.Sprintf("win %d", f.RoundsPlayed))
+		}
 	}
 	return nil
 }
@@ -675,8 +676,8 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			// The world damage after the bomb's facts runs the deciding round's Win (D27).
-			wantTail := "hurt 404,kill 404,win 13"
+			// The world damage after the bomb's facts is dropped (D15).
+			wantTail := "win 13,hurt 404,kill 404"
 			if tc.winPanel {
 				wantTail += ",commit"
 			}
@@ -686,8 +687,8 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 			res, err := m.Finish(fact.Terminal{Kind: tc.term, Err: errors.New("stream"),
 				End: fact.Snapshot{Tick: s.tick + 500, RoundsPlayed: 13}})
 			want(t, res, err, Ended, 13)
-			if got := strings.Join(rec.log[len(rec.log)-4:], ","); got != "hurt 404,kill 404,win 13,commit" {
-				t.Errorf("last calls %v; want the bomb's facts, then the win and the commit", rec.log[len(rec.log)-4:])
+			if got := strings.Join(rec.log[len(rec.log)-4:], ","); got != "win 13,hurt 404,kill 404,commit" {
+				t.Errorf("last calls %v; want the win, the bomb's facts, then the commit", rec.log[len(rec.log)-4:])
 			}
 			if r := res.Rounds[12]; r.EndTick != end.Tick {
 				t.Errorf("end tick %d; want the RoundEnd's %d", r.EndTick, end.Tick)
@@ -707,10 +708,9 @@ func TestBracketedClanWithoutTag(t *testing.T) {
 	}
 }
 
-// Since CS2's bomb shockwave, an explosion's damage and kills arrive after RoundEnd. Win waits for
-// them and runs before any other kill, damage or flash, or the commit; other rounds win at RoundEnd
-// (D27).
-func TestExplosionWinWaitsForTheBomb(t *testing.T) {
+// Since CS2's bomb shockwave, an explosion's damage and kills arrive after RoundEnd. The lifecycle
+// passes every fact in order with the RoundEnd's win; the stats place the Win (engine/round, D27).
+func TestExplosionFactsKeepTheirOrder(t *testing.T) {
 	bomb, rifle := eqBomb, 303
 	s := newSim()
 	s.open()
@@ -728,7 +728,7 @@ func TestExplosionWinWaitsForTheBomb(t *testing.T) {
 	end.Reason = reasonTargetBombed
 	s.facts[len(s.facts)-1] = end
 	wave := fact.Snapshot{Tick: end.Tick + 37, RoundsPlayed: 2}
-	s.add(fact.Frame{Tick: end.Tick + 1}, fact.PlayerInfo{Tick: end.Tick + 2}, fact.Hurt{Snapshot: wave, Weapon: &bomb},
+	s.add(frame(fact.Snapshot{Tick: end.Tick + 1}), fact.PlayerInfo{Tick: end.Tick + 2}, fact.Hurt{Snapshot: wave, Weapon: &bomb},
 		fact.Kill{Snapshot: wave, Weapon: &bomb},
 		fact.Kill{Snapshot: fact.Snapshot{Tick: end.Tick + 60, RoundsPlayed: 2}, Weapon: &rifle}, official)
 
@@ -749,7 +749,7 @@ func TestExplosionWinWaitsForTheBomb(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	want := "win 1,kill 303,commit,hurt 404,kill 404,win 2,kill 303,commit,win 3,kill 404,commit"
+	want := "win 1,kill 303,commit,win 2,hurt 404,kill 404,kill 303,commit,win 3,kill 404,commit"
 	if got := strings.Join(rec.log, ","); got != want {
 		t.Errorf("calls %s; want %s", got, want)
 	}

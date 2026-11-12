@@ -16,9 +16,6 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
-// mr is half the regulation rounds (MR12).
-const mr = 12
-
 // Outcome is what the demo holds.
 type Outcome uint8
 
@@ -181,8 +178,8 @@ func (m *Match) InRound() bool { return m.inRound }
 // Members is the oracle's getTeamMembers over s for side.
 func (m *Match) Members(s fact.Snapshot, side fact.Side) []fact.Player { return m.members(s, side) }
 
-// lurkTicks is the lurk sampler's cadence: 4 s at the oracle's 64 tick rate.
-const lurkTicks = 4 * 64
+// lurkTicks is the lurk sampler's cadence: 4 s at the oracle's tick rate.
+const lurkTicks = 4 * fact.TickRate
 
 // collect passes a stat fact to the stats, after the lifecycle's own update. Only a lurk-cadence
 // frame is passed, with its sample.
@@ -516,9 +513,9 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if !okW || !okL {
 		return m.fail(f.Tick, "round %d: team %q or %q not in the match", f.RoundsPlayed, winner, loser)
 	}
-	if matchIsDecided(mr+1, w, l) {
+	if matchIsDecided(fact.MR+1, w, l) {
 		m.winnerClan = winner
-		if f.Reason != reasonTargetBombed {
+		if f.Reason != fact.ReasonTargetBombed {
 			return m.final(f.Tick, f.RoundsPlayed, true)
 		}
 		// The explosion's damage and kills arrive after RoundEnd: the deciding round commits at the
@@ -548,11 +545,6 @@ func (m *Match) setScore(tick int, team string, score int) error {
 	return nil
 }
 
-const (
-	reasonTargetBombed = 1   // RoundEnd.Reason when the bomb exploded
-	eqBomb             = 404 // the bomb's equipment type
-)
-
 // bombFact reports whether f is the bomb's damage or kill.
 func bombFact(f fact.Fact) bool {
 	var w *int
@@ -562,7 +554,7 @@ func bombFact(f fact.Fact) bool {
 	case fact.Kill:
 		w = f.Weapon
 	}
-	return w != nil && *w == eqBomb
+	return w != nil && *w == fact.EqBomb
 }
 
 // flush commits the pending deciding round and ends the match.
@@ -635,9 +627,9 @@ func (m *Match) teamName(tick int, clan string, side fact.Side) (string, error) 
 	}
 	round := m.potential.Num
 	swap := false
-	if round >= mr+1 && round <= mr*2+3 {
+	if round >= fact.MR+1 && round <= fact.MR*2+3 {
 		swap = true
-	} else if round >= mr*2+4 && (round-(mr*2+4))/6%2 != 0 {
+	} else if round >= fact.MR*2+4 && (round-(fact.MR*2+4))/6%2 != 0 {
 		swap = true
 	}
 	switch {
@@ -653,15 +645,15 @@ func (m *Match) teamName(tick int, clan string, side fact.Side) (string, error) 
 // matchIsDecided is the oracle's clinch rule for MR12 (13 to win, OT blocks of 6); a level score is
 // left to the tie fallback. See fragg-3.0#23.
 func matchIsDecided(roundsToWin, winner, loser int) bool {
-	if roundsToWin != mr+1 {
+	if roundsToWin != fact.MR+1 {
 		return false
 	}
-	if winner == mr+1 && loser < mr {
+	if winner == fact.MR+1 && loser < fact.MR {
 		return true
 	}
-	if winner > mr {
-		overtime := (winner+loser-mr*2-1)/6 + 1
-		return (winner-mr-1)/3 == overtime
+	if winner > fact.MR {
+		overtime := (winner+loser-fact.MR*2-1)/6 + 1
+		return (winner-fact.MR-1)/3 == overtime
 	}
 	return false
 }

@@ -10,38 +10,8 @@ import (
 	shared "github.com/csconfederation/fragg-3.0/engine/round"
 )
 
-// The oracle's constants (csc/parser.go).
-const (
-	tickRate = 64
-	eqAWP    = 309
-)
-
 var multiKillBonus = [...]float64{0, 0, 0.3, 0.7, 1.2, 2}
 var clutchBonus = [...]float64{0, 0.2, 0.6, 1.2, 2, 3}
-
-var roundEndReasons = map[int]string{
-	0:  "StillInProgress", //base values
-	1:  "TargetBombed",
-	2:  "VIPEscaped",
-	3:  "VIPKilled",
-	4:  "TerroristsEscaped",
-	5:  "CTStoppedEscape",
-	6:  "TerroristsStopped",
-	7:  "BombDefused",
-	8:  "CTWin",
-	9:  "TerroristsWin",
-	10: "Draw",
-	11: "HostagesRescued",
-	12: "TargetSaved",
-	13: "HostagesNotRescued",
-	14: "TerroristsNotEscaped",
-	15: "VIPNotEscaped",
-	16: "GameStart",
-	17: "TerroristsSurrender",
-	18: "CTSurrender",
-	19: "TerroristsPlanted",
-	20: "CTsReachedHostage",
-}
 
 // Host is the lifecycle's view the collector reads. The replay of a buffered round supplies it from
 // each event, until the calculators replace the collector.
@@ -109,7 +79,7 @@ func (c *Collector) Join(m Host, r *match.Round, mem match.Member) error {
 func (c *Collector) Win(m Host, r *match.Round, f fact.RoundEnd) error {
 	pr := c.potential
 	pr.WinnerENUM = int(f.Winner)
-	pr.RoundEndReason = roundEndReasons[f.Reason]
+	pr.RoundEndReason = fact.RoundEndName(f.Reason)
 	pr.WinnerClanName = r.WinnerClan
 	return nil
 }
@@ -227,14 +197,14 @@ func (c *Collector) Commit(m Host, r *match.Round, tick int, s shared.State) err
 	var lurker uint64
 	blips, invalid := 0, false
 	for _, p := range pr.PlayerStats {
-		if p.Side == 2 && p.LurkerBlips > blips {
+		if p.Side == int(fact.SideT) && p.LurkerBlips > blips {
 			blips = p.LurkerBlips
 			lurker, _ = strconv.ParseUint(p.SteamID, 10, 64)
 		}
 	}
 	for _, p := range pr.PlayerStats {
 		id, _ := strconv.ParseUint(p.SteamID, 10, 64)
-		if p.Side == 2 && p.LurkerBlips == blips && id != lurker {
+		if p.Side == int(fact.SideT) && p.LurkerBlips == blips && id != lurker {
 			invalid = true
 		}
 	}
@@ -285,7 +255,7 @@ func (c *Collector) Fact(m Host, f fact.Fact, x shared.Context) error {
 			return fmt.Errorf("grenade without a weapon at tick %d", f.Tick)
 		}
 		switch *f.Weapon {
-		case 506, 505, 504, 502, 503:
+		case fact.EqHE, fact.EqSmoke, fact.EqFlash, fact.EqMolotov, fact.EqIncendiary:
 			// demoinfocs v6 can leave the thrower unresolved, and a thrower without round stats gets
 			// no count (the oracle dereferences nil for both).
 			if f.Thrower == nil {
@@ -296,11 +266,11 @@ func (c *Collector) Fact(m Host, f fact.Fact, x shared.Context) error {
 				return nil
 			}
 			switch *f.Weapon {
-			case 506:
+			case fact.EqHE:
 				p.NadesThrown++
-			case 505:
+			case fact.EqSmoke:
 				p.SmokeThrown++
-			case 504:
+			case fact.EqFlash:
 				p.FlashThrown++
 			default:
 				p.FiresThrown++
@@ -313,11 +283,11 @@ func (c *Collector) Fact(m Host, f fact.Fact, x shared.Context) error {
 // lurk is the oracle's FrameDone lurker sampler: every 4 s of a round after the first 18 s, the
 // live T furthest from... nearest-but-not-close to their teammates gets a blip.
 func (c *Collector) lurk(m Host, f fact.Frame, s shared.State) error {
-	if !m.InRound() || c.lastTickProcessed+4*tickRate >= f.Tick {
+	if !m.InRound() || c.lastTickProcessed+4*fact.TickRate >= f.Tick {
 		return nil
 	}
 	c.lastTickProcessed = f.Tick
-	if s.TAlive <= 2 || s.Phase == shared.Decided || f.Tick <= 18*tickRate+c.potential.StartingTick {
+	if s.TAlive <= 2 || s.Phase == shared.Decided || f.Tick <= 18*fact.TickRate+c.potential.StartingTick {
 		return nil
 	}
 	pS := c.potential.PlayerStats
@@ -385,12 +355,12 @@ func (c *Collector) hurt(f fact.Hurt, x shared.Context) error {
 		}
 		a.Damage += f.HealthDamageTaken
 		pS[f.Player.Steam64].DamageList[f.Attacker.Steam64] += f.HealthDamageTaken
-		if equipment >= 500 && equipment <= 506 {
+		if equipment >= 500 && equipment <= fact.EqHE {
 			a.UtilDmg += f.HealthDamageTaken
-			if equipment == 506 {
+			if equipment == fact.EqHE {
 				a.NadeDmg += f.HealthDamageTaken
 			}
-			if equipment == 502 || equipment == 503 {
+			if equipment == fact.EqMolotov || equipment == fact.EqIncendiary {
 				a.InfernoDmg += f.HealthDamageTaken
 			}
 		}
@@ -408,7 +378,7 @@ func (c *Collector) flashed(f fact.Flashed, x shared.Context) error {
 		return missing("flasher", f.Attacker.Steam64)
 	}
 	fp.Ef++
-	fp.EnemyFlashTime += f.Duration * float64(tickRate) / float64(tickRate) // the oracle's arithmetic, bit for bit
+	fp.EnemyFlashTime += f.Duration * float64(fact.TickRate) / float64(fact.TickRate) // the oracle's arithmetic, bit for bit
 	if vp == nil {
 		return missing("flashed player", f.Player.Steam64)
 	}
@@ -511,7 +481,7 @@ func (c *Collector) kill(f fact.Kill, x shared.Context) error {
 		k.Kills++
 		k.KastRounds = 1
 		k.Rwk = 1
-		if *f.Weapon == eqAWP {
+		if *f.Weapon == fact.EqAWP {
 			k.AwpKills++
 			if killer.Side == fact.SideCT {
 				k.CtAWP++

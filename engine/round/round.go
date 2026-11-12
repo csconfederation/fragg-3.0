@@ -14,13 +14,6 @@ import (
 	"github.com/csconfederation/fragg-3.0/rating"
 )
 
-const (
-	mr                 = 12
-	eqBomb             = 404
-	tickRate           = 64
-	reasonTargetBombed = 1 // RoundEnd.Reason when the bomb exploded
-)
-
 // Phase is where the round stands. Exactly one holds at a time.
 type Phase uint8
 
@@ -244,7 +237,7 @@ func (d *Deriver) Event(e match.Event) error {
 		c.After = d.s
 		d.add(e, c)
 		if e.Win {
-			if i := len(d.cur.Events) - 1; f.Reason == reasonTargetBombed {
+			if i := len(d.cur.Events) - 1; f.Reason == fact.ReasonTargetBombed {
 				d.pending = &i
 			} else {
 				d.win(i)
@@ -354,7 +347,7 @@ func bombFact(f fact.Fact) bool {
 	case fact.Kill:
 		w = f.Weapon
 	}
-	return w != nil && *w == eqBomb
+	return w != nil && *w == fact.EqBomb
 }
 
 // win is the Win of the RoundEnd at event i, where today's hold runs it.
@@ -440,14 +433,14 @@ func (d *Deriver) apply(e match.Event, c *Context) error {
 }
 
 func isRoundFinalInHalf(round int) bool {
-	return round%mr == 0 || (round > mr*2 && round%3 == 0)
+	return round%fact.MR == 0 || (round > fact.MR*2 && round%3 == 0)
 }
 
 // bombIgnored is the filter on bomb kills and damage in a half's final round, where a bomb can
 // explode after the round was won by elimination. D10: the bomb still counts when it ends the
 // round, or when the round is undecided (v5 delivered the bomb's kills before the explosion).
 func (d *Deriver) bombIgnored(weapon int) bool {
-	return weapon == eqBomb && isRoundFinalInHalf(d.s.Num) && d.s.Phase == Decided && !d.s.BombDecided
+	return weapon == fact.EqBomb && isRoundFinalInHalf(d.s.Num) && d.s.Phase == Decided && !d.s.BombDecided
 }
 
 func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
@@ -471,7 +464,7 @@ func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 		// Clutches (corpus finding 6): a bomb death at the explosion can't start one, and the
 		// clutcher is the side's member with no death this round, not the entity's IsAlive(),
 		// which lags the kill.
-		if d.s.Phase != Decided && *f.Weapon != eqBomb {
+		if d.s.Phase != Decided && *f.Weapon != fact.EqBomb {
 			if d.s.TAlive == 1 && d.s.TClutch.Size == 0 {
 				d.s.TClutch = Clutch{d.s.CTAlive, d.survivor(roster.Members(f.Snapshot, fact.SideT))}
 			}
@@ -513,14 +506,14 @@ func (d *Deriver) flashed(f fact.Flashed, c *Context) {
 	if f.Player == nil || f.Attacker == nil {
 		return
 	}
-	blind := f.Duration * tickRate
+	blind := f.Duration * fact.TickRate
 	v, a := f.Player, f.Attacker
 	// Both must be round members (rows in every collector): a mid-round reconnect can be relisted
 	// without joining the round (S19 Combine mid7214), and the oracle dereferences nil for it.
 	if !d.isMember(v.Steam64) || !d.isMember(a.Steam64) {
 		return
 	}
-	if a.Side == v.Side || blind <= tickRate || !v.Alive || v.FlashDuration >= blind/tickRate+1 {
+	if a.Side == v.Side || blind <= fact.TickRate || !v.Alive || v.FlashDuration >= blind/fact.TickRate+1 {
 		return
 	}
 	c.Flash = true

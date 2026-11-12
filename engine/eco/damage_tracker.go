@@ -1,6 +1,7 @@
 package eco
 
 import (
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 	"maps"
 	"slices"
@@ -129,7 +130,7 @@ func (dt *DamageTracker) GetKillerDamage(killerID, victimID uint64) int {
 // deduped per attacker (keeps the longest-duration entry).
 func (dt *DamageTracker) GetFlashAssists(victimID uint64, currentTick int, tickRate float64) []swing.FlashAssist {
 	if tickRate <= 0 {
-		tickRate = 64
+		tickRate = fact.TickRate
 	}
 
 	bestByAttacker := make(map[uint64]FlashInfo)

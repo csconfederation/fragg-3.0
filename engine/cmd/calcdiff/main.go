@@ -55,7 +55,8 @@ type family struct {
 // families are the compared families, in the plan's order: combat, KAST, trades, openings,
 // clutches, utility, objectives (+Finish), survival, economy, positioning, swing.
 var families = []family{
-	{"Combat", ecoCombat},
+	{name: "Combat", eco: ecoCombat},
+	{name: "Utility"},
 }
 
 // ecoCombat is the eco-origin Combat fields as one round's eco row gives them: the per-round form
@@ -248,11 +249,11 @@ func playerRow(id uint64) string { return "player:" + strconv.FormatUint(id, 10)
 // fieldDiffs compares one family struct field by field, floats exactly: one ULP is a difference.
 func (rp *report) fieldDiffs(demo string, num int, id uint64, fam string, ov, nv reflect.Value) {
 	for i := range ov.NumField() {
-		tag := ov.Type().Field(i).Tag.Get("json")
-		if tag == "-" {
-			continue
+		// An internal sum (json:"-") is compared too, by its Go name: the family's eco hook sets the old side's.
+		name, _, _ := strings.Cut(ov.Type().Field(i).Tag.Get("json"), ",")
+		if name == "-" {
+			name = ov.Type().Field(i).Name
 		}
-		name, _, _ := strings.Cut(tag, ",")
 		rp.fields++
 		if o, n := ov.Field(i), nv.Field(i); !reflect.DeepEqual(o.Interface(), n.Interface()) {
 			rp.add(diff{demo: demo, round: num, evt: -1, row: playerRow(id), field: name, class: "value",

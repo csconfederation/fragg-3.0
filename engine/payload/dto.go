@@ -70,7 +70,7 @@ func build(g *cscstats.Game, res *match.Result) *Payload {
 		}
 	}
 	for _, r := range g.Rounds {
-		rr := Round{Round: roundRow(r)}
+		rr := Round{Round: RoundRow(r)}
 		for _, steam := range slices.Sorted(maps.Keys(rr.Round.Players)) {
 			rr.Players = append(rr.Players, rr.Round.Players[steam])
 		}
@@ -98,7 +98,9 @@ func playerRow(src *cscstats.PlayerStats) *row.Player {
 	return p
 }
 
-func roundRow(src *cscstats.Round) *row.Round {
+// RoundRow is a committed round's row as the payload holds it, constants applied. cmd/calcdiff compares
+// the calculators with it.
+func RoundRow(src *cscstats.Round) *row.Round {
 	r := &row.Round{Players: map[uint64]*row.Player{}}
 	copyRow(r, src)
 	setConstants(r, scopeRound)

@@ -36,6 +36,9 @@ func New() *Collector {
 	return &Collector{potential: &round{}, rounds: map[*match.Round]*round{}}
 }
 
+// Row is the open round's row for steam, or nil. derivediff reads it to check the deriver's gates.
+func (c *Collector) Row(steam uint64) *PlayerStats { return c.potential.PlayerStats[steam] }
+
 func missing(what string, steam uint64) error {
 	return fmt.Errorf("no player stats for %s %d", what, steam) // the oracle dereferences nil here
 }

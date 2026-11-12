@@ -60,6 +60,7 @@ var families = []family{
 	{name: "KAST", eco: ecoKAST},
 	{name: "Trades", eco: ecoTrades},
 	{name: "Openings", team: "TeamOpenings", eco: ecoOpenings},
+	{name: "Clutches", team: "TeamClutches", eco: ecoClutches},
 	{name: "Utility"},
 	{name: "Survival", team: "TeamSurvival", eco: func(old *row.Player, rs *model.RoundStats) {
 		old.EcoDeathTime, old.EcoTimeAlive = rs.DeathTime, rs.TimeAlive
@@ -115,6 +116,26 @@ func ecoOpenings(old *row.Player, rs *model.RoundStats) {
 	o := &old.Openings
 	o.AWPOpeningKills = b2i(rs.AWPOpeningKill)
 	o.ManAdvantageKills, o.ManDisadvantageDeaths = rs.ManAdvantageKills, rs.ManDisadvantageDeaths
+}
+
+// ecoClutches is the eco-origin clutch attempts as one round's eco row gives them (fold.go FoldRound).
+func ecoClutches(old *row.Player, rs *model.RoundStats) {
+	c := &old.Clutches
+	if !rs.ClutchAttempt {
+		return
+	}
+	switch rs.ClutchSize {
+	case 1:
+		c.Clutch1v1Attempts = 1
+	case 2:
+		c.Clutch1v2Attempts = 1
+	case 3:
+		c.Clutch1v3Attempts = 1
+	case 4:
+		c.Clutch1v4Attempts = 1
+	case 5:
+		c.Clutch1v5Attempts = 1
+	}
 }
 
 func b2i(b bool) int {

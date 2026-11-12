@@ -5,6 +5,7 @@
 package calc
 
 import (
+	"github.com/csconfederation/fragg-3.0/engine/calc/clutches"
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
 	"github.com/csconfederation/fragg-3.0/engine/calc/economy"
 	"github.com/csconfederation/fragg-3.0/engine/calc/kast"
@@ -31,6 +32,7 @@ var All = []Calc{
 	kast.Calc,
 	trades.Calc,
 	openings.Calc,
+	clutches.Calc,
 	utility.Calc,
 	survival.Calc,
 	economy.Calc,

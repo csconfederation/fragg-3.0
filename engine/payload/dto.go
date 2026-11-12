@@ -116,6 +116,14 @@ func RoundRow(src *cscstats.Round) *row.Round {
 	return r
 }
 
+// RoundTeam is a team's row in a round, without the match row's constants. cmd/calcdiff compares the
+// calculators with it.
+func RoundTeam(src *cscstats.TeamStats) *row.Team {
+	t := &row.Team{}
+	copyRow(t, src)
+	return t
+}
+
 // teamRow is nil for a team without stats.
 func teamRow(src *cscstats.TeamStats) *row.Team {
 	if src == nil {

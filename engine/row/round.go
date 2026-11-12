@@ -1,11 +1,14 @@
 package row
 
+import "github.com/csconfederation/fragg-3.0/engine/fact"
+
 // Round is a committed round: its meta, bomb fields and player rows. The payload lists the player
 // rows itself.
 type Round struct {
 	Meta
 	Bomb
-	Players map[uint64]*Player `json:"-"`
+	Players map[uint64]*Player  `json:"-"`
+	Teams   map[fact.Side]*Team `json:"-"`
 }
 
 type Meta struct {

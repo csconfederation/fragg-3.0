@@ -10,10 +10,10 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/round"
 )
 
-// replay drives today's collectors from each committed round's buffer, in the oracle's order: per
+// Replay drives today's collectors from each committed round's buffer, in the oracle's order: per
 // event eco then CSC; at round phases CSC then eco. It goes until the calculators replace the
 // collectors (PR 18).
-type replay struct {
+type Replay struct {
 	csc    *cscstats.Collector
 	eco    *eco.Collector
 	rounds map[*match.Round]*eco.Round   // by the lifecycle's round
@@ -21,13 +21,13 @@ type replay struct {
 	roster match.Roster                  // the current event's, for the collector's Members
 }
 
-func newReplay() *replay {
-	return &replay{csc: cscstats.New(), eco: eco.New(), rounds: map[*match.Round]*eco.Round{},
+func NewReplay() *Replay {
+	return &Replay{csc: cscstats.New(), eco: eco.New(), rounds: map[*match.Round]*eco.Round{},
 		seen: map[*match.Round]*match.Round{}}
 }
 
 // views is res with the rounds the CSC collector holds.
-func (p *replay) views(res *match.Result) *match.Result {
+func (p *Replay) views(res *match.Result) *match.Result {
 	v := &match.Result{Rounds: make([]*match.Round, 0, len(res.Rounds))}
 	for _, r := range res.Rounds {
 		v.Rounds = append(v.Rounds, p.seen[r])
@@ -36,15 +36,15 @@ func (p *replay) views(res *match.Result) *match.Result {
 }
 
 // The collector's view of the lifecycle: buffered events are live and in a round.
-func (p *replay) Live() bool    { return true }
-func (p *replay) InRound() bool { return true }
-func (p *replay) Members(s fact.Snapshot, side fact.Side) []fact.Player {
+func (p *Replay) Live() bool    { return true }
+func (p *Replay) InRound() bool { return true }
+func (p *Replay) Members(s fact.Snapshot, side fact.Side) []fact.Player {
 	return p.roster.Members(s, side)
 }
 
 // Round replays one committed round. A round's own copy stands in for the lifecycle's, whose members
 // gain joins after the open.
-func (p *replay) Round(r *round.Round) error {
+func (p *Replay) Round(r *round.Round) error {
 	mr := &match.Round{Num: r.Num, StartTick: r.StartTick, Pistol: r.Pistol, FreezeEnd: r.FreezeEnd,
 		InitT: r.InitT, InitCT: r.InitCT, TClan: r.TClan, CTClan: r.CTClan, Members: maps.Clone(r.OpenMembers)}
 	p.seen[r.Key] = mr
@@ -98,7 +98,7 @@ func (p *replay) Round(r *round.Round) error {
 	return nil
 }
 
-func (p *replay) event(mr *match.Round, e *round.Event) error {
+func (p *Replay) event(mr *match.Round, e *round.Event) error {
 	if e.Dropped {
 		return nil
 	}
@@ -123,9 +123,14 @@ func (p *replay) event(mr *match.Round, e *round.Event) error {
 	return p.fact(f, e.Context)
 }
 
-func (p *replay) fact(f fact.Fact, x round.Context) error {
+func (p *Replay) fact(f fact.Fact, x round.Context) error {
 	if err := p.eco.Fact(f, x); err != nil {
 		return err
 	}
 	return p.csc.Fact(p, f, x)
+}
+
+// Rows are the collectors' rows for a committed round, once the round and its tail are replayed.
+func (p *Replay) Rows(key *match.Round) (*cscstats.Round, *eco.Round) {
+	return p.csc.Round(p.seen[key]), p.rounds[key]
 }

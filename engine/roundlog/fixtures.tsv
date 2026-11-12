@@ -1,0 +1,60 @@
+# demo (under /mnt/cs2-demos)	round	why: the decision, quirk or section the round is a fixture for
+csc-demo-corpus/demos/s21/M09/s21-M09-BoardwalkBruisers-vs-PeasantPythons-mid9986-0_de_mirage-2026-10-21_02-05-52.dem	1	D13 pistol round 1
+csc-demo-corpus/demos/s21/M09/s21-M09-BoardwalkBruisers-vs-PeasantPythons-mid9986-0_de_mirage-2026-10-21_02-05-52.dem	13	D13 pistol round 13
+csc-demo-corpus/demos/s21/M09/s21-M09-BoardwalkBruisers-vs-PeasantPythons-mid9986-0_de_mirage-2026-10-21_02-05-52.dem	25	D13 overtime round, no pistol rating
+csc-demo-corpus/demos/s21/M09/s21-M09-BoardwalkBruisers-vs-PeasantPythons-mid9986-0_de_mirage-2026-10-21_02-05-52.dem	27	D10 D14 D23: the bomb won an OT half-final; clutch entered by a team kill
+csc-demo-corpus/demos/s20/M13/s20-M13-Pathfinders-vs-BrisketBombers-mid9217-1_de_inferno-2026-07-17_02-08-36.dem	2	Q10: assist on a same-team kill
+csc-demo-corpus/demos/s20/M13/s20-M13-Pathfinders-vs-BrisketBombers-mid9217-1_de_inferno-2026-07-17_02-08-36.dem	9	Q42 D42: same-tick trade
+csc-demo-corpus/demos/s20/M13/s20-M13-Pathfinders-vs-BrisketBombers-mid9217-1_de_inferno-2026-07-17_02-08-36.dem	14	Q9c D34: flasher is the assister, eac twice
+csc-demo-corpus/demos/s20/M13/s20-M13-Pathfinders-vs-BrisketBombers-mid9217-1_de_inferno-2026-07-17_02-08-36.dem	18	D15 D27: the bomb won the deciding round
+csc-demo-corpus/demos/s17/M08/s17-M08-Shogun-vs-Leviathans-mid6352-0_de_inferno-2025-07-01_02-06-34.dem	1	D20 D47: average time to death
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	7	D22 Q41 D41: trades; collapsed expiry; entries left at round end
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	8	Q41 D41: collapsed expiry
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	9	Q15 D38 Q54: lurker disqualified; residual fallback
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	14	Q9b D34: flasher is the killer
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	15	Q41 D41: entries left at round end
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	18	Q41 D41: entries left at round end
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	19	Q10 Q15 D38: assist on a same-team kill; lurker already disqualified
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	23	D27 Q32: explosion Win ended by a Hurt
+csc-demo-corpus/demos/s20/M15/s20-M15-WallingWizards-vs-Onryos-mid9275-0_de_anubis-2026-07-25_01-36-03.dem	24	Q10: assist on a same-team kill
+csc-demo-corpus/demos/s17/M10-mid6411-FragginFrogs-vs-SludgeSquad/s17-M10-FragginFrogs-vs-SludgeSquad-mid6411-0_de_ancient-2025-07-09_02-10-32.dem	13	D23: clutch entered by a team kill
+csc-demo-corpus/demos/s20/M13/s20-M13-Assassins-vs-SovereignSerpents-mid9223-1_de_anubis-2026-07-17_01-49-26.dem	3	D27 Q32: bomb facts after the hold ended
+csc-demo-corpus/demos/s20/M13/s20-M13-Assassins-vs-SovereignSerpents-mid9223-0_de_nuke-2026-07-17_01-16-05.dem	11	Q6 D33: alive list differs from the count
+csc-demo-corpus/demos/s16/M14/s16-M14-Triggermen-vs-TeamFlash-mid5754-0_de_anubis-2025-03-28_01-22-09.dem	4	D27 Q32: explosion Win ended by a Hurt
+csc-demo-corpus/demos/s16/M14/s16-M14-Triggermen-vs-TeamFlash-mid5754-0_de_anubis-2025-03-28_01-22-09.dem	17	Q11: non-enemy first death
+csc-demo-corpus/demos/s16/M14/s16-M14-Triggermen-vs-TeamFlash-mid5754-0_de_anubis-2025-03-28_01-22-09.dem	18	Q9c D34
+csc-demo-corpus/demos/s16/M14/s16-M14-Triggermen-vs-TeamFlash-mid5754-0_de_anubis-2025-03-28_01-22-09.dem	22	Q15 D38: lurker is neither min nor max
+csc-demo-corpus/demos/s13/M05-mid3077-Marauders-vs-SludgeSquad/s13-M05-Marauders-vs-SludgeSquad-mid3077-0_de_mirage-2024-02-23_03-07-25.dem	6	clutch fixture (mid3077)
+csc-demo-corpus/demos/s12/M05-mid2439-RockemSockem-vs-Ronin/s12-M05-Bigwelds-vs-Ronin-mid2439-1_None-2023-10-18 02:57:47.852633+00:00.dem	6	clutch fixture (mid2439)
+csc-demo-corpus/demos/s15/M05/s15-M05-GunkyGoons-vs-Manhacks-mid4728-0_de_ancient-2024-10-11_02-07-10.dem	11	clutch fixture (mid4728)
+csc-demo-corpus/demos/s21/M09/s21-M09-Impastas-vs-Aces-mid9949-0_de_nuke-2026-10-21_02-11-31.dem	14	D32: clutch with no enemy faced
+csc-demo-corpus/demos/s13/M12/s13-M12-TheAssociates-vs-RagingRigatoni-mid3370-0_de_mirage-2024-03-20_02-06-31.dem	20	D33 D44: disconnect recount; disconnect alive on a losing team
+csc-demo-corpus/demos/s14/M04/s14-M04-RagingRigatoni-vs-BrisketBombers-mid3771-0_de_dust2-2024-06-12_02-10-18.dem	7	D33 D44: disconnect recount; winning side
+csc-demo-corpus/demos/s12/M07-mid2520-Cardinals-vs-Caracals/s12-M07-Cardinals-vs-Caracals-mid2520-1_None-2023-10-25 02:32:49.416668+00:00.dem	26	D33: 5v4 roster
+csc-demo-corpus/demos/s19/M08-mid8055-SaltyScripters-vs-TheBachelors/s19-M08-SaltyScripters-vs-TheBachelors-mid8055-0_de_ancient-2026-03-06_03-08-47.dem	3	Q15 D38: lurker disqualified
+csc-demo-corpus/demos/s19/M08-mid8055-SaltyScripters-vs-TheBachelors/s19-M08-SaltyScripters-vs-TheBachelors-mid8055-0_de_ancient-2026-03-06_03-08-47.dem	6	Q9b D34
+csc-demo-corpus/demos/s19/M08-mid8055-SaltyScripters-vs-TheBachelors/s19-M08-SaltyScripters-vs-TheBachelors-mid8055-0_de_ancient-2026-03-06_03-08-47.dem	16	Q9c D34
+csc-demo-corpus/demos/s20/M05/s20-M05-Wyrms-vs-CrownedCobras-mid8878-0_de_dust2-2026-06-17_02-03-59.dem	12	Q9b D34
+csc-demo-corpus/demos/s20/M05/s20-M05-Wyrms-vs-CrownedCobras-mid8878-0_de_dust2-2026-06-17_02-03-59.dem	15	D35: flash assist without KAST
+csc-demo-corpus/demos/s21/Combines/08-18/combine-prospect-mid8533-0_de_mirage-2026-08-18_04-12-33.dem	2	Q15 D38: lurker is neither min nor max
+csc-demo-corpus/demos/s21/Combines/08-18/combine-prospect-mid8533-0_de_mirage-2026-08-18_04-12-33.dem	22	D35
+csc-demo-corpus/demos/s21/Combines/08-18/combine-prospect-mid8533-0_de_mirage-2026-08-18_04-12-33.dem	23	Q15 D38: lurker is neither min nor max
+csc-demo-corpus/demos/s21/Combines/08-18/combine-prospect-mid8533-0_de_mirage-2026-08-18_04-12-33.dem	25	D35
+csc-demo-corpus/demos/s21/M08/s21-M08-Aces-vs-TheMolotovs-mid9900-0_de_inferno-2026-10-21_00-55-00.dem	18	Q10: assist on a suicide
+csc-demo-corpus/demos/s21/Combines/08-20/combine-recruit-mid8821-0_de_inferno-2026-08-21_02-43-44.dem	1	Q11: both teams 4v5
+csc-demo-corpus/demos/s21/M08/s21-M08-CrownedCobras-vs-BrisketBombers-mid9928-0_de_mirage-2026-10-21_00-53-27.dem	8	Q11: both teams 4v5
+csc-demo-corpus/demos/s18/Combines/combine-elite-mid6155-0_de_overpass-2025-09-03_01-11-49.dem	2	Q11: both teams 4v5
+csc-demo-corpus/demos/s13/M13/s13-M13-HolySmokes-vs-Storm-mid3421-0_de_vertigo-2024-03-22_01-56-13.dem	6	Q11: non-enemy first death
+csc-demo-corpus/demos/s21/M07/s21-M07-SuzukaSprinters-vs-PrettyPenne-mid9867-0_de_mirage-2026-10-14_02-07-29.dem	5	Q42 D42: same-tick trade
+csc-demo-corpus/demos/s21/M09/s21-M09-Ronin-vs-Wedgies-mid9983-0_de_inferno-2026-10-21_02-07-43.dem	21	Q42 D42: same-tick trade
+csc-demo-corpus/demos/s18/M01-mid6831-Mulligans-vs-Roombas/s18-M01-Mulligans-vs-Roombas-mid6831-0_de_overpass-2025-10-03_02-14-41.dem	23	D43: rounds survived
+csc-demo-corpus/demos/s21/Combines/08-26/combine-prospect-mid9331-0_de_dust2-2026-08-27_01-19-13.dem	8	Q32 D27: explosion Win ended by a Flashed
+csc-demo-corpus/demos/s13/M14/s13-M14-BootyHunters-vs-WallingWizards-mid3430-1_de_anubis-2024-03-27_02-04-36.dem	6	Q32 D27: explosion Win ended by a Flashed
+csc-demo-corpus/demos/s20/M09/s20-M09-BoardwalkBruisers-vs-Guppies-mid9072-0_de_inferno-2026-07-01_02-27-35.dem	18	Q32 D27: explosion Win ended by a Disconnect
+csc-demo-corpus/demos/s12/M03-mid2346-Necromancers-vs-IronGiants/s12-M03-Necromancers-vs-Roombas-mid2346-1_None-2023-10-11 02:47:34.717651+00:00.dem	3	§6: a Win followed by two trades before the commit
+csc-demo-corpus/demos/s14/M09/s14-M09-Orochis-vs-RibeyeRippers-mid3984-0_de_anubis-2024-06-28_02-10-33.dem	14	§6 D27: explosion wave, then trades before the commit
+league-archive/s21/M08/s21-M08-HolySmokes-vs-SaltyScripters-mid9922-0_de_dust2-2026-10-16_02-10-49.dem	15	D15: the bomb won the deciding round (13-2)
+s19/Combines/01-12/combine-elite-mid7214-0_de_nuke-2026-01-13_06-11-50.dem	7	mid-round reconnect (a Disconnect, then relisted alive; fragg#57)
+csc-demo-corpus/demos/s19/M09/s19-M09-TestHomeTeam-vs-TestAwayTeam-mid8364-0_de_mirage-2026-05-27_00-14-24.dem	1	D32 Q5 Q17: test lobby, 1v1 rosters (clutch slot of size 0)
+csc-demo-corpus/demos/s19/M09/s19-M09-TestHomeTeam-vs-TestAwayTeam-mid8364-0_de_mirage-2026-05-27_00-14-24.dem	12	Q67: a tail after the commit holding a TeamChange; roster not 5v5
+csc-demo-corpus/demos/s21/P06/Bowie-2026-09-18_02-05-09_1_de_dust2_team_kryz_vs_team_professional_gamer.dem	12	Q67: a tail after the commit holding 11 TeamChanges

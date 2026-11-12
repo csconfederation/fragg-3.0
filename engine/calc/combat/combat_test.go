@@ -231,6 +231,17 @@ func TestNonMemberKiller(t *testing.T) {
 	}
 }
 
+// A human who joins mid-round has an eco row from the join: an earlier kill was a scratch row's.
+func TestLateJoiner(t *testing.T) {
+	x := round.Context{Expected: true, EcoKill: true}
+	join := ev(fact.TeamChange{}, round.Context{})
+	join.Join = &match.Member{Steam64: 99}
+	out := calc.Run(build(ev(kill(99, 1, fact.EqKnife, true), x), join, ev(kill(99, 2, fact.EqKnife, true), x)))
+	if got := out.Players[99].Combat; got.PerfectKills != 1 || got.KnifeKills != 1 {
+		t.Errorf("joiner %+v, want only the kill after the join", got)
+	}
+}
+
 // Utility, pistol-vs-rifle and AWP multi-kill rounds are eco's gates.
 func TestEcoOrigin(t *testing.T) {
 	x := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}

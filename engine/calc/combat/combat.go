@@ -19,19 +19,16 @@ type eco struct {
 // Calc writes each player's Combat.
 func Calc(r *round.Round, out *row.Round) {
 	rows := map[uint64]*row.Combat{}
-	ecos := map[uint64]*eco{} // eco has rows for the round's humans only; bots share Steam64 0
-	member := func(id uint64, human bool) {
+	ecos := map[uint64]*eco{} // eco has rows for the round's humans, from the open or their join; bots share Steam64 0
+	for id, m := range r.OpenMembers {
 		rows[id] = &row.Combat{}
-		if human {
+		if !m.IsBot {
 			ecos[id] = &eco{}
 		}
 	}
-	for id, m := range r.OpenMembers {
-		member(id, !m.IsBot)
-	}
 	for _, e := range r.Events[:r.Commit] {
 		if e.Join != nil && rows[e.Join.Steam64] == nil {
-			member(e.Join.Steam64, !e.Join.IsBot)
+			rows[e.Join.Steam64] = &row.Combat{}
 		}
 	}
 	damage := map[uint64]map[uint64]int{} // each victim's damage by attacker, over the round
@@ -39,6 +36,9 @@ func Calc(r *round.Round, out *row.Round) {
 	for _, e := range r.Events[:r.Commit] {
 		if e.Dropped {
 			continue
+		}
+		if j := e.Join; j != nil && !j.IsBot && ecos[j.Steam64] == nil {
+			ecos[j.Steam64] = &eco{} // a kill before the join was a scratch row's
 		}
 		switch f := e.Fact.(type) {
 		case fact.Hurt:

@@ -59,6 +59,7 @@ var families = []family{
 	{name: "Combat", eco: ecoCombat},
 	{name: "KAST", eco: ecoKAST},
 	{name: "Trades", eco: ecoTrades},
+	{name: "Openings", team: "TeamOpenings", eco: ecoOpenings},
 	{name: "Utility"},
 	{name: "Survival", team: "TeamSurvival", eco: func(old *row.Player, rs *model.RoundStats) {
 		old.EcoDeathTime, old.EcoTimeAlive = rs.DeathTime, rs.TimeAlive
@@ -106,6 +107,14 @@ func ecoTrades(old *row.Player, rs *model.RoundStats) {
 	t.TradeKills, t.FastTrades, t.TradeDenials = rs.TradeKills, rs.FastTrades, rs.TradeDenials
 	t.OpeningDeathsTraded = b2i(rs.OpeningDeath && rs.Traded)
 	t.SavedByTeammate, t.SavedTeammate = b2i(rs.SavedByTeammate), b2i(rs.SavedTeammate)
+}
+
+// ecoOpenings is the eco-origin Openings fields as one round's eco row gives them (side_stats.go
+// updateAWPOpeningKills, fold.go FoldRound).
+func ecoOpenings(old *row.Player, rs *model.RoundStats) {
+	o := &old.Openings
+	o.AWPOpeningKills = b2i(rs.AWPOpeningKill)
+	o.ManAdvantageKills, o.ManDisadvantageDeaths = rs.ManAdvantageKills, rs.ManDisadvantageDeaths
 }
 
 func b2i(b bool) int {

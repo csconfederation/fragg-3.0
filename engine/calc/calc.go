@@ -8,6 +8,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
 	"github.com/csconfederation/fragg-3.0/engine/calc/economy"
 	"github.com/csconfederation/fragg-3.0/engine/calc/kast"
+	"github.com/csconfederation/fragg-3.0/engine/calc/openings"
 	"github.com/csconfederation/fragg-3.0/engine/calc/positioning"
 	"github.com/csconfederation/fragg-3.0/engine/calc/survival"
 	"github.com/csconfederation/fragg-3.0/engine/calc/swing"
@@ -29,6 +30,7 @@ var All = []Calc{
 	combat.Calc,
 	kast.Calc,
 	trades.Calc,
+	openings.Calc,
 	utility.Calc,
 	survival.Calc,
 	economy.Calc,

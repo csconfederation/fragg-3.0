@@ -78,8 +78,8 @@ type Frame struct {
 	Sample      func() Snapshot
 }
 
-// RoundStartWindow is the oracle's early-open window: 1 s at its fixed 64 tick rate.
-const RoundStartWindow = 64
+// RoundStartWindow is the oracle's early-open window: 1 s at its fixed tick rate.
+const RoundStartWindow = TickRate
 
 // FreezeEnd is the end of freeze time.
 type FreezeEnd struct{ Snapshot }

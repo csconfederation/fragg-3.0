@@ -3,7 +3,6 @@ package cscstats
 import (
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
-	"github.com/csconfederation/fragg-3.0/rating"
 )
 
 // Buy is a team's buy in a round (Core-planning#590).
@@ -24,7 +23,7 @@ const (
 
 // buy classifies side's buy from the round's open snapshot.
 func buy(m Host, r *match.Round, s fact.Snapshot, side fact.Side) Buy {
-	if r.Num == rating.FirstHalfPistolRound || r.Num == rating.SecondHalfPistolRound {
+	if r.Num == fact.FirstPistolRound || r.Num == fact.SecondPistolRound {
 		return BuyPistol
 	}
 	members := m.Members(s, side)

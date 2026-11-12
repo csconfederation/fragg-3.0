@@ -12,12 +12,6 @@ import (
 	"github.com/csconfederation/fragg-3.0/rating"
 )
 
-const (
-	mr       = 12
-	eqBomb   = 404
-	tickRate = 64
-)
-
 // kill is an enemy kill, kept for trades.
 type kill struct {
 	Death
@@ -158,14 +152,14 @@ func (t *Tracker) apply(m *match.Match, f fact.Fact, c *Context) error {
 }
 
 func isRoundFinalInHalf(round int) bool {
-	return round%mr == 0 || (round > mr*2 && round%3 == 0)
+	return round%fact.MR == 0 || (round > fact.MR*2 && round%3 == 0)
 }
 
 // bombIgnored is the filter on bomb kills and damage in a half's final round, where a bomb can
 // explode after the round was won by elimination. D10: the bomb still counts when it ends the
 // round, or when the round is undecided (v5 delivered the bomb's kills before the explosion).
 func (t *Tracker) bombIgnored(weapon int) bool {
-	return weapon == eqBomb && isRoundFinalInHalf(t.s.Num) && t.s.Phase == Decided && !t.s.BombDecided
+	return weapon == fact.EqBomb && isRoundFinalInHalf(t.s.Num) && t.s.Phase == Decided && !t.s.BombDecided
 }
 
 func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
@@ -191,7 +185,7 @@ func (t *Tracker) kill(m *match.Match, f fact.Kill, c *Context) error {
 		// Clutches (corpus finding 6): a bomb death at the explosion can't start one, and the
 		// clutcher is the side's member with no death this round, not the entity's IsAlive(),
 		// which lags the kill.
-		if t.s.Phase != Decided && *f.Weapon != eqBomb {
+		if t.s.Phase != Decided && *f.Weapon != fact.EqBomb {
 			if t.s.TAlive == 1 && t.s.TClutch.Size == 0 {
 				t.s.TClutch = Clutch{Size: t.s.CTAlive, Steam: t.survivor(m.Members(f.Snapshot, fact.SideT))}
 			}
@@ -233,14 +227,14 @@ func (t *Tracker) flashed(f fact.Flashed, c *Context) {
 	if f.Player == nil || f.Attacker == nil {
 		return
 	}
-	blind := f.Duration * tickRate
+	blind := f.Duration * fact.TickRate
 	v, a := f.Player, f.Attacker
 	// Both must be round members (rows in every collector): a mid-round reconnect can be relisted
 	// without joining the round (S19 Combine mid7214), and the oracle dereferences nil for it.
 	if !t.members[v.Steam64] || !t.members[a.Steam64] {
 		return
 	}
-	if a.Side == v.Side || blind <= tickRate || !v.Alive || v.FlashDuration >= blind/tickRate+1 {
+	if a.Side == v.Side || blind <= fact.TickRate || !v.Alive || v.FlashDuration >= blind/fact.TickRate+1 {
 		return
 	}
 	c.Flash = true
@@ -316,5 +310,5 @@ func bombFact(f fact.Fact) bool {
 	case fact.Kill:
 		w = f.Weapon
 	}
-	return w != nil && *w == eqBomb
+	return w != nil && *w == fact.EqBomb
 }

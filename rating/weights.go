@@ -88,10 +88,3 @@ const (
 	TradeWindowTicks    = 320    // Trade window in ticks (5 seconds at 64 tick)
 	TradeProximityUnits = 1200.0 // Maximum distance for trade opportunity (units)
 )
-
-// Round structure constants - CS2 MR12 format.
-const (
-	FirstHalfPistolRound  = 1  // First pistol round of the match
-	SecondHalfPistolRound = 13 // Second half pistol round (MR12)
-	TickRate              = 64 // Server tick rate for time calculations
-)

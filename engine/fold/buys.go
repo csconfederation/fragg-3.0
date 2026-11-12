@@ -1,6 +1,7 @@
 package fold
 
 import (
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"maps"
 	"slices"
 
@@ -40,7 +41,7 @@ func rateBuys(g *cscstats.Game) {
 				s := bs[i]
 				add(row(s.rows, steam, p), p)
 				s.teamsWinPoints[steam] += team.WinPoints
-				if p.Side == sideT {
+				if p.Side == int(fact.SideT) {
 					s.normalizer[steam] += r.InitTerroristCount
 				} else {
 					s.normalizer[steam] += r.InitCTerroristCount

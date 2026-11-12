@@ -23,7 +23,7 @@ const (
 )
 
 // buy classifies side's buy from the round's open snapshot.
-func buy(m *match.Match, r *match.Round, s fact.Snapshot, side fact.Side) Buy {
+func buy(m Host, r *match.Round, s fact.Snapshot, side fact.Side) Buy {
 	if r.Num == rating.FirstHalfPistolRound || r.Num == rating.SecondHalfPistolRound {
 		return BuyPistol
 	}

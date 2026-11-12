@@ -39,14 +39,7 @@ type roundRow struct {
 }
 
 type collector struct {
-	round   *round.Tracker
-	data    *probability.DataCollector
-	mapName string
-	planted bool
-	freeze  bool // a freeze-end fact is being processed: the open it causes is post-buy
-	cur     roundRow
-	pending probability.PendingRound
-	end     round.State
+	data *probability.DataCollector
 	// committed holds each commit until Finish says which rounds count: an in-demo restore (D12)
 	// supersedes rounds after they commit.
 	committed map[*match.Round]commit
@@ -59,87 +52,59 @@ type commit struct {
 	row             roundRow
 }
 
-func buy(m *match.Match, s fact.Snapshot, side fact.Side) teamBuy {
+func buy(r *round.Round, side fact.Side) teamBuy {
 	b := teamBuy{Equip: []int{}, Money: []int{}}
-	for _, p := range m.Members(s, side) {
+	for _, p := range r.Roster.Members(r.Open, side) {
 		b.Equip = append(b.Equip, p.EquipValue)
 		b.Money = append(b.Money, p.Money)
 	}
 	return b
 }
 
-func (c *collector) Open(m *match.Match, r *match.Round, s fact.Snapshot, pistol bool) error {
-	c.round.Open(r)
-	c.planted = false
+// Round takes a committed round's states and kills up to its last Win, as the old CLI did at its
+// round snapshot; kills after the win aren't counted.
+func (c *collector) Round(r *round.Round) error {
 	c.data.RecordRoundStart(0, 0, false, "")
-	c.cur = roundRow{Num: r.Num, Pistol: pistol, FreezeEnd: c.freeze,
-		T: buy(m, s, fact.SideT), CT: buy(m, s, fact.SideCT)}
-	return nil
-}
-
-func (c *collector) RoundEnd(m *match.Match, f fact.RoundEnd) error {
-	c.round.RoundEnd(f)
-	return nil
-}
-
-// Win takes the round's states and kills, as the old CLI did at its round snapshot; kills after the
-// win aren't counted.
-func (c *collector) Win(m *match.Match, r *match.Round, f fact.RoundEnd) error {
-	c.round.Win()
-	c.end = c.round.State()
-	c.pending = c.data.TakePending()
-	c.cur.Winner, c.cur.Reason = int(f.Winner), f.Reason
-	return nil
-}
-
-func (c *collector) Commit(m *match.Match, r *match.Round, tick int) error {
-	c.committed[r] = commit{c.pending, min(c.end.TAlive, 5), min(c.end.CTAlive, 5), c.planted, c.cur}
-	return nil
-}
-
-func (c *collector) Join(m *match.Match, r *match.Round, mem match.Member) error {
-	c.round.Join(r, mem.Steam64)
-	return nil
-}
-
-func (c *collector) Fact(m *match.Match, f fact.Fact) error {
-	if si, ok := f.(fact.ServerInfo); ok {
-		c.mapName = si.Map
-	}
-	x, err := c.round.Fact(m, f)
-	if err != nil {
-		return err
-	}
-	snap := func(planted bool) {
-		c.data.RecordStateSnapshot(min(x.Before.TAlive, 5), min(x.Before.CTAlive, 5), planted)
-	}
-	switch f := f.(type) {
-	case fact.Kill:
-		if !x.Expected {
-			return nil
+	k := commit{row: roundRow{Num: r.Num, Pistol: r.Pistol, FreezeEnd: r.FreezeEnd,
+		T: buy(r, fact.SideT), CT: buy(r, fact.SideCT)}}
+	var end round.State
+	for i := 0; i <= r.Commit; i++ {
+		for _, w := range r.OldWins {
+			if w.At == i && !w.PostCommit {
+				re := r.Events[w.Event].Fact.(fact.RoundEnd)
+				end, k.pending = w.State, c.data.TakePending()
+				k.row.Winner, k.row.Reason = int(re.Winner), re.Reason
+			}
 		}
-		snap(c.planted)
-		if x.Enemy {
-			c.data.RecordKill(float64(f.Killer.EquipValue), float64(f.Victim.EquipValue))
+		if i == r.Commit {
+			break
 		}
-	case fact.BombPlanted:
-		snap(false)
-		c.planted = true
-	case fact.BombDefused, fact.BombExplode:
-		snap(true)
+		e := r.Events[i]
+		if e.Dropped {
+			continue
+		}
+		snap := func(planted bool) {
+			c.data.RecordStateSnapshot(min(e.Before.TAlive, 5), min(e.Before.CTAlive, 5), planted)
+		}
+		switch f := e.Fact.(type) {
+		case fact.Kill:
+			if !e.Expected {
+				continue
+			}
+			snap(k.planted)
+			if e.Enemy {
+				c.data.RecordKill(float64(f.Killer.EquipValue), float64(f.Victim.EquipValue))
+			}
+		case fact.BombPlanted:
+			snap(false)
+			k.planted = true
+		case fact.BombDefused, fact.BombExplode:
+			snap(true)
+		}
 	}
+	k.tAlive, k.ctAlive = min(end.TAlive, 5), min(end.CTAlive, 5)
+	c.committed[r.Key] = k
 	return nil
-}
-
-// sink marks freeze-end facts before the lifecycle sees them, since Open doesn't say what caused it.
-type sink struct {
-	m *match.Match
-	c *collector
-}
-
-func (s sink) Fact(f fact.Fact) error {
-	_, s.c.freeze = f.(fact.FreezeEnd)
-	return s.m.Fact(f)
 }
 
 func main() {
@@ -155,10 +120,14 @@ func main() {
 		return
 	}
 	defer f.Close()
-	c := &collector{round: round.New(), data: probability.NewDataCollector(), committed: map[*match.Round]commit{}}
-	m := match.New(c)
-	term, _ := ingest.Run(context.Background(), f, sink{m, c})
+	c := &collector{data: probability.NewDataCollector(), committed: map[*match.Round]commit{}}
+	d := round.NewDeriver(c)
+	m := match.New(d)
+	term, _ := ingest.Run(context.Background(), f, m)
 	res, err := m.Finish(term)
+	if err == nil {
+		err = d.Close()
+	}
 	if err != nil {
 		status["error"] = err.Error()
 		return
@@ -170,7 +139,7 @@ func main() {
 	rows := []roundRow{}
 	for _, r := range res.Rounds {
 		k := c.committed[r]
-		c.data.CommitPending(k.pending, k.tAlive, k.ctAlive, k.planted, fact.Side(k.row.Winner), c.mapName)
+		c.data.CommitPending(k.pending, k.tAlive, k.ctAlive, k.planted, fact.Side(k.row.Winner), res.Map)
 		rows = append(rows, k.row)
 	}
 	if err := c.data.SaveToFile(os.Args[2] + ".prob.json"); err != nil {

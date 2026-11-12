@@ -54,7 +54,33 @@ type family struct {
 
 // families are the compared families, in the plan's order: combat, KAST, trades, openings,
 // clutches, utility, objectives (+Finish), survival, economy, positioning, swing.
-var families = []family{}
+var families = []family{
+	{"Combat", ecoCombat},
+}
+
+// ecoCombat is the eco-origin Combat fields as one round's eco row gives them: the per-round form
+// of the eco fold's lines for each (the fold sums these over rounds).
+func ecoCombat(old *row.Player, rs *model.RoundStats) {
+	c := &old.Combat
+	c.AssistedKills = 0 // side_stats.go updateSupportStats: Assists when GotAssist
+	if rs.GotAssist {
+		c.AssistedKills = rs.Assists
+	}
+	c.AWPMultiKillRounds = b2i(rs.AWPKills >= 2) // updateAWPStats
+	c.AWPDeaths = b2i(rs.LostAWP)                // updateAWPStats
+	c.RoundsWithAWPKill = b2i(rs.AWPKill)        // updateAWPStats
+	c.KnifeKills = b2i(rs.KnifeKill)             // updateTradeStats
+	c.PistolVsRifleKills = b2i(rs.PistolVsRifleKill)
+	c.UtilityKills = rs.UtilityKills // fold.go FoldRound
+	c.PerfectKills = rs.PerfectKills // fold.go FoldRound
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
 
 // Differences found.
 const (

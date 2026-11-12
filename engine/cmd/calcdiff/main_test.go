@@ -106,6 +106,18 @@ func TestFixtures(t *testing.T) {
 		if rp.rows == 0 || len(bad) != 0 {
 			t.Errorf("%s: %d rows compared, differences %+v", path, rp.rows, bad)
 		}
+		if moved {
+			// The moved Win is the whole difference: with each Win where the hold ran it, the rows match.
+			for k, w := range got.Round.OldWins {
+				got.Round.Wins[k] = w.At
+			}
+			again := &report{classes: map[string][2]int{}, byField: map[string][2]int{}}
+			again.familyDiffs(filepath.Base(path), got.Round, got.Rows.CSC.Round, got.Rows.Eco)
+			if len(again.unlisted) != 0 {
+				t.Errorf("%s: %d differences from the moved Win, %d with the Win where the hold ran it: %+v", path,
+					len(rp.unlisted), len(again.unlisted), again.unlisted)
+			}
+		}
 	}
 }
 

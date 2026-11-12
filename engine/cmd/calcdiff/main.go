@@ -14,7 +14,7 @@
 // -allow reads the accepted differences, one per line: demo (file name), round, event, row, field,
 // class, tab-separated; # starts a comment. A line accepts the difference with that key; never a
 // whole round. Event is the buffer index of the RoundEnd for a Win ("win" row, field "at"), and -1
-// for a family field, which is a round's sum. Row is "win", "player:<steam64>" or "round". -emit
+// for a family field, which is a round's sum. Row is "win", "player:<steam64>", "team:T", "team:CT" or "round". -emit
 // writes the unlisted differences in that format, to review and add to the allowlist.
 //
 // Exit status 1 on an unlisted difference or an error.
@@ -49,6 +49,7 @@ import (
 // eco copies them from the round's model.RoundStats onto the old row. A family without any has nil.
 type family struct {
 	name string
+	team string // the family's struct in row.Team, if it writes team parts
 	eco  func(old *row.Player, rs *model.RoundStats)
 }
 
@@ -57,6 +58,12 @@ type family struct {
 var families = []family{
 	{name: "Combat", eco: ecoCombat},
 	{name: "Utility"},
+	{name: "Survival", team: "TeamSurvival", eco: func(old *row.Player, rs *model.RoundStats) {
+		old.EcoDeathTime, old.EcoTimeAlive = rs.DeathTime, rs.TimeAlive
+		if rs.Deaths > 0 && rs.DeathTime < 30.0 {
+			old.EarlyDeaths = 1
+		}
+	}},
 }
 
 // ecoCombat is the eco-origin Combat fields as one round's eco row gives them: the per-round form
@@ -239,15 +246,34 @@ func (rp *report) familyDiffs(demo string, r *round.Round, csc *cscstats.Round, 
 			}
 			ov := reflect.ValueOf(op).Elem().FieldByName(fam.name)
 			nv := reflect.ValueOf(cur.Players[id]).Elem().FieldByName(fam.name)
-			rp.fieldDiffs(demo, r.Num, id, fam.name, ov, nv)
+			rp.fieldDiffs(demo, r.Num, playerRow(id), fam.name, ov, nv)
 		}
 	}
+	for side, clan := range map[fact.Side]string{fact.SideT: r.TClan, fact.SideCT: r.CTClan} {
+		ot, nt := csc.TeamStats[clan], cur.Teams[side]
+		if ot == nil || nt == nil {
+			rp.add(diff{demo: demo, round: r.Num, evt: -1, row: teamRow(side), field: "-", class: "missing row"},
+				rp.byField, "row")
+			continue
+		}
+		oldTeam := payload.RoundTeam(ot)
+		for _, fam := range families {
+			if fam.team != "" {
+				rp.fieldDiffs(demo, r.Num, teamRow(side), fam.team, reflect.ValueOf(oldTeam).Elem().FieldByName(fam.team),
+					reflect.ValueOf(nt).Elem().FieldByName(fam.team))
+			}
+		}
+	}
+}
+
+func teamRow(side fact.Side) string {
+	return "team:" + map[fact.Side]string{fact.SideT: "T", fact.SideCT: "CT"}[side]
 }
 
 func playerRow(id uint64) string { return "player:" + strconv.FormatUint(id, 10) }
 
 // fieldDiffs compares one family struct field by field, floats exactly: one ULP is a difference.
-func (rp *report) fieldDiffs(demo string, num int, id uint64, fam string, ov, nv reflect.Value) {
+func (rp *report) fieldDiffs(demo string, num int, rowName, fam string, ov, nv reflect.Value) {
 	for i := range ov.NumField() {
 		// An internal sum (json:"-") is compared too, by its Go name: the family's eco hook sets the old side's.
 		name, _, _ := strings.Cut(ov.Type().Field(i).Tag.Get("json"), ",")
@@ -256,7 +282,7 @@ func (rp *report) fieldDiffs(demo string, num int, id uint64, fam string, ov, nv
 		}
 		rp.fields++
 		if o, n := ov.Field(i), nv.Field(i); !reflect.DeepEqual(o.Interface(), n.Interface()) {
-			rp.add(diff{demo: demo, round: num, evt: -1, row: playerRow(id), field: name, class: "value",
+			rp.add(diff{demo: demo, round: num, evt: -1, row: rowName, field: name, class: "value",
 				old: fmt.Sprint(o.Interface()), new: fmt.Sprint(n.Interface())}, rp.byField, fam+"."+name)
 		}
 	}

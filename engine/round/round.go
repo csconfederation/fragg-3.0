@@ -123,6 +123,33 @@ type Round struct {
 	committed bool
 }
 
+// Win is a Win in effect: the winning side and clan, and the tick of its RoundEnd.
+type Win struct {
+	Side fact.Side
+	Clan string
+	Tick int
+}
+
+// WinAt is the latest Win in effect when event i runs (a Win takes effect before event Wins[k]),
+// and false before the first. Wins whose RoundEnd is in the tail never are in effect before Commit.
+func (r *Round) WinAt(i int) (Win, bool) {
+	var w Win
+	var ok bool
+	k := 0
+	for _, e := range r.Events {
+		re, isEnd := e.Fact.(fact.RoundEnd)
+		if !isEnd || !e.Win {
+			continue
+		}
+		if k >= len(r.Wins) || r.Wins[k] > i {
+			break
+		}
+		w, ok = Win{Side: re.Winner, Clan: e.Winner, Tick: re.Snapshot.Tick}, true
+		k++
+	}
+	return w, ok
+}
+
 // OldWin is a Win as today's hold runs it: before event At (len(Events) after the last), for the
 // RoundEnd at index Event, with the residual alive members and the state at that moment.
 type OldWin struct {

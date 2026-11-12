@@ -6,7 +6,9 @@ package calc
 
 import (
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
+	"github.com/csconfederation/fragg-3.0/engine/calc/survival"
 	"github.com/csconfederation/fragg-3.0/engine/calc/utility"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/round"
 	"github.com/csconfederation/fragg-3.0/engine/row"
 )
@@ -21,11 +23,13 @@ type Calc func(r *round.Round, out *row.Round)
 var All = []Calc{
 	combat.Calc,
 	utility.Calc,
+	survival.Calc,
 }
 
 // Run is r's rows: one empty player row per member, then every calculator.
 func Run(r *round.Round) *row.Round {
-	out := &row.Round{Players: map[uint64]*row.Player{}}
+	out := &row.Round{Players: map[uint64]*row.Player{},
+		Teams: map[fact.Side]*row.Team{fact.SideT: {}, fact.SideCT: {}}}
 	for id := range r.OpenMembers {
 		out.Players[id] = &row.Player{}
 	}

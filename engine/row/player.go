@@ -134,6 +134,10 @@ type Survival struct {
 	TicksAlive     int     `json:"ticksAlive"`
 	Saves          int     `json:"saves"`
 	EarlyDeaths    int     `json:"earlyDeaths"`
+
+	// Eco's seconds into the round of the last death and of survival, for the fold's time sums; 0 on the bot row.
+	EcoDeathTime float64 `json:"-"`
+	EcoTimeAlive float64 `json:"-"`
 }
 
 type Economy struct {

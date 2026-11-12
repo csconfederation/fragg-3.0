@@ -254,3 +254,21 @@ func TestFlashNeedsMembers(t *testing.T) {
 		}
 	}
 }
+
+func TestWinAt(t *testing.T) {
+	end := func(side fact.Side, clan string, tick int) Event {
+		return Event{Event: match.Event{Fact: fact.RoundEnd{Snapshot: fact.Snapshot{Tick: tick}, Winner: side}, Win: true, Winner: clan}}
+	}
+	plain := Event{Event: match.Event{Fact: fact.RoundEnd{}}} // a RoundEnd without a Win
+	r := &Round{Events: []Event{plain, end(fact.SideT, "a", 10), {}, end(fact.SideCT, "b", 20), {}}, Wins: []int{3, 5}}
+	for i, want := range []struct {
+		ok   bool
+		side fact.Side
+		tick int
+	}{{false, 0, 0}, {false, 0, 0}, {false, 0, 0}, {true, fact.SideT, 10}, {true, fact.SideT, 10}, {true, fact.SideCT, 20}} {
+		w, ok := r.WinAt(i)
+		if ok != want.ok || w.Side != want.side || w.Tick != want.tick {
+			t.Errorf("WinAt(%d) = %+v, %v; want %+v", i, w, ok, want)
+		}
+	}
+}

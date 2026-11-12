@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -52,17 +53,55 @@ func wrong(r *round.Round, out *row.Round) {
 func run(t *testing.T, allow map[string]bool, calcs ...calc.Calc) *report {
 	t.Helper()
 	r, rows := fixture(t)
+	keep(t)
 	families = []family{{name: "Combat"}}
 	calc.All = calcs
-	t.Cleanup(func() { families, calc.All = nil, nil })
 	rp := &report{allow: allow, classes: map[string][2]int{}, byField: map[string][2]int{}}
 	rp.familyDiffs("demo.dem", r, rows.CSC.Round, rows.Eco)
 	return rp
 }
 
+// keep restores the registered families when the test ends.
+func keep(t *testing.T) {
+	f, c := families, calc.All
+	t.Cleanup(func() { families, calc.All = f, c })
+}
+
+// Every registered family matches the collectors on every fixture round, floats exactly.
+func TestFixtures(t *testing.T) {
+	files, err := filepath.Glob("../../roundlog/testdata/*.json.gz")
+	if err != nil || len(files) < 30 {
+		t.Fatalf("%d fixtures, %v", len(files), err)
+	}
+	for _, path := range files {
+		gz, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := roundlog.Gunzip(gz)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := roundlog.Decode(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := roundlog.Replay(f)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		rp := &report{classes: map[string][2]int{}, byField: map[string][2]int{}}
+		rp.familyDiffs(filepath.Base(path), got.Round, got.Rows.CSC.Round, got.Rows.Eco)
+		if rp.rows == 0 || len(rp.unlisted) != 0 {
+			t.Errorf("%s: %d rows compared, differences %+v", path, rp.rows, rp.unlisted)
+		}
+	}
+}
+
 // With no family, nothing is compared. A calculator that matches the collectors reports nothing,
 // one that doesn't reports each field by row, and an allowlist line accepts only its own key.
 func TestFamilyDiffs(t *testing.T) {
+	keep(t)
 	families, calc.All = nil, nil
 	r, rows := fixture(t)
 	none := &report{classes: map[string][2]int{}, byField: map[string][2]int{}}

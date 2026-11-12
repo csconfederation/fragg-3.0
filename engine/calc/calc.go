@@ -6,6 +6,7 @@ package calc
 
 import (
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
+	"github.com/csconfederation/fragg-3.0/engine/calc/utility"
 	"github.com/csconfederation/fragg-3.0/engine/round"
 	"github.com/csconfederation/fragg-3.0/engine/row"
 )
@@ -19,6 +20,7 @@ type Calc func(r *round.Round, out *row.Round)
 // tier 1's results in out (design note section 3). The families land one per PR.
 var All = []Calc{
 	combat.Calc,
+	utility.Calc,
 }
 
 // Run is r's rows: one empty player row per member, then every calculator.

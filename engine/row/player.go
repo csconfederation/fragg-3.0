@@ -64,7 +64,8 @@ type Combat struct {
 }
 
 type KAST struct {
-	KastRounds float64 `json:"kastRounds"`
+	KastRounds    float64 `json:"kastRounds"`
+	EcoKastRounds float64 `json:"-"` // eco's KAST rounds (its kill gate), for the eco ratings
 }
 
 type Trades struct {

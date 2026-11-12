@@ -12,17 +12,6 @@ import (
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 )
 
-// The demoinfocs equipment types the handlers test.
-const (
-	eqP2000      = 1
-	eqRevolver   = 10
-	eqAWP        = 309
-	eqKnife      = 405
-	eqMolotov    = 502
-	eqIncendiary = 503
-	eqHE         = 506
-)
-
 // Collector is the oracle's eco parser in attached mode (parser.AttachToParser): its stat
 // handlers, and BeginRound, FinalizeRound and SnapshotRound, which the CSC pipeline drives. The
 // oracle's probability DataCollector is left out: it only feeds offline probability tables.
@@ -64,7 +53,7 @@ func playing(s fact.Snapshot) []fact.Player {
 }
 
 func (c *Collector) timeInRound(tick int) float64 {
-	return float64(tick-c.startTick) / float64(rating.TickRate)
+	return float64(tick-c.startTick) / float64(fact.TickRate)
 }
 
 // ensurePlayer registers p. The name and clan are metadata the payload doesn't carry.
@@ -432,22 +421,22 @@ func (c *Collector) kill(f fact.Kill, x round.Context) bool {
 	// processWeaponStats
 	if f.Weapon != nil {
 		switch *f.Weapon {
-		case eqAWP:
+		case fact.EqAWP:
 			r.AWPKills++
 			r.AWPKill = true
-		case eqKnife:
+		case fact.EqKnife:
 			r.KnifeKill = true
-		case eqHE, eqMolotov, eqIncendiary:
+		case fact.EqHE, fact.EqMolotov, fact.EqIncendiary:
 			r.UtilityKills++
 		}
-		if *f.Weapon >= eqP2000 && *f.Weapon <= eqRevolver && victimEquip > 3500 {
+		if *f.Weapon >= fact.EqP2000 && *f.Weapon <= fact.EqRevolver && victimEquip > 3500 {
 			r.PistolVsRifleKill = true
 		}
 	}
 
 	// processOpeningKill: the round's opening, as CSC's (#591)
 	if x.Before.Opening && x.Enemy {
-		if f.Weapon != nil && *f.Weapon == eqAWP {
+		if f.Weapon != nil && *f.Weapon == fact.EqAWP {
 			r.AWPOpeningKill = true
 		}
 		vr.OpeningDeath = true
@@ -502,7 +491,7 @@ func (c *Collector) death(f fact.Kill) {
 	v.Deaths++
 	v.DeathTime = c.timeInRound(f.Tick)
 	for _, w := range f.Victim.Weapons {
-		if w == eqAWP {
+		if w == fact.EqAWP {
 			v.LostAWP = true
 			break
 		}

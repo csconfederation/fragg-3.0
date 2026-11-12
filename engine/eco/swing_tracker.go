@@ -1,7 +1,6 @@
 package eco
 
 import (
-	"github.com/csconfederation/fragg-3.0/rating"
 	"github.com/csconfederation/fragg-3.0/rating/probability"
 	"github.com/csconfederation/fragg-3.0/rating/swing"
 
@@ -36,7 +35,7 @@ func NewSwingTrackerWithConfig(cfg swing.Config) *SwingTracker {
 		damageTracker:    NewDamageTracker(),
 		advantageTracker: NewAdvantageTracker(),
 		cfg:              cfg,
-		tickRate:         float64(rating.TickRate),
+		tickRate:         float64(fact.TickRate),
 		bombTimer:        defaultBombTimerSeconds,
 	}
 }

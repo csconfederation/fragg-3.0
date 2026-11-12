@@ -6,6 +6,7 @@ package fold
 
 import (
 	"fmt"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"maps"
 	"math"
 	"slices"
@@ -17,9 +18,7 @@ import (
 )
 
 const (
-	sideT  = 2
-	sideCT = 3
-	total  = 4 // the Side of a whole-match row
+	total = 4 // the Side of a whole-match row
 )
 
 // Game folds g's committed rounds and the matching eco rounds into g's player and team stats.
@@ -33,7 +32,7 @@ func Game(g *cscstats.Game, e *eco.Collector, ecoRounds []*eco.Round) error {
 	}
 	for _, r := range g.Rounds {
 		for _, p := range r.PlayerStats {
-			if p.Side != sideT && p.Side != sideCT {
+			if p.Side != int(fact.SideT) && p.Side != int(fact.SideCT) {
 				return &match.InvariantError{Tick: r.EndingTick, Reason: fmt.Sprintf("round %d: player %s has side %d", r.RoundNum, p.SteamID, p.Side)}
 			}
 		}
@@ -60,10 +59,10 @@ func enrich(r *cscstats.Round) {
 		}
 		team := r.TeamStats[p.TeamClanName]
 		switch p.Side {
-		case sideT:
+		case int(fact.SideT):
 			team.TWinPoints += p.WinPoints
 			team.TImpactPoints += p.ImpactPoints
-		case sideCT:
+		case int(fact.SideCT):
 			team.CtWinPoints += p.WinPoints
 			team.CtImpactPoints += p.ImpactPoints
 		}
@@ -80,7 +79,7 @@ func enrich(r *cscstats.Round) {
 		}
 		p.Rws = share * (float64(p.Damage) / float64(r.WinTeamDmg))
 		steam, _ := strconv.ParseUint(p.SteamID, 10, 64)
-		if r.EndDueToBombEvent && (p.Side == sideT && r.Planter == steam || p.Side == sideCT && r.Defuser == steam) {
+		if r.EndDueToBombEvent && (p.Side == int(fact.SideT) && r.Planter == steam || p.Side == int(fact.SideCT) && r.Defuser == steam) {
 			p.Rws += 30
 		}
 		if math.IsNaN(p.Rws) {
@@ -124,7 +123,7 @@ func accumulate(g *cscstats.Game) {
 		for _, steam := range slices.Sorted(maps.Keys(r.PlayerStats)) {
 			p := r.PlayerStats[steam]
 			sides := g.CtPlayerStats
-			if p.Side == sideT {
+			if p.Side == int(fact.SideT) {
 				sides = g.TPlayerStats
 			}
 			whole, side := row(g.TotalPlayerStats, steam, p), row(sides, steam, p)
@@ -132,7 +131,7 @@ func accumulate(g *cscstats.Game) {
 			add(side, p)
 			whole.Side, side.Side = total, p.Side
 			lurk(side, p)
-			if p.Side == sideT { // the oracle's whole-match row counts lurking on T only
+			if p.Side == int(fact.SideT) { // the oracle's whole-match row counts lurking on T only
 				lurk(whole, p)
 			}
 
@@ -142,10 +141,10 @@ func accumulate(g *cscstats.Game) {
 			whole.TTeamsWinPoints += team.TWinPoints
 			whole.CtTeamsWinPoints += team.CtWinPoints
 			switch p.Side {
-			case sideT:
+			case int(fact.SideT):
 				whole.WinPointsNormalizer += r.InitTerroristCount
 				whole.TWinPointsNormalizer += r.InitTerroristCount
-			case sideCT:
+			case int(fact.SideCT):
 				whole.WinPointsNormalizer += r.InitCTerroristCount
 				whole.CtWinPointsNormalizer += r.InitCTerroristCount
 				whole.CtAWP += p.CtAWP

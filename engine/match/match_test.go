@@ -22,9 +22,9 @@ type sim struct {
 func newSim() *sim { return &sim{score: map[string]int{"Alpha": 0, "Bravo": 0}} }
 
 func (s *sim) sides(num int) (t, ct string) {
-	swap := num > mr && num <= mr*2
-	if num > mr*2 {
-		swap = (num-mr*2-1)/3%2 == 0
+	swap := num > fact.MR && num <= fact.MR*2
+	if num > fact.MR*2 {
+		swap = (num-fact.MR*2-1)/3%2 == 0
 	}
 	if swap {
 		return "Bravo", "Alpha"
@@ -37,7 +37,7 @@ func (s *sim) snapshot(num int) fact.Snapshot {
 	money := s.money
 	if money == 0 {
 		money = 4000
-		if num == 1 || num == mr+1 {
+		if num == 1 || num == fact.MR+1 {
 			money = 800
 		}
 	}
@@ -657,9 +657,9 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 			s.open()
 			s.end("Alpha", false)
 			end := s.facts[len(s.facts)-1].(fact.RoundEnd)
-			end.Reason = reasonTargetBombed
+			end.Reason = fact.ReasonTargetBombed
 			s.facts[len(s.facts)-1] = end
-			bomb, world := eqBomb, 407
+			bomb, world := fact.EqBomb, 407
 			late := fact.Snapshot{Tick: s.tick + 18}
 			joiner := fact.Player{Steam64: 99, Alive: true, Connected: true, Listed: true}
 			s.add(fact.Hurt{Snapshot: late, Weapon: &bomb}, fact.Kill{Snapshot: late, Weapon: &bomb},
@@ -711,7 +711,7 @@ func TestBracketedClanWithoutTag(t *testing.T) {
 // Since CS2's bomb shockwave, an explosion's damage and kills arrive after RoundEnd. The lifecycle
 // passes every fact in order with the RoundEnd's win; the stats place the Win (engine/round, D27).
 func TestExplosionFactsKeepTheirOrder(t *testing.T) {
-	bomb, rifle := eqBomb, 303
+	bomb, rifle := fact.EqBomb, 303
 	s := newSim()
 	s.open()
 	s.end("Alpha", true) // round 1 by elimination
@@ -725,7 +725,7 @@ func TestExplosionFactsKeepTheirOrder(t *testing.T) {
 	official := s.facts[len(s.facts)-1]
 	s.facts = s.facts[:len(s.facts)-1]
 	end := s.facts[len(s.facts)-1].(fact.RoundEnd)
-	end.Reason = reasonTargetBombed
+	end.Reason = fact.ReasonTargetBombed
 	s.facts[len(s.facts)-1] = end
 	wave := fact.Snapshot{Tick: end.Tick + 37, RoundsPlayed: 2}
 	s.add(frame(fact.Snapshot{Tick: end.Tick + 1}), fact.PlayerInfo{Tick: end.Tick + 2}, fact.Hurt{Snapshot: wave, Weapon: &bomb},
@@ -737,7 +737,7 @@ func TestExplosionFactsKeepTheirOrder(t *testing.T) {
 	official = s.facts[len(s.facts)-1]
 	s.facts = s.facts[:len(s.facts)-1]
 	end3 := s.facts[len(s.facts)-1].(fact.RoundEnd)
-	end3.Reason = reasonTargetBombed
+	end3.Reason = fact.ReasonTargetBombed
 	s.facts[len(s.facts)-1] = end3
 	s.add(fact.PlayerInfo{Tick: end3.Tick + 5, Found: true, Resolved: 3},
 		fact.Kill{Snapshot: fact.Snapshot{Tick: end3.Tick + 30, RoundsPlayed: 3}, Weapon: &bomb}, official)

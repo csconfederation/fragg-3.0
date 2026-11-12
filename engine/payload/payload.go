@@ -28,7 +28,7 @@ var (
 // Run parses r and returns the payload and the match result. A partial demo (D9) is a score-only
 // payload; a stream that breaks after the match ended still yields the full payload.
 func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
-	s := newReplay()
+	s := NewReplay()
 	d := round.NewDeriver(s)
 	m := match.New(d)
 	term, _ := ingest.Run(ctx, r, m)

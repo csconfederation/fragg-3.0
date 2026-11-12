@@ -97,7 +97,7 @@ func run(path string, rounds []string, out string, dry bool) error {
 	if err := d.Close(); err != nil {
 		return err
 	}
-	if _, err := io.Copy(io.Discard, f); err != nil { // the hash covers the whole file
+	if _, err := io.Copy(sum, f); err != nil { // the hash covers the whole file, not what ingest read
 		return err
 	}
 	name := filepath.Base(path)

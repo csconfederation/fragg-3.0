@@ -92,8 +92,19 @@ func TestFixtures(t *testing.T) {
 		}
 		rp := &report{classes: map[string][2]int{}, byField: map[string][2]int{}}
 		rp.familyDiffs(filepath.Base(path), got.Round, got.Rows.CSC.Round, got.Rows.Eco)
-		if rp.rows == 0 || len(rp.unlisted) != 0 {
-			t.Errorf("%s: %d rows compared, differences %+v", path, rp.rows, rp.unlisted)
+		// A round whose Win is placed after bomb facts the hold missed (design note section 6) moves swing.
+		moved := false
+		for k, w := range got.Round.OldWins {
+			moved = moved || got.Round.Wins[k] != w.At
+		}
+		var bad []diff
+		for _, d := range rp.unlisted {
+			if !moved || d.field != "ecoProbabilitySwing" {
+				bad = append(bad, d)
+			}
+		}
+		if rp.rows == 0 || len(bad) != 0 {
+			t.Errorf("%s: %d rows compared, differences %+v", path, rp.rows, bad)
 		}
 	}
 }

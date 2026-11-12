@@ -123,29 +123,35 @@ type Round struct {
 	committed bool
 }
 
-// Win is a Win in effect: the winning side and clan, and the tick of its RoundEnd.
+// Win is a Win: the winning side and clan, the RoundEnd's event index and tick, and At, the index
+// of the event it takes effect before.
 type Win struct {
-	Side fact.Side
-	Clan string
-	Tick int
+	Side      fact.Side
+	Clan      string
+	Event, At int
+	Tick      int
 }
 
-// WinAt is the latest Win in effect when event i runs (a Win takes effect before event Wins[k]),
-// and false before the first. Wins whose RoundEnd is in the tail never are in effect before Commit.
+// WinList is the round's Wins in order, a tail's included.
+func (r *Round) WinList() []Win {
+	var ws []Win
+	for i, e := range r.Events {
+		if re, ok := e.Fact.(fact.RoundEnd); ok && e.Win && len(ws) < len(r.Wins) {
+			ws = append(ws, Win{Side: re.Winner, Clan: e.Winner, Event: i, At: r.Wins[len(ws)], Tick: re.Snapshot.Tick})
+		}
+	}
+	return ws
+}
+
+// WinAt is the latest Win in effect when event i runs, and false before the first.
 func (r *Round) WinAt(i int) (Win, bool) {
 	var w Win
 	var ok bool
-	k := 0
-	for _, e := range r.Events {
-		re, isEnd := e.Fact.(fact.RoundEnd)
-		if !isEnd || !e.Win {
-			continue
-		}
-		if k >= len(r.Wins) || r.Wins[k] > i {
+	for _, c := range r.WinList() {
+		if c.At > i {
 			break
 		}
-		w, ok = Win{Side: re.Winner, Clan: e.Winner, Tick: re.Snapshot.Tick}, true
-		k++
+		w, ok = c, true
 	}
 	return w, ok
 }
@@ -535,7 +541,7 @@ func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 	c.Victim = f.Victim != nil && d.isMember(f.Victim.Steam64) && !c.BombIgnored
 	c.Killer = f.Killer != nil && d.isMember(f.Killer.Steam64) && !c.BombIgnored
 	if c.Victim {
-		d.deaths[actor(f.Victim)]++
+		d.deaths[Actor(f.Victim)]++
 		d.cscDeaths[f.Victim.Steam64]++
 		switch f.Victim.Side {
 		case fact.SideT:
@@ -610,18 +616,18 @@ func (d *Deriver) flashed(f fact.Flashed, c *Context) {
 // trade is an enemy kill's trades (D22): the victim's untraded enemy kills of the killer's
 // teammates within the window, then the kill itself becomes tradeable.
 func (d *Deriver) trade(f fact.Kill, c *Context) {
-	for _, k := range d.kills[actor(f.Victim)] {
+	for _, k := range d.kills[Actor(f.Victim)] {
 		if !k.traded && k.team == *f.Killer.TeamStateID && f.Tick-k.Tick <= rating.TradeWindowTicks {
 			k.traded = true
 			c.Avenged = append(c.Avenged, k.Death)
 		}
 	}
-	d.kills[actor(f.Killer)] = append(d.kills[actor(f.Killer)],
+	d.kills[Actor(f.Killer)] = append(d.kills[Actor(f.Killer)],
 		&kill{Death: Death{f.Victim.Steam64, f.Tick}, team: *f.Victim.TeamStateID})
 }
 
-// actor tells players apart for trades: bots share Steam64 0, so they go by user ID.
-func actor(p *fact.Player) uint64 {
+// Actor tells players apart for trades and deaths: bots share Steam64 0, so they go by user ID.
+func Actor(p *fact.Player) uint64 {
 	if p.IsBot {
 		return 1<<63 | uint64(p.UserID)
 	}
@@ -640,7 +646,7 @@ func Enemies(a, b *fact.Player) (bool, error) {
 // after the tick's events, so it still shows earlier victims of the tick alive. Deaths go by actor:
 // keyed by Steam64, one bot's death made every bot (Steam64 0) dead at a disconnect recount.
 func (d *Deriver) alive(p fact.Player) bool {
-	return p.Alive && d.deaths[actor(&p)] == 0
+	return p.Alive && d.deaths[Actor(&p)] == 0
 }
 
 // survivor is the last alive member with a round row.

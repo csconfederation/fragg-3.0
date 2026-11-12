@@ -9,9 +9,16 @@ import (
 
 // Calc writes each player's row.Utility.
 func Calc(r *round.Round, out *row.Round) {
+	in := map[uint64]bool{} // the players with a row so far: one who joins mid-round has none before
+	for id := range r.OpenMembers {
+		in[id] = true
+	}
 	for _, e := range r.Events[:r.Commit] {
 		if e.Dropped {
 			continue
+		}
+		if e.Join != nil {
+			in[e.Join.Steam64] = true
 		}
 		switch f := e.Fact.(type) {
 		case fact.Flashed:
@@ -39,7 +46,7 @@ func Calc(r *round.Round, out *row.Round) {
 				continue
 			}
 			p := out.Players[f.Thrower.Steam64]
-			if p == nil {
+			if p == nil || !in[f.Thrower.Steam64] {
 				continue
 			}
 			switch *f.Weapon {

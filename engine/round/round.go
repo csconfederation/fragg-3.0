@@ -68,6 +68,13 @@ type Context struct {
 	// of the killer's teammates in the last 5 s, inclusive, each traded once. A kill avenging any is
 	// one trade kill.
 	Avenged []Death
+	// Hurts: Dealt is CSC's damage dealt (both players have rows, on different sides); Taken is its
+	// damage taken (the victim has a row, an enemy's, not bomb-ignored). EcoDamage is eco's gate:
+	// not warmup, an enemy's, not bomb-ignored, with no membership test. Kills: EcoKill is eco's
+	// killer credit: expected, not bomb-ignored, both players known, no suicide or team kill. The
+	// eco flags go when D31 unifies the gates.
+	Dealt, Taken       bool
+	EcoKill, EcoDamage bool
 }
 
 // Blind is a player's latest counting flash: who threw it and the tick it wears off.
@@ -105,8 +112,12 @@ type Round struct {
 	Events []Event
 	// Commit is the index of the first event after the commit.
 	Commit int
-	// OldWins are the round's Wins where today's hold runs them (PR 18 deletes them).
+	// OldWins are the round's Wins where today's hold runs them (PR 18 deletes them). Wins are the
+	// same Wins, one entry each in the same order, placed by the rule of design note section 6: the
+	// index of the event the Win takes effect before. A Win is a RoundEnd with Win set; a Win whose
+	// RoundEnd is at or after Commit is a tail's, and calculators skip it.
 	OldWins []OldWin
+	Wins    []int
 	End     State // at the commit
 	// committed is set by Commit; the deriver hands over only committed rounds.
 	committed bool
@@ -203,7 +214,33 @@ func (d *Deriver) handover() error {
 	if r == nil || !r.committed {
 		return nil
 	}
+	r.placeWins()
 	return d.out.Round(r)
+}
+
+// placeWins fills Wins: each Win takes effect right after its RoundEnd, or, for an explosion, after
+// the last bomb Kill or Hurt of its wave, the events up to the next RoundEnd, the commit (when the
+// RoundEnd is before it) or the buffer's end. Dropped events are skipped and nothing is reordered.
+func (r *Round) placeWins() {
+	r.Wins = make([]int, 0, len(r.OldWins))
+	for _, w := range r.OldWins {
+		at := w.Event + 1
+		if r.Events[w.Event].Fact.(fact.RoundEnd).Reason == fact.ReasonTargetBombed {
+			end := len(r.Events)
+			if w.Event < r.Commit {
+				end = r.Commit
+			}
+			for j := w.Event + 1; j < end; j++ {
+				if _, ok := r.Events[j].Fact.(fact.RoundEnd); ok {
+					break
+				}
+				if !r.Events[j].Dropped && bombFact(r.Events[j].Fact) {
+					at = j + 1
+				}
+			}
+		}
+		r.Wins = append(r.Wins, at)
+	}
 }
 
 // Event applies one fact: the checks the old pipeline made (round, then eco, then CSC), the state,
@@ -394,6 +431,10 @@ func (d *Deriver) apply(e match.Event, c *Context) error {
 		}
 		c.BombIgnored = d.bombIgnored(w)
 		c.Enemy = f.Attacker != nil && f.Player != nil && f.Attacker.Side != f.Player.Side
+		member := f.Player != nil && d.isMember(f.Player.Steam64)
+		c.Taken = member && !c.BombIgnored && c.Enemy
+		c.Dealt = member && c.Enemy && d.isMember(f.Attacker.Steam64)
+		c.EcoDamage = !f.Warmup && c.Enemy && !c.BombIgnored
 	case fact.Flashed:
 		d.flashed(f, c)
 	case fact.BombPlanted:
@@ -450,6 +491,9 @@ func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 	}
 	c.Expected = true
 	c.BombIgnored = d.bombIgnored(*f.Weapon)
+	if k, v := f.Killer, f.Victim; !c.BombIgnored && k != nil && v != nil {
+		c.EcoKill = !(k.Steam64 == v.Steam64 && !k.IsBot || k.Side == v.Side)
+	}
 	c.Victim = f.Victim != nil && d.isMember(f.Victim.Steam64) && !c.BombIgnored
 	c.Killer = f.Killer != nil && d.isMember(f.Killer.Steam64) && !c.BombIgnored
 	if c.Victim {

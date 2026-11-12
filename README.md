@@ -13,6 +13,7 @@ csgo-demo-worker calls `payload.Run`; nothing else in this repo is an entry poin
 | `engine/round` | Shared round state and one definition per shared concept: alive counts, phase, opening, clutches, deaths, assists, trades, flashes. Collectors read its `Context` |
 | `engine/cscstats` | CSC's stats per round |
 | `engine/eco` | Eco stats and the probability swing (`rating/swing`, `rating/probability`) |
+| `engine/calc` | The stat calculators that replace the collectors, one family per PR (empty until then; `cmd/calcdiff` compares them with the collectors) |
 | `engine/row` | The payload's row model: player, team and round rows as per-family structs |
 | `engine/fold` | Folds both into match, T and CT rows and derives the ratings |
 | `engine/payload` | `Run`: the whole pipeline, the payload and its error sentinels |

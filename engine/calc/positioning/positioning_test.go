@@ -61,6 +61,22 @@ func TestLurker(t *testing.T) {
 		t.Errorf("skipped frames: %+v", p)
 	}
 
+	// The lone T joins after two frames: no row before, so no blip before.
+	join := round.Event{Event: match.Event{Fact: fact.TeamChange{}, Live: true, Join: &match.Member{Steam64: 1, Side: fact.SideT}}}
+	late := []round.Event{frame(1300, all, ok), frame(1600, all, ok), join, frame(1900, all, ok), frame(2200, all, ok), frame(2500, all, ok)}
+	r := &round.Round{StartTick: 100, OpenMembers: map[uint64]match.Member{}, Events: late, Commit: len(late)}
+	lateOut := &row.Round{Players: map[uint64]*row.Player{}}
+	for id := uint64(1); id <= 4; id++ {
+		lateOut.Players[id] = &row.Player{}
+		if id != 1 {
+			r.OpenMembers[id] = match.Member{Steam64: id, Side: fact.SideT}
+		}
+	}
+	Calc(r, lateOut)
+	if p := lateOut.Players[1]; p.LurkerBlips != 3 {
+		t.Errorf("a T who joined after two frames: %+v", p.Positioning)
+	}
+
 	// Two Ts alone and equally far from each other get a blip in turn, the first in the roster order
 	// winning the tie: 4 blips apiece, so no lurker.
 	var tie []round.Event

@@ -13,7 +13,7 @@ import (
 // than two Ts alive and the round undecided, the T whose distance sum to the others is smallest
 // and positive gets a blip; the T with more than 3 blips, alone at the most, is the round's lurker.
 func Calc(r *round.Round, out *row.Round) {
-	sides := map[uint64]fact.Side{}
+	sides := map[uint64]fact.Side{} // the players with a row so far: one who joins mid-round has none before
 	for id, m := range r.OpenMembers {
 		sides[id] = m.Side
 	}
@@ -30,7 +30,7 @@ func Calc(r *round.Round, out *row.Round) {
 		if e.After.TAlive <= 2 || e.After.Phase == round.Decided || f.Tick <= 18*fact.TickRate+r.StartTick {
 			continue
 		}
-		sample(out, e.Roster.Members(*e.Sample, fact.SideT))
+		sample(out, sides, e.Roster.Members(*e.Sample, fact.SideT))
 	}
 
 	var lurker uint64
@@ -51,10 +51,10 @@ func Calc(r *round.Round, out *row.Round) {
 }
 
 // sample is one tick of the sampler over the Ts of the round's roster that have rows.
-func sample(out *row.Round, members []fact.Player) {
+func sample(out *row.Round, sides map[uint64]fact.Side, members []fact.Player) {
 	var ts []fact.Player
 	for _, t := range members {
-		if out.Players[t.Steam64] != nil {
+		if _, ok := sides[t.Steam64]; ok && out.Players[t.Steam64] != nil {
 			ts = append(ts, t)
 		}
 	}

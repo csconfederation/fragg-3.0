@@ -13,11 +13,11 @@ import (
 func newRound(num int, freeze bool, tEquip, ctEquip int) *round.Round {
 	open := fact.Snapshot{Players: []fact.Player{{EquipValue: tEquip}, {EquipValue: tEquip + 200}, {EquipValue: ctEquip}}}
 	return &round.Round{Num: num, FreezeEnd: freeze, Pistol: num == 1, TClan: "a", CTClan: "b", Open: open,
-		Roster: match.Roster{T: []int{0, 1}, CT: []int{2}}}
+		Roster: match.Roster{T: []int{0, 1}, CT: []int{2}}, OpenMembers: map[uint64]match.Member{1: {}, 2: {}, 0: {}}}
 }
 
 func run(r *round.Round) *row.Round {
-	out := &row.Round{Players: map[uint64]*row.Player{1: {}, 2: {}, 0: {}},
+	out := &row.Round{Players: map[uint64]*row.Player{1: {}, 2: {}, 0: {}, 5: {}},
 		Teams: map[fact.Side]*row.Team{fact.SideT: {}, fact.SideCT: {}}}
 	Calc(r, out)
 	return out
@@ -75,7 +75,11 @@ func TestKills(t *testing.T) {
 		kill(bot, victim, true),     // the bot kills: only the death counts
 		dropped,
 	}
-	r.Commit = 6
+	// Player 5 kills before joining the round, and again after.
+	late := &fact.Player{Steam64: 5, EquipValue: 5000}
+	r.Events = append(r.Events, kill(late, victim, true),
+		round.Event{Event: match.Event{Fact: fact.TeamChange{}, Join: &match.Member{Steam64: 5}}}, kill(late, victim, true))
+	r.Commit = len(r.Events)
 	out := run(r)
 	kv, dp := rating.EcoKillValue(5000, 1000), rating.EcoDeathPenalty(1000, 5000)
 	kv2, dp2 := rating.EcoKillValue(1000, 5000), rating.EcoDeathPenalty(5000, 1000)
@@ -83,7 +87,7 @@ func TestKills(t *testing.T) {
 		t.Fatalf("test values: %v, %v", kv, kv2)
 	}
 	want1 := row.Economy{EcoKillValue: kv + kv, EcoDeathValue: dp2, KillsVsLowerBuy: 2, KillsVsMuchLowerBuy: 2}
-	want2 := row.Economy{EcoKillValue: kv2, EcoDeathValue: dp + rating.EcoDeathPenalty(1000, 1000)}
+	want2 := row.Economy{EcoKillValue: kv2, EcoDeathValue: dp + rating.EcoDeathPenalty(1000, 1000) + dp + dp}
 	if kv > 0.85 {
 		want1.KillsVsMuchLowerBuy = 0
 	}
@@ -92,6 +96,10 @@ func TestKills(t *testing.T) {
 	}
 	if got := out.Players[2].Economy; got != want2 {
 		t.Errorf("player 2: %+v, want %+v", got, want2)
+	}
+	kv5 := rating.EcoKillValue(5000, 1000)
+	if got := out.Players[5].Economy; got.EcoKillValue != kv5 {
+		t.Errorf("player 5, who joined after a kill: %+v, want one kill worth %v", got, kv5)
 	}
 	if got := out.Players[0].Economy; got != (row.Economy{}) {
 		t.Errorf("bot row: %+v", got)

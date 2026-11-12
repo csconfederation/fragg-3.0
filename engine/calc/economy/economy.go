@@ -44,14 +44,21 @@ func Calc(r *round.Round, out *row.Round) {
 		}
 	}
 
+	in := map[uint64]bool{} // the players with a row so far: one who joins mid-round has none before
+	for id := range r.OpenMembers {
+		in[id] = true
+	}
 	for _, e := range r.Events[:r.Commit] {
+		if e.Join != nil && !e.Dropped {
+			in[e.Join.Steam64] = true
+		}
 		k, ok := e.Fact.(fact.Kill)
 		if !ok || e.Dropped || !e.EcoKill {
 			continue
 		}
 		// Eco has no bot rows: a bot's share of the kill or death goes nowhere.
 		attacker, victim := float64(k.Killer.EquipValue), float64(k.Victim.EquipValue)
-		if id := k.Killer.Steam64; id != 0 && out.Players[id] != nil {
+		if id := k.Killer.Steam64; id != 0 && in[id] && out.Players[id] != nil {
 			p := out.Players[id]
 			value := rating.EcoKillValue(attacker, victim)
 			p.EcoKillValue += value
@@ -62,7 +69,7 @@ func Calc(r *round.Round, out *row.Round) {
 				p.KillsVsMuchLowerBuy++
 			}
 		}
-		if id := k.Victim.Steam64; id != 0 && out.Players[id] != nil {
+		if id := k.Victim.Steam64; id != 0 && in[id] && out.Players[id] != nil {
 			out.Players[id].EcoDeathValue += rating.EcoDeathPenalty(victim, attacker)
 		}
 	}

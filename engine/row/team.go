@@ -38,7 +38,20 @@ type TeamEconomy struct {
 	FullBuysW  int `json:"fullBuysW"`
 	AntiEcos   int `json:"antiEcos"`
 	AntiEcosW  int `json:"antiEcosW"`
+
+	Buy Buy `json:"-" fold:"-"` // the round's buy, for the fold's buy scopes
 }
+
+// Buy is a team's buy in a round (Core-planning#590).
+type Buy uint8
+
+const (
+	BuyUnknown Buy = iota // a round that committed without a freeze-end open, so before the buy
+	BuyPistol             // rounds 1 and 13 (D13), by number
+	BuyEco                // average equipment per player under $1,500 at freeze end
+	BuyForce              // $1,500-3,499
+	BuyFull               // $3,500 and up
+)
 
 type TeamObjectives struct {
 	WinPoints      float64 `json:"winPoints"`

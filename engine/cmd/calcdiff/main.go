@@ -64,6 +64,10 @@ var families = []family{
 			old.EarlyDeaths = 1
 		}
 	}},
+	{name: "Economy", team: "TeamEconomy", eco: func(old *row.Player, rs *model.RoundStats) {
+		old.EcoKillValue, old.EcoDeathValue = rs.EconImpact, rs.EcoDeathValue
+		old.KillsVsLowerBuy, old.KillsVsMuchLowerBuy = rs.LowBuyKills, rs.DisadvantagedBuyKills
+	}},
 }
 
 // ecoCombat is the eco-origin Combat fields as one round's eco row gives them: the per-round form

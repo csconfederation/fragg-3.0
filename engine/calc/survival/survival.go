@@ -47,7 +47,7 @@ func Calc(r *round.Round, out *row.Round) {
 		if !died[id] {
 			if m := members[id]; m.TeamID != int(win.Side) {
 				p.Saves = 1
-				if t := out.Teams[clanSide(r, m.Clan)]; t != nil {
+				if t := out.Teams[r.SideOf(m.Clan)]; t != nil {
 					t.Saves = 1
 				}
 			}
@@ -68,14 +68,4 @@ func Calc(r *round.Round, out *row.Round) {
 
 func seconds(r *round.Round, tick int) float64 {
 	return float64(tick-r.StartTick) / float64(fact.TickRate)
-}
-
-func clanSide(r *round.Round, clan string) fact.Side {
-	switch clan {
-	case r.TClan:
-		return fact.SideT
-	case r.CTClan:
-		return fact.SideCT
-	}
-	return 0
 }

@@ -6,7 +6,9 @@ import (
 	"strconv"
 
 	"github.com/csconfederation/fragg-3.0/engine/cscstats"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
+	"github.com/csconfederation/fragg-3.0/engine/row"
 )
 
 // Payload is what the worker sends Stats (D7, amended 2026-10-25): the stats Stats stores, named
@@ -23,21 +25,21 @@ type Payload struct {
 	HeaderMatchID *string `json:"headerMatchID"`
 	Teams         []Team  `json:"teams"`
 	// Players holds each player's whole-match row (side 4) and side rows (2 T, 3 CT).
-	Players []*cscstats.PlayerStats `json:"players,omitempty"`
-	Rounds  []Round                 `json:"rounds,omitempty"`
+	Players []*row.Player `json:"players,omitempty"`
+	Rounds  []Round       `json:"rounds,omitempty"`
 }
 
 // Team is a team's name, final score, and match stats (absent when score-only).
 type Team struct {
 	Name  string `json:"name"`
 	Score int    `json:"score"`
-	*cscstats.TeamStats
+	*row.Team
 }
 
 // Round is a committed round and its players' round rows.
 type Round struct {
-	*cscstats.Round
-	Players []*cscstats.PlayerStats `json:"players"`
+	*row.Round
+	Players []*row.Player `json:"players"`
 }
 
 const schemaVersion = 2
@@ -52,7 +54,7 @@ func build(g *cscstats.Game, res *match.Result) *Payload {
 	for _, name := range slices.Sorted(maps.Keys(res.Scores)) {
 		t := Team{Name: name, Score: res.Scores[name]}
 		if p.FullStatsOK {
-			t.TeamStats = g.TotalTeamStats[name]
+			t.Team = teamRow(g.TotalTeamStats[name])
 		}
 		p.Teams = append(p.Teams, t)
 	}
@@ -60,19 +62,65 @@ func build(g *cscstats.Game, res *match.Result) *Payload {
 		return p
 	}
 	for _, steam := range slices.Sorted(maps.Keys(g.TotalPlayerStats)) {
-		p.Players = append(p.Players, g.TotalPlayerStats[steam])
+		p.Players = append(p.Players, playerRow(g.TotalPlayerStats[steam]))
 		for _, side := range []map[uint64]*cscstats.PlayerStats{g.TPlayerStats, g.CtPlayerStats} {
-			if row := side[steam]; row != nil {
-				p.Players = append(p.Players, row)
+			if src := side[steam]; src != nil {
+				p.Players = append(p.Players, playerRow(src))
 			}
 		}
 	}
 	for _, r := range g.Rounds {
-		rr := Round{Round: r}
-		for _, steam := range slices.Sorted(maps.Keys(r.PlayerStats)) {
-			rr.Players = append(rr.Players, r.PlayerStats[steam])
+		rr := Round{Round: roundRow(r)}
+		for _, steam := range slices.Sorted(maps.Keys(rr.Round.Players)) {
+			rr.Players = append(rr.Players, rr.Round.Players[steam])
 		}
 		p.Rounds = append(p.Rounds, rr)
 	}
 	return p
+}
+
+// The rows come from the collectors and the fold (engine/cscstats) as they always have; the payload
+// holds them as row types with the constants applied (constants.go).
+
+// playerRow is a match or side row; a round's row is the same with the round's constants.
+func playerRow(src *cscstats.PlayerStats) *row.Player {
+	p := &row.Player{}
+	copyRow(p, src)
+	switch p.Side {
+	case int(fact.SideT):
+		setConstants(p, scopeSideT)
+	case int(fact.SideCT):
+		setConstants(p, scopeSideCT)
+	}
+	if p.SteamID == "0" {
+		setConstants(p, scopeBot)
+	}
+	return p
+}
+
+func roundRow(src *cscstats.Round) *row.Round {
+	r := &row.Round{Players: map[uint64]*row.Player{}}
+	copyRow(r, src)
+	setConstants(r, scopeRound)
+	for steam, ps := range src.PlayerStats {
+		p := &row.Player{}
+		copyRow(p, ps)
+		setConstants(p, scopeRoundPlayer)
+		if p.SteamID == "0" {
+			setConstants(p, scopeBot)
+		}
+		r.Players[steam] = p
+	}
+	return r
+}
+
+// teamRow is nil for a team without stats.
+func teamRow(src *cscstats.TeamStats) *row.Team {
+	if src == nil {
+		return nil
+	}
+	t := &row.Team{}
+	copyRow(t, src)
+	setConstants(t, scopeTeamMatch)
+	return t
 }

@@ -121,6 +121,7 @@ func RoundRow(src *cscstats.Round) *row.Round {
 func RoundTeam(src *cscstats.TeamStats) *row.Team {
 	t := &row.Team{}
 	copyRow(t, src)
+	t.Buy = row.Buy(src.Buy)
 	return t
 }
 

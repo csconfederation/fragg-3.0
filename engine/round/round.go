@@ -150,6 +150,17 @@ func (r *Round) WinAt(i int) (Win, bool) {
 	return w, ok
 }
 
+// SideOf is the side of one of the round's two clans, 0 for any other.
+func (r *Round) SideOf(clan string) fact.Side {
+	switch clan {
+	case r.TClan:
+		return fact.SideT
+	case r.CTClan:
+		return fact.SideCT
+	}
+	return 0
+}
+
 // OldWin is a Win as today's hold runs it: before event At (len(Events) after the last), for the
 // RoundEnd at index Event, with the residual alive members and the state at that moment.
 type OldWin struct {

@@ -7,6 +7,7 @@ package calc
 import (
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
 	"github.com/csconfederation/fragg-3.0/engine/calc/economy"
+	"github.com/csconfederation/fragg-3.0/engine/calc/positioning"
 	"github.com/csconfederation/fragg-3.0/engine/calc/survival"
 	"github.com/csconfederation/fragg-3.0/engine/calc/utility"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
@@ -26,6 +27,7 @@ var All = []Calc{
 	utility.Calc,
 	survival.Calc,
 	economy.Calc,
+	positioning.Calc,
 }
 
 // Run is r's rows: one empty player row per member, then every calculator.

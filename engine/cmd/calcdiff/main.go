@@ -68,6 +68,7 @@ var families = []family{
 		old.EcoKillValue, old.EcoDeathValue = rs.EconImpact, rs.EcoDeathValue
 		old.KillsVsLowerBuy, old.KillsVsMuchLowerBuy = rs.LowBuyKills, rs.DisadvantagedBuyKills
 	}},
+	{name: "Positioning"},
 }
 
 // ecoCombat is the eco-origin Combat fields as one round's eco row gives them: the per-round form

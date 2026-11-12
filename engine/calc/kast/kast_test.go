@@ -1,0 +1,145 @@
+package kast_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/csconfederation/fragg-3.0/engine/calc"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/match"
+	"github.com/csconfederation/fragg-3.0/engine/payload"
+	"github.com/csconfederation/fragg-3.0/engine/round"
+	"github.com/csconfederation/fragg-3.0/engine/roundlog"
+	"github.com/csconfederation/fragg-3.0/engine/row"
+)
+
+// Every PR 2 fixture: the calculator's KAST against the collectors' rows. Eco's KAST round is
+// restored from its round row as the fold counts it (side_stats.go UpdateCommonRoundStats).
+func TestFixtures(t *testing.T) {
+	files, _ := filepath.Glob("../../roundlog/testdata/*.json.gz")
+	if len(files) == 0 {
+		t.Fatal("no fixtures")
+	}
+	for _, path := range files {
+		t.Run(strings.TrimSuffix(filepath.Base(path), ".json.gz"), func(t *testing.T) {
+			gz, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := roundlog.Gunzip(gz)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f, err := roundlog.Decode(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := roundlog.Replay(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			old, cur := payload.RoundRow(got.Rows.CSC.Round), calc.Run(got.Round)
+			for id, op := range old.Players {
+				if rs := got.Rows.Eco[id]; rs != nil && (rs.GotKill || rs.GotAssist || rs.Survived || rs.Traded) {
+					op.EcoKastRounds = 1
+				}
+				if np := cur.Players[id]; np == nil || op.KAST != np.KAST {
+					t.Errorf("player %d: old %+v, new %+v", id, op.KAST, np)
+				}
+			}
+		})
+	}
+}
+
+// Hand-built rounds: players 1-2 T, 11-13 CT; 0 is the shared bot row; 99 isn't a member.
+func player(steam uint64) *fact.Player {
+	side := fact.SideT
+	if steam > 10 {
+		side = fact.SideCT
+	}
+	return &fact.Player{Steam64: steam, Side: side, IsBot: steam == 0}
+}
+
+func kill(killer, victim uint64, x round.Context) round.Event {
+	w := 7
+	return round.Event{Event: match.Event{Fact: fact.Kill{Killer: player(killer), Victim: player(victim), Weapon: &w}}, Context: x}
+}
+
+func run(events ...round.Event) *row.Round {
+	ms := map[uint64]match.Member{}
+	for _, id := range []uint64{0, 1, 2, 11, 12, 13} {
+		ms[id] = match.Member{Steam64: id, IsBot: id == 0}
+	}
+	return calc.Run(&round.Round{OpenMembers: ms, Events: events, Commit: len(events)})
+}
+
+type got struct{ csc, eco float64 }
+
+func TestKAST(t *testing.T) {
+	enemy := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+	cases := []struct {
+		name   string
+		events func() []round.Event
+		want   map[uint64]got
+	}{
+		{"nothing happens: everyone survives", func() []round.Event { return nil },
+			map[uint64]got{0: {1, 0}, 1: {1, 1}, 11: {1, 1}}},
+		{"a kill counts for the killer, the death does not", func() []round.Event { return []round.Event{kill(11, 1, enemy)} },
+			map[uint64]got{11: {1, 1}, 1: {0, 0}, 12: {1, 1}}},
+		{"an assist counts for the assister", func() []round.Event {
+			e := kill(11, 1, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, Assist: true, EcoKill: true})
+			e.Fact = func() fact.Kill { k := e.Fact.(fact.Kill); k.Assister = player(12); return k }()
+			return []round.Event{e, kill(13, 2, enemy), kill(1, 13, enemy)}
+		}, map[uint64]got{12: {1, 1}, 13: {1, 1}, 1: {1, 1}, 2: {0, 0}}},
+		{"a traded death counts", func() []round.Event {
+			x := enemy
+			x.Avenged = []round.Death{{Steam: 1, Tick: 1}}
+			return []round.Event{kill(11, 1, enemy), kill(2, 13, x)}
+		}, map[uint64]got{1: {1, 1}, 13: {0, 0}, 2: {1, 1}}},
+		{"a team kill counts for nobody; the victim died", func() []round.Event {
+			return []round.Event{kill(12, 11, round.Context{Expected: true, Killer: true, Victim: true})}
+		}, map[uint64]got{12: {1, 1}, 11: {0, 0}}},
+		{"an eco kill of a non-member: eco counts the killer, CSC does not", func() []round.Event {
+			k := kill(1, 99, round.Context{Expected: true, EcoKill: true})
+			return []round.Event{kill(11, 1, enemy), k}
+		}, map[uint64]got{1: {0, 1}, 11: {1, 1}}},
+		{"bots share a row: one bot death kills its KAST", func() []round.Event {
+			return []round.Event{kill(11, 0, enemy)}
+		}, map[uint64]got{0: {0, 0}, 11: {1, 1}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out := run(c.events()...)
+			for id, w := range c.want {
+				if g := (got{out.Players[id].KastRounds, out.Players[id].EcoKastRounds}); g != w {
+					t.Errorf("player %d: csc, eco = %v, want %v", id, g, w)
+				}
+			}
+		})
+	}
+}
+
+// The eco gate: a human's kill of a non-member is theirs in eco, nobody's in CSC.
+func TestEcoGate(t *testing.T) {
+	out := run(kill(1, 99, round.Context{Expected: true, EcoKill: true}), kill(11, 2, round.Context{Expected: true, Victim: true}))
+	if p := out.Players[1]; p.KastRounds != 1 || p.EcoKastRounds != 1 {
+		t.Errorf("killer survived either way: %+v", p.KAST)
+	}
+	out = run(kill(1, 99, round.Context{Expected: true, EcoKill: true}), kill(11, 1, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}))
+	if p := out.Players[1]; p.KastRounds != 0 || p.EcoKastRounds != 1 {
+		t.Errorf("killer died: csc 0, eco 1 expected, got %+v", p.KAST)
+	}
+}
+
+// A human who joins mid-round has an eco row from the join: an earlier kill was a scratch row's.
+func TestLateJoiner(t *testing.T) {
+	x := round.Context{Expected: true, EcoKill: true}
+	join := round.Event{Event: match.Event{Fact: fact.TeamChange{}, Join: &match.Member{Steam64: 99}}}
+	died := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+	out := run(kill(99, 1, x), join, kill(11, 99, died))
+	if got := out.Players[99].EcoKastRounds; got != 0 {
+		t.Errorf("eco KAST %v, want 0: the kill came before the join and the joiner died", got)
+	}
+}

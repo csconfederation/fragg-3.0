@@ -58,6 +58,7 @@ type family struct {
 var families = []family{
 	{name: "Combat", eco: ecoCombat},
 	{name: "KAST", eco: ecoKAST},
+	{name: "Trades", eco: ecoTrades},
 	{name: "Utility"},
 	{name: "Survival", team: "TeamSurvival", eco: func(old *row.Player, rs *model.RoundStats) {
 		old.EcoDeathTime, old.EcoTimeAlive = rs.DeathTime, rs.TimeAlive
@@ -96,6 +97,15 @@ func ecoCombat(old *row.Player, rs *model.RoundStats) {
 // ecoKAST is eco's KAST round as the fold counts it (side_stats.go UpdateCommonRoundStats).
 func ecoKAST(old *row.Player, rs *model.RoundStats) {
 	old.KAST.EcoKastRounds = float64(b2i(rs.GotKill || rs.GotAssist || rs.Survived || rs.Traded))
+}
+
+// ecoTrades is the eco-origin Trades fields as one round's eco row gives them (side_stats.go
+// updateTradeStats and applySideEcoCounters, fold.go FoldRound).
+func ecoTrades(old *row.Player, rs *model.RoundStats) {
+	t := &old.Trades
+	t.TradeKills, t.FastTrades, t.TradeDenials = rs.TradeKills, rs.FastTrades, rs.TradeDenials
+	t.OpeningDeathsTraded = b2i(rs.OpeningDeath && rs.Traded)
+	t.SavedByTeammate, t.SavedTeammate = b2i(rs.SavedByTeammate), b2i(rs.SavedTeammate)
 }
 
 func b2i(b bool) int {

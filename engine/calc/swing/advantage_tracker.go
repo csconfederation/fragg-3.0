@@ -1,4 +1,4 @@
-package eco
+package swing
 
 import (
 	"github.com/csconfederation/fragg-3.0/engine/fact"

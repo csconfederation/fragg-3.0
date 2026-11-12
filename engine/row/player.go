@@ -157,6 +157,10 @@ type Swing struct {
 	EcoProbabilitySwing float64 `json:"ecoProbabilitySwing"`
 	EcoAdjustedKills    float64 `json:"ecoAdjustedKills"`
 	AvgTimeToKill       float64 `json:"avgTimeToKill"`
+
+	// Seconds from first damage to the kill, over the kills with prior damage, for the fold's average.
+	TimeToKillSum float64 `json:"-"`
+	KillsWithTTK  int     `json:"-"`
 }
 
 // Rates are computed by the fold from the sums.

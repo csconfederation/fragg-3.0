@@ -1,4 +1,4 @@
-package eco
+package swing
 
 import (
 	"testing"

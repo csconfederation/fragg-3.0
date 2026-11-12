@@ -9,6 +9,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/calc/economy"
 	"github.com/csconfederation/fragg-3.0/engine/calc/positioning"
 	"github.com/csconfederation/fragg-3.0/engine/calc/survival"
+	"github.com/csconfederation/fragg-3.0/engine/calc/swing"
 	"github.com/csconfederation/fragg-3.0/engine/calc/utility"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/round"
@@ -28,6 +29,7 @@ var All = []Calc{
 	survival.Calc,
 	economy.Calc,
 	positioning.Calc,
+	swing.Calc,
 }
 
 // Run is r's rows: one empty player row per member, then every calculator.

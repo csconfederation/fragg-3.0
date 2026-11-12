@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 
+	calcswing "github.com/csconfederation/fragg-3.0/engine/calc/swing"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/round"
 	"github.com/csconfederation/fragg-3.0/model"
@@ -19,7 +20,7 @@ type Collector struct {
 	players     map[uint64]*model.PlayerStats
 	round       map[uint64]*model.RoundStats
 	trades      *TradeDetector
-	swing       *SwingTracker
+	swing       *calcswing.SwingTracker
 	roundActive bool
 	mapName     string
 	startTick   int // the round clock starts at the open's tick, as CSC's
@@ -37,7 +38,7 @@ func New() *Collector {
 		players: map[uint64]*model.PlayerStats{},
 		round:   map[uint64]*model.RoundStats{},
 		trades:  NewTradeDetector(),
-		swing:   NewSwingTrackerWithConfig(swing.DefaultConfig()),
+		swing:   calcswing.NewSwingTrackerWithConfig(swing.DefaultConfig()),
 	}
 }
 

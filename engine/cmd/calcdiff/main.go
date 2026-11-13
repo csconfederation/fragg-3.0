@@ -36,6 +36,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/calc"
 	"github.com/csconfederation/fragg-3.0/engine/cscstats"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/fold"
 	"github.com/csconfederation/fragg-3.0/engine/ingest"
 	"github.com/csconfederation/fragg-3.0/engine/match"
 	"github.com/csconfederation/fragg-3.0/engine/payload"
@@ -48,9 +49,11 @@ import (
 // how the old side gets the eco-origin values the payload zeroes on round rows (constants.go):
 // eco copies them from the round's model.RoundStats onto the old row. A family without any has nil.
 type family struct {
-	name string
-	team string // the family's struct in row.Team, if it writes team parts
-	eco  func(old *row.Player, rs *model.RoundStats)
+	name  string
+	team  string // the family's struct in row.Team, if it writes team parts
+	round string // the family's struct in row.Round, if it writes round parts
+	fold  bool   // the old side is read as the fold leaves it: fold.Enrich ran
+	eco   func(old *row.Player, rs *model.RoundStats)
 }
 
 // families are the compared families, in the plan's order: combat, KAST, trades, openings,
@@ -62,6 +65,9 @@ var families = []family{
 	{name: "Openings", team: "TeamOpenings", eco: ecoOpenings},
 	{name: "Clutches", team: "TeamClutches", eco: ecoClutches},
 	{name: "Utility"},
+	{name: "Objectives", team: "TeamObjectives", round: "Bomb", fold: true, eco: func(old *row.Player, rs *model.RoundStats) {
+		old.ExitFrags = rs.ExitFrags
+	}},
 	{name: "Survival", team: "TeamSurvival", eco: func(old *row.Player, rs *model.RoundStats) {
 		old.EcoDeathTime, old.EcoTimeAlive = rs.DeathTime, rs.TimeAlive
 		if rs.Deaths > 0 && rs.DeathTime < 30.0 {
@@ -278,6 +284,11 @@ func (rp *report) familyDiffs(demo string, r *round.Round, csc *cscstats.Round, 
 	if len(families) == 0 {
 		return
 	}
+	for _, fam := range families {
+		if fam.fold {
+			fold.Enrich(csc)
+		}
+	}
 	old, cur := payload.RoundRow(csc), calc.Run(r)
 	for _, id := range slices.Sorted(maps.Keys(old.Players)) {
 		if _, ok := cur.Players[id]; !ok {
@@ -317,6 +328,12 @@ func (rp *report) familyDiffs(demo string, r *round.Round, csc *cscstats.Round, 
 				rp.fieldDiffs(demo, r.Num, teamRow(side), fam.team, reflect.ValueOf(oldTeam).Elem().FieldByName(fam.team),
 					reflect.ValueOf(nt).Elem().FieldByName(fam.team))
 			}
+		}
+	}
+	for _, fam := range families {
+		if fam.round != "" {
+			rp.fieldDiffs(demo, r.Num, "round", fam.round, reflect.ValueOf(old).Elem().FieldByName(fam.round),
+				reflect.ValueOf(cur).Elem().FieldByName(fam.round))
 		}
 	}
 }

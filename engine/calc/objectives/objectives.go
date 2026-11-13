@@ -21,8 +21,10 @@ var clutchBonus = [...]float64{0, 0.2, 0.6, 1.2, 2, 3}
 // Calc writes each player's killPoints and exitFrags, the bonus part of impactPoints (+0.15 per
 // assisted kill, +0.5 per defuse or explosion, in fact order), and the round's bomb fields.
 func Calc(r *round.Round, out *row.Round) {
-	ecos := map[uint64]bool{} // eco has rows for the round's humans, from the open or their join
+	ecos := map[uint64]bool{}    // eco has rows for the round's humans, from the open or their join
+	present := map[uint64]bool{} // CSC has rows for the round's members, from the open or their join
 	for id, m := range r.OpenMembers {
+		present[id] = true
 		if !m.IsBot {
 			ecos[id] = true
 		}
@@ -39,8 +41,11 @@ func Calc(r *round.Round, out *row.Round) {
 		if e.Dropped {
 			continue
 		}
-		if j := e.Join; j != nil && !j.IsBot {
-			ecos[j.Steam64] = true // a kill before the join was a scratch row's
+		if j := e.Join; j != nil {
+			present[j.Steam64] = true // a bomb credit before the join had no row
+			if !j.IsBot {
+				ecos[j.Steam64] = true // a kill before the join was a scratch row's
+			}
 		}
 		switch f := e.Fact.(type) {
 		case fact.Kill:
@@ -68,14 +73,14 @@ func Calc(r *round.Round, out *row.Round) {
 		case fact.BombDefused:
 			if e.Before.Phase != round.Decided {
 				out.EndDueToBombEvent, out.Defuser = true, f.Player.Steam64
-				if p := out.Players[f.Player.Steam64]; p != nil {
+				if p := out.Players[f.Player.Steam64]; p != nil && present[f.Player.Steam64] {
 					p.ImpactPoints += 0.5
 				}
 			}
 		case fact.BombExplode:
 			if e.Before.Phase != round.Decided {
 				out.EndDueToBombEvent = true
-				if p := out.Players[out.Planter]; out.Planter != 0 && p != nil {
+				if p := out.Players[out.Planter]; out.Planter != 0 && p != nil && present[out.Planter] {
 					p.ImpactPoints += 0.5
 				}
 			}

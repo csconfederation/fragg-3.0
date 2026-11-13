@@ -312,3 +312,23 @@ func TestFinishEdges(t *testing.T) {
 		t.Errorf("bot impact %v, want %v", got, want)
 	}
 }
+
+// A defuser or planter who joins later has no row at the event: no credit then.
+func TestBombBeforeJoin(t *testing.T) {
+	p := &fact.Player{Steam64: 5, Side: fact.SideCT}
+	join := round.Event{Event: match.Event{Fact: fact.TeamChange{}, Join: &match.Member{Steam64: 5, Clan: "B"}}}
+	r := build(0, bomb(fact.BombDefused{Player: p}, round.PostPlant), join)
+	out := seed(r)
+	out.Players[5] = &row.Player{} // calc.Run seeds the joiner's row
+	objectives.Calc(r, out)
+	if out.Players[5].ImpactPoints != 0 || out.Defuser != 5 {
+		t.Errorf("defuse before the join: %v, defuser %d", out.Players[5].ImpactPoints, out.Defuser)
+	}
+	r = build(0, join, bomb(fact.BombDefused{Player: p}, round.PostPlant))
+	out = seed(r)
+	out.Players[5] = &row.Player{}
+	objectives.Calc(r, out)
+	if out.Players[5].ImpactPoints != 0.5 {
+		t.Errorf("defuse after the join: %v", out.Players[5].ImpactPoints)
+	}
+}

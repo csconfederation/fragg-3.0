@@ -112,7 +112,7 @@ func Calc(r *round.Round, out *row.Round) {
 		if len(e.Avenged) > 0 {
 			if k := ecos[f.Killer.Steam64]; k != nil {
 				k.kills++
-				if speed := clock(f.Tick) - clock(e.Avenged[0].Tick); speed > 0 && speed < 2.0 {
+				if speed := clock(f.Tick) - clock(e.Avenged[0].Tick); speed < 2.0 {
 					k.fast++
 				}
 			}

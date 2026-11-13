@@ -44,10 +44,11 @@ func TestAtdIsPerDeath(t *testing.T) {
 	rows := map[uint64]*row.Player{
 		1: {ID: row.ID{Rounds: 4}, Combat: row.Combat{Deaths: 2}, Survival: row.Survival{TicksAlive: 64 * 30 * 2}}, // died twice at 30 s, survived twice
 		2: {ID: row.ID{Rounds: 4}},                                                                                 // never died
+		3: {ID: row.ID{Rounds: 4}, Combat: row.Combat{Deaths: 2}, Survival: row.Survival{TicksAlive: 64*30 + 96}},  // 1.5 s over: D47 keeps it
 	}
 	derive(rows)
-	if rows[1].Atd != 30 || rows[2].Atd != 0 {
-		t.Errorf("atd %d, %d; want 30, 0", rows[1].Atd, rows[2].Atd)
+	if rows[1].Atd != 30 || rows[2].Atd != 0 || rows[3].Atd != 15.75 {
+		t.Errorf("atd %v, %v, %v; want 30, 0, 15.75", rows[1].Atd, rows[2].Atd, rows[3].Atd)
 	}
 	if rows[2].Tr != 0.5 {
 		t.Errorf("tr %v with no deaths, want 0.50", rows[2].Tr)

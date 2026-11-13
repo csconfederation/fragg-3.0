@@ -198,10 +198,10 @@ func count(dst, p *row.Player, tallies map[*row.Player]*tally) {
 func derive(rows map[uint64]*row.Player) {
 	for _, id := range slices.Sorted(maps.Keys(rows)) {
 		p := rows[id]
-		// Average time to death (D20): over the rounds the player died in; survivors' rounds have no
-		// time to death (ticksAlive is set at death).
+		// Average time to death (D20, D47): over the rounds the player died in, in seconds with its
+		// fraction; survivors' rounds have no time to death (ticksAlive is set at death).
 		if p.Deaths > 0 {
-			p.Atd = p.TicksAlive / p.Deaths / fact.TickRate
+			p.Atd = float64(p.TicksAlive) / float64(p.Deaths) / fact.TickRate
 		} else {
 			p.Atd = 0
 		}

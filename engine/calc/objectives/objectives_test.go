@@ -278,8 +278,8 @@ func TestFinish(t *testing.T) {
 	}
 }
 
-// Everyone with nothing shares mip (Q17); a zero-damage win has no round win share, and loses the
-// bomb's 30 with it (D46 is held at parity).
+// Everyone with nothing shares mip (Q17); a zero-damage win has no round win share, but the
+// planter keeps the bomb's 30 (D46).
 func TestFinishEdges(t *testing.T) {
 	r := build(fact.SideT)
 	out := finish(r, nil)
@@ -292,8 +292,11 @@ func TestFinishEdges(t *testing.T) {
 		bomb(fact.BombPlanted{Player: &fact.Player{Steam64: 1, Side: fact.SideT}}, round.PrePlant),
 		bomb(fact.BombExplode{}, round.PostPlant))
 	out = finish(r, map[uint64]row.Combat{1: {Damage: 0}})
-	if p := out.Players[1]; p.Rws != 0 || math.IsNaN(p.Rws) {
-		t.Errorf("zero-damage win rws %v, want 0", p.Rws)
+	if p := out.Players[1]; p.Rws != 30 {
+		t.Errorf("zero-damage win, planter rws %v, want 30", p.Rws)
+	}
+	if p := out.Players[2]; p.Rws != 0 || math.IsNaN(p.Rws) {
+		t.Errorf("zero-damage win, teammate rws %v, want 0", p.Rws)
 	}
 	out = finish(r, map[uint64]row.Combat{1: {Damage: 50}, 2: {Damage: 50}})
 	if got, want := out.Players[1].Rws, 70*(50.0/100.0)+30; got != want {

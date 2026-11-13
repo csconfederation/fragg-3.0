@@ -2,7 +2,7 @@ module github.com/csconfederation/fragg-3.0
 
 go 1.27.0
 
-require github.com/markus-wa/demoinfocs-golang/v6 v6.0.0-rc.1
+require github.com/markus-wa/demoinfocs-golang/v6 v6.0.0-rc.2
 
 require (
 	github.com/golang/geo v0.0.0-20260129164528-943061e2742c // indirect

@@ -56,3 +56,29 @@ func TestCalc(t *testing.T) {
 		t.Errorf("team saves %+v %+v", out.Teams[fact.SideT], out.Teams[fact.SideCT])
 	}
 }
+
+// D44: a member who disconnects without dying is not a survivor, so a loser who leaves is not a save.
+func TestDisconnectedIsNotASave(t *testing.T) {
+	end := round.Event{Event: match.Event{Fact: fact.RoundEnd{Snapshot: fact.Snapshot{Tick: 4000}, Winner: fact.SideT}, Live: true,
+		Win: true, Winner: "a"}}
+	left := round.Event{Event: match.Event{Fact: fact.Disconnect{Steam64: 4}, Live: true}}
+	r := &round.Round{StartTick: 1000, TClan: "a", CTClan: "b",
+		OpenMembers: map[uint64]match.Member{
+			2: {Steam64: 2, Side: fact.SideT, TeamID: 2, Clan: "a"},
+			3: {Steam64: 3, Side: fact.SideCT, TeamID: 3, Clan: "b"}, 4: {Steam64: 4, Side: fact.SideCT, TeamID: 3, Clan: "b"}},
+		Events: []round.Event{left, end}, Wins: []int{1}, Commit: 2}
+	out := &row.Round{Players: map[uint64]*row.Player{}, Teams: map[fact.Side]*row.Team{fact.SideT: {}, fact.SideCT: {}}}
+	for id := range r.OpenMembers {
+		out.Players[id] = &row.Player{}
+	}
+	Calc(r, out)
+	if p := out.Players[4]; p.Saves != 0 || p.LeftAlive != 1 {
+		t.Errorf("disconnected loser %+v: want no save, LeftAlive 1", p.Survival)
+	}
+	if p := out.Players[3]; p.Saves != 1 || p.LeftAlive != 0 {
+		t.Errorf("loser who stayed %+v: want a save", p.Survival)
+	}
+	if out.Teams[fact.SideCT].Saves != 1 {
+		t.Errorf("team saves %d, want 1 (player 3 only)", out.Teams[fact.SideCT].Saves)
+	}
+}

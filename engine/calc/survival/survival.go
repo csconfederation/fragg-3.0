@@ -43,8 +43,11 @@ func Calc(r *round.Round, out *row.Round) {
 		}
 	}
 	win, won := r.WinAt(r.Commit)
+	left := r.Disconnected()
 	for id, p := range out.Players {
-		if !died[id] {
+		if !died[id] && left[id] { // D44: a disconnect while alive is not surviving
+			p.LeftAlive = 1
+		} else if !died[id] {
 			if m := members[id]; m.TeamID != int(win.Side) {
 				p.Saves = 1
 				if t := out.Teams[r.SideOf(m.Clan)]; t != nil {

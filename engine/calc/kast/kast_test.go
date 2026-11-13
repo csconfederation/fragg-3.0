@@ -62,6 +62,12 @@ func TestKAST(t *testing.T) {
 			k := kill(1, 99, round.Context{Expected: true, EcoKill: true})
 			return []round.Event{kill(11, 1, enemy), k}
 		}, map[uint64]got{1: {0, 1}, 11: {1, 1}}},
+		{"D44: a player who disconnects alive did not survive", func() []round.Event {
+			return []round.Event{{Event: match.Event{Fact: fact.Disconnect{Steam64: 1}, Live: true}}}
+		}, map[uint64]got{1: {0, 0}, 2: {1, 1}}},
+		{"D44: a kill before the disconnect still counts", func() []round.Event {
+			return []round.Event{kill(1, 11, enemy), {Event: match.Event{Fact: fact.Disconnect{Steam64: 1}, Live: true}}}
+		}, map[uint64]got{1: {1, 1}}},
 		{"bots share a row: one bot death kills its KAST", func() []round.Event {
 			return []round.Event{kill(11, 0, enemy)}
 		}, map[uint64]got{0: {0, 0}, 11: {1, 1}}},

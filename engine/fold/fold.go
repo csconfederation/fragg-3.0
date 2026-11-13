@@ -186,7 +186,7 @@ func count(dst, p *row.Player, tallies map[*row.Player]*tally) {
 	if k := p.EcoKills; k >= 1 && k <= 5 {
 		t.multi[k]++
 	}
-	if p.Deaths == 0 {
+	if p.Deaths == 0 && p.LeftAlive == 0 {
 		t.survived++
 	} else {
 		t.died++

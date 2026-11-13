@@ -1,11 +1,10 @@
 package fold
 
 import (
-	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"maps"
 	"slices"
 
-	"github.com/csconfederation/fragg-3.0/engine/cscstats"
+	"github.com/csconfederation/fragg-3.0/engine/row"
 )
 
 // The buy scopes a whole-match row is rated over (Core-planning#589, #590).
@@ -15,86 +14,48 @@ const (
 	scopeForce
 	scopeFull
 	scopeAntiEco
-	scopes
+	numBuys
 )
 
-// buyScope is a row set like a side's: the player's rounds in the scope, with the rating inputs the
-// whole-match row carries for its side scopes.
-type buyScope struct {
-	rows           map[uint64]*cscstats.PlayerStats
-	teamsWinPoints map[uint64]float64
-	normalizer     map[uint64]int
-}
-
-// rateBuys rates every whole-match row over the rounds of each of its team's buys, as rate rates a
-// side: the main CSC formula against the scope's own averages.
-func rateBuys(g *cscstats.Game) {
-	var bs [scopes]buyScope
-	for i := range bs {
-		bs[i] = buyScope{map[uint64]*cscstats.PlayerStats{}, map[uint64]float64{}, map[uint64]int{}}
-	}
-	for _, r := range g.Rounds {
-		for _, steam := range slices.Sorted(maps.Keys(r.PlayerStats)) {
-			p := r.PlayerStats[steam]
-			team := r.TeamStats[p.TeamClanName]
-			for _, i := range buyScopes(team.Buy, opponentBuy(r, p.TeamClanName)) {
-				s := bs[i]
-				add(row(s.rows, steam, p), p)
-				s.teamsWinPoints[steam] += team.WinPoints
-				if p.Side == int(fact.SideT) {
-					s.normalizer[steam] += r.InitTerroristCount
-				} else {
-					s.normalizer[steam] += r.InitCTerroristCount
-				}
-			}
-		}
-	}
-	for i, s := range bs {
-		derive(s.rows, g.TickRate)
+// rateBuys rates every whole-match row over the rounds of each of its team's buys, as a side is
+// rated: the main CSC formula against the scope's own averages.
+func rateBuys(m *Match, buys [numBuys]*scope) {
+	for i, s := range buys {
 		a := average(s.rows)
-		for _, steam := range slices.Sorted(maps.Keys(s.rows)) {
-			row := s.rows[steam]
-			_, rating := rating(row, a, s.teamsWinPoints[steam], s.normalizer[steam])
-			w := g.TotalPlayerStats[steam]
+		for _, id := range slices.Sorted(maps.Keys(s.rows)) {
+			p := s.rows[id]
+			_, r := cscRating(p, a, s.teamsWinPoints[id], s.normalizer[id])
+			w := m.Whole[id]
 			switch i {
 			case scopePistol:
-				w.PistolRounds, w.PistolRoundsWon, w.PistolRoundRating = row.Rounds, row.RF, rating
+				w.PistolRounds, w.PistolRoundsWon, w.PistolRoundRating = p.Rounds, p.RF, r
 			case scopeEco:
-				w.EcoBuyRounds, w.EcoBuyRoundsWon, w.EcoBuyRating = row.Rounds, row.RF, rating
+				w.EcoBuyRounds, w.EcoBuyRoundsWon, w.EcoBuyRating = p.Rounds, p.RF, r
 			case scopeForce:
-				w.ForceBuyRounds, w.ForceBuyRoundsWon, w.ForceBuyRating = row.Rounds, row.RF, rating
+				w.ForceBuyRounds, w.ForceBuyRoundsWon, w.ForceBuyRating = p.Rounds, p.RF, r
 			case scopeFull:
-				w.FullBuyRounds, w.FullBuyRoundsWon, w.FullBuyRating = row.Rounds, row.RF, rating
+				w.FullBuyRounds, w.FullBuyRoundsWon, w.FullBuyRating = p.Rounds, p.RF, r
 			case scopeAntiEco:
-				w.AntiEcoRounds, w.AntiEcoRoundsWon, w.AntiEcoRating = row.Rounds, row.RF, rating
+				w.AntiEcoRounds, w.AntiEcoRoundsWon, w.AntiEcoRating = p.Rounds, p.RF, r
 			}
 		}
 	}
 }
 
 // buyScopes are the scopes a round of the team's buy counts in.
-func buyScopes(own, opponent cscstats.Buy) []int {
+func buyScopes(own, opponent row.Buy) []int {
 	switch own {
-	case cscstats.BuyPistol:
+	case row.BuyPistol:
 		return []int{scopePistol}
-	case cscstats.BuyEco:
+	case row.BuyEco:
 		return []int{scopeEco}
-	case cscstats.BuyForce:
+	case row.BuyForce:
 		return []int{scopeForce}
-	case cscstats.BuyFull:
-		if opponent == cscstats.BuyEco {
+	case row.BuyFull:
+		if opponent == row.BuyEco {
 			return []int{scopeFull, scopeAntiEco}
 		}
 		return []int{scopeFull}
 	}
 	return nil
-}
-
-func opponentBuy(r *cscstats.Round, clan string) cscstats.Buy {
-	for name, t := range r.TeamStats {
-		if name != clan {
-			return t.Buy
-		}
-	}
-	return cscstats.BuyUnknown
 }

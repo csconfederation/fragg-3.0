@@ -1,5 +1,5 @@
 // Package payload runs the engine over a demo and builds the payload the worker sends Stats: the
-// CSC and eco stats of the committed rounds, folded once (Core-planning#303).
+// calculators' rows of the committed rounds, folded once (Core-planning#303, #681).
 package payload
 
 import (
@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/csconfederation/fragg-3.0/engine/eco"
+	"github.com/csconfederation/fragg-3.0/engine/calc"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/fold"
 	"github.com/csconfederation/fragg-3.0/engine/ingest"
 	"github.com/csconfederation/fragg-3.0/engine/match"
 	"github.com/csconfederation/fragg-3.0/engine/round"
+	"github.com/csconfederation/fragg-3.0/engine/row"
 )
 
 // The errors Run returns besides a *match.InvariantError and stream failures. The worker maps them
@@ -28,7 +29,7 @@ var (
 // Run parses r and returns the payload and the match result. A partial demo (D9) is a score-only
 // payload; a stream that breaks after the match ended still yields the full payload.
 func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
-	s := NewReplay()
+	s := &rows{rows: map[*match.Round]*row.Round{}}
 	d := round.NewDeriver(s)
 	m := match.New(d)
 	term, _ := ingest.Run(ctx, r, m)
@@ -51,15 +52,25 @@ func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
 	if err := d.Close(); err != nil {
 		return nil, nil, err
 	}
-	game := s.csc.Game(s.views(res))
-	if res.Outcome == match.Ended {
-		rounds := make([]*eco.Round, 0, len(res.Rounds))
-		for _, r := range res.Rounds {
-			rounds = append(rounds, s.rounds[r])
-		}
-		if err := fold.Game(game, s.eco, rounds); err != nil {
-			return nil, nil, err
-		}
+	if res.Outcome != match.Ended {
+		return build(res, nil, nil), res, nil
 	}
-	return build(game, res), res, nil
+	rounds := make([]*row.Round, 0, len(res.Rounds))
+	for _, r := range res.Rounds {
+		rounds = append(rounds, s.rows[r])
+	}
+	folded, err := fold.Fold(rounds)
+	if err != nil {
+		return nil, nil, err
+	}
+	return build(res, folded, rounds), res, nil
+}
+
+// rows takes each committed round from the Deriver and keeps its calculated rows, by the lifecycle's
+// round: the Deriver also hands over rounds the lifecycle later supersedes, which the fold never reads.
+type rows struct{ rows map[*match.Round]*row.Round }
+
+func (s *rows) Round(r *round.Round) error {
+	s.rows[r.Key] = calc.Run(r)
+	return nil
 }

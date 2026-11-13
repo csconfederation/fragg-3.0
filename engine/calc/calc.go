@@ -1,10 +1,12 @@
 // Package calc holds the stat calculators that replace the collectors (Core-planning#681). Each
 // reads one committed round, as the Deriver handed it over, and writes only its own family of the
-// round's row model. The payload doesn't call them until the fold switches (PR 17); cmd/calcdiff
-// compares them with the collectors meanwhile.
+// round's row model. The payload runs them through Run and folds the rows (engine/fold); cmd/calcdiff
+// compares them with the collectors until PR 18 deletes those.
 package calc
 
 import (
+	"strconv"
+
 	"github.com/csconfederation/fragg-3.0/engine/calc/clutches"
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
 	"github.com/csconfederation/fragg-3.0/engine/calc/economy"
@@ -17,6 +19,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/calc/trades"
 	"github.com/csconfederation/fragg-3.0/engine/calc/utility"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
+	"github.com/csconfederation/fragg-3.0/engine/match"
 	"github.com/csconfederation/fragg-3.0/engine/round"
 	"github.com/csconfederation/fragg-3.0/engine/row"
 )
@@ -43,20 +46,62 @@ var All = []Calc{
 	objectives.Finish, // tier 2
 }
 
-// Run is r's rows: one empty player row per member, then every calculator.
+// Run is r's rows: the round's meta, one player row per member, then every calculator.
 func Run(r *round.Round) *row.Round {
-	out := &row.Round{Players: map[uint64]*row.Player{},
-		Teams: map[fact.Side]*row.Team{fact.SideT: {}, fact.SideCT: {}}}
-	for id := range r.OpenMembers {
-		out.Players[id] = &row.Player{}
+	out := &row.Round{Meta: meta(r), Players: map[uint64]*row.Player{},
+		Teams: map[fact.Side]*row.Team{fact.SideT: {Clan: r.TClan}, fact.SideCT: {Clan: r.CTClan}}}
+	for id, m := range r.OpenMembers {
+		out.Players[id] = &row.Player{ID: identity(m)}
 	}
 	for _, e := range r.Events[:r.Commit] {
 		if e.Join != nil {
-			out.Players[e.Join.Steam64] = &row.Player{}
+			out.Players[e.Join.Steam64] = &row.Player{ID: identity(*e.Join)}
 		}
 	}
 	for _, c := range All {
 		c(r, out)
 	}
+	// Team meta: each team's R, and the R win of the team named the winner (by clan, as a lobby's
+	// winner can disagree with the winning side).
+	t, ct := out.Teams[fact.SideT], out.Teams[fact.SideCT]
+	t.TR, ct.CtR = 1, 1
+	if w, ok := latestWin(r); ok {
+		t.TRW, ct.CtRW = b2i(w.Clan == r.TClan), b2i(w.Clan == r.CTClan)
+	}
 	return out
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// identity is who a member is, as the round row carries it.
+func identity(m match.Member) row.ID {
+	return row.ID{Name: m.Name, SteamID: strconv.FormatUint(m.Steam64, 10), IsBot: m.IsBot, TeamENUM: m.TeamID,
+		TeamClanName: m.Clan, Side: int(m.Side)}
+}
+
+// latestWin is the latest Win whose RoundEnd comes before the commit: a tail's Win isn't the
+// round's (Q67).
+func latestWin(r *round.Round) (w round.Win, ok bool) {
+	for _, c := range r.WinList() {
+		if c.Event < r.Commit {
+			w, ok = c, true
+		}
+	}
+	return w, ok
+}
+
+// meta is the round's own fields: numbers, ticks, init counts and the latest Win's winner.
+func meta(r *round.Round) row.Meta {
+	m := row.Meta{RoundNum: r.Num, StartingTick: r.StartTick, EndingTick: r.EndTick,
+		InitTerroristCount: r.InitT, InitCTCount: r.InitCT}
+	if w, ok := latestWin(r); ok {
+		m.WinnerClanName, m.WinnerENUM = w.Clan, int(w.Side)
+		m.RoundEndReason = fact.RoundEndName(r.Events[w.Event].Fact.(fact.RoundEnd).Reason)
+	}
+	return m
 }

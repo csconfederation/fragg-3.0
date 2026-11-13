@@ -49,6 +49,16 @@ func Game(g *cscstats.Game, e *eco.Collector, ecoRounds []*eco.Round) error {
 	return nil
 }
 
+// Enrich is enrich on a round that may have been enriched: cmd/calcdiff reads the collectors' rows
+// the way the fold leaves them. PR 18 deletes it with the collectors.
+func Enrich(r *cscstats.Round) {
+	r.WinTeamDmg = 0
+	for _, t := range r.TeamStats {
+		t.WinPoints, t.ImpactPoints, t.TWinPoints, t.CtWinPoints, t.TImpactPoints, t.CtImpactPoints = 0, 0, 0, 0, 0, 0
+	}
+	enrich(r)
+}
+
 // enrich computes a round's team win and impact points, its winning team's damage, and each
 // winner's round win share; Stats stores the last two on the round rows.
 func enrich(r *cscstats.Round) {

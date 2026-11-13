@@ -9,6 +9,7 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
 	"github.com/csconfederation/fragg-3.0/engine/calc/economy"
 	"github.com/csconfederation/fragg-3.0/engine/calc/kast"
+	"github.com/csconfederation/fragg-3.0/engine/calc/objectives"
 	"github.com/csconfederation/fragg-3.0/engine/calc/openings"
 	"github.com/csconfederation/fragg-3.0/engine/calc/positioning"
 	"github.com/csconfederation/fragg-3.0/engine/calc/survival"
@@ -34,10 +35,12 @@ var All = []Calc{
 	openings.Calc,
 	clutches.Calc,
 	utility.Calc,
+	objectives.Calc,
 	survival.Calc,
 	economy.Calc,
 	positioning.Calc,
 	swing.Calc,
+	objectives.Finish, // tier 2
 }
 
 // Run is r's rows: one empty player row per member, then every calculator.

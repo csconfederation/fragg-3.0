@@ -15,11 +15,13 @@ const earlyDeath = 30.0
 // Calc writes each player's row.Survival and each team's row.TeamSurvival.
 func Calc(r *round.Round, out *row.Round) {
 	died := map[uint64]bool{}
+	joined := map[fact.Side]int{} // players who joined each side mid-round (D33)
 	members := map[uint64]match.Member{}
 	maps.Copy(members, r.OpenMembers)
 	for _, e := range r.Events[:r.Commit] {
-		if e.Join != nil {
-			members[e.Join.Steam64] = *e.Join
+		if j := e.Join; j != nil {
+			members[j.Steam64] = *j
+			joined[j.Side]++
 		}
 		k, ok := e.Fact.(fact.Kill)
 		if !ok || e.Dropped || !e.Victim {
@@ -34,9 +36,9 @@ func Calc(r *round.Round, out *row.Round) {
 		p.TicksAlive += k.Tick - r.StartTick
 		switch k.Victim.Side {
 		case fact.SideT:
-			p.DeathPlacement = float64(r.InitT - e.After.TAlive)
+			p.DeathPlacement = float64(r.InitT + joined[fact.SideT] - e.After.TAlive)
 		case fact.SideCT:
-			p.DeathPlacement = float64(r.InitCT - e.After.CTAlive)
+			p.DeathPlacement = float64(r.InitCT + joined[fact.SideCT] - e.After.CTAlive)
 		}
 		if id := k.Victim.Steam64; id != 0 { // eco has no bot rows
 			p.EcoDeathTime = seconds(r, k.Tick)

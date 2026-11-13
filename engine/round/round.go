@@ -295,10 +295,18 @@ func (d *Deriver) Event(e match.Event) error {
 	case fact.PlayerInfo:
 		return nil
 	case fact.TeamChange:
-		if e.Join != nil {
-			d.members[e.Join.Steam64] = *e.Join
+		c.Before = d.s
+		if j := e.Join; j != nil {
+			d.members[j.Steam64] = *j
+			// An alive joiner is alive for the counts, as for Alive (D33).
+			switch j.Side {
+			case fact.SideT:
+				d.s.TAlive++
+			case fact.SideCT:
+				d.s.CTAlive++
+			}
 		}
-		c = Context{Before: d.s, After: d.s}
+		c.After = d.s
 	case fact.RoundEnd:
 		c.Before = d.s
 		if f.Winner == fact.SideT {

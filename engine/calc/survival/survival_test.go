@@ -80,5 +80,18 @@ func TestDisconnectedIsNotASave(t *testing.T) {
 	}
 	if out.Teams[fact.SideCT].Saves != 1 {
 		t.Errorf("team saves %d, want 1 (player 3 only)", out.Teams[fact.SideCT].Saves)
+||||||| parent of b54cfd9 (engine: a mid-round joiner counts as alive (D33))
+
+// D33: placement counts the players who joined the side mid-round.
+func TestPlacementWithJoiner(t *testing.T) {
+	t1 := &fact.Player{Steam64: 1, Side: fact.SideT}
+	join := round.Event{Event: match.Event{Fact: fact.TeamChange{}, Live: true, Join: &match.Member{Steam64: 2, Side: fact.SideT, TeamID: 2, Clan: "a"}}}
+	r := &round.Round{StartTick: 0, InitT: 1, TClan: "a", CTClan: "b",
+		OpenMembers: map[uint64]match.Member{1: {Steam64: 1, Side: fact.SideT, TeamID: 2, Clan: "a"}},
+		Events:      []round.Event{join, kill(t1, 640, round.State{TAlive: 1}, true)}, Commit: 2}
+	out := &row.Round{Players: map[uint64]*row.Player{1: {}, 2: {}}, Teams: map[fact.Side]*row.Team{fact.SideT: {}, fact.SideCT: {}}}
+	Calc(r, out)
+	if got := out.Players[1].DeathPlacement; got != 1 {
+		t.Errorf("placement %v, want 1: the first of two T to die", got)
 	}
 }

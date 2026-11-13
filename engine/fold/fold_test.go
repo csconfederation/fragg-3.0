@@ -180,3 +180,11 @@ func TestAverageSkipsBots(t *testing.T) {
 		t.Errorf("averages %+v, want %+v", got, want)
 	}
 }
+
+// A scope of only bots has no averages: zeros, not NaN, which would break the payload's JSON.
+func TestAverageOnlyBots(t *testing.T) {
+	rows := map[uint64]*row.Player{0: {ID: row.ID{Rounds: 10, IsBot: true}, Combat: row.Combat{Kills: 30}}}
+	if got := average(rows); got != (averages{}) {
+		t.Errorf("averages %+v, want zeros", got)
+	}
+}

@@ -250,6 +250,9 @@ func average(rows map[uint64]*row.Player) averages {
 		a.kast += p.KastRounds
 		a.adr += float64(p.Damage)
 	}
+	if n == 0 { // only bots: nothing to rate against, and a NaN would break the payload's JSON
+		return a
+	}
 	a.impact /= float64(n)
 	a.kills /= float64(n)
 	a.deaths /= float64(n)

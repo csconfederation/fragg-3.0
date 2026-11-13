@@ -33,7 +33,7 @@ func with(before, after round.State, flags round.Context) round.Context {
 	return flags
 }
 
-var enemy = round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+var enemy = round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 
 // run is the family alone, over a row for each member and join.
 func run(r *round.Round) *row.Round {
@@ -146,11 +146,11 @@ func TestBotAndNonMember(t *testing.T) {
 	if got, want := out.Players[0].Openings, (row.Openings{Ok: 1, Entries: 1, Rwk: 1}); got != want {
 		t.Errorf("bot %+v, want %+v", got, want)
 	}
-	// An eco kill without a member killer: the human victim still has a man-disadvantage death.
-	nm := with(st(5, 5, true, round.PrePlant), st(5, 4, false, round.PrePlant), round.Context{Expected: true, EcoKill: true})
+	// D31: a kill without a member killer counts nowhere, victim included.
+	nm := with(st(5, 5, true, round.PrePlant), st(5, 4, false, round.PrePlant), round.Context{Expected: true})
 	out = run(build(kill(5, 11, 7, nm)))
-	if got := out.Players[11].Openings.ManDisadvantageDeaths; got != 1 {
-		t.Errorf("victim of a non-member: %d, want 1", got)
+	if got := out.Players[11].Openings.ManDisadvantageDeaths; got != 0 {
+		t.Errorf("victim of a non-member: %d, want 0", got)
 	}
 	if out.Players[5] != nil {
 		t.Error("a row for a non-member")

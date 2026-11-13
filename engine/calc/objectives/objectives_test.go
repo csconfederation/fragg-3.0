@@ -35,7 +35,7 @@ func ctx(before round.State, f round.Context) round.Context {
 	return f
 }
 
-var enemy = round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+var enemy = round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 
 func winEvent(w fact.Side) round.Event {
 	clan := map[fact.Side]string{fact.SideT: "A", fact.SideCT: "B"}[w]

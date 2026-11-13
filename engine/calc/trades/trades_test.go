@@ -33,7 +33,7 @@ func kill(tick int, killer, victim uint64, mates []mate, x round.Context) round.
 	return round.Event{Event: match.Event{Fact: fact.Kill{Snapshot: s, Killer: k, Victim: v, Weapon: &w}}, Context: x}
 }
 
-var enemy = round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+var enemy = round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 
 func run(events ...round.Event) *row.Round {
 	ms := map[uint64]match.Member{}

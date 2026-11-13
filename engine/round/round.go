@@ -69,12 +69,9 @@ type Context struct {
 	// one trade kill.
 	Avenged []Death
 	// Hurts: Dealt is CSC's damage dealt (both players have rows, on different sides); Taken is its
-	// damage taken (the victim has a row, an enemy's, not bomb-ignored). EcoDamage is eco's gate:
-	// not warmup, an enemy's, not bomb-ignored, with no membership test. Kills: EcoKill is eco's
-	// killer credit: expected, not bomb-ignored, both players known, no suicide or team kill. The
-	// eco flags go when D31 unifies the gates.
-	Dealt, Taken       bool
-	EcoKill, EcoDamage bool
+	// damage taken (the victim has a row, an enemy's, not bomb-ignored). Every stat reads these and
+	// Enemy (D31).
+	Dealt, Taken bool
 }
 
 // Blind is a player's latest counting flash: who threw it and the tick it wears off.
@@ -430,7 +427,6 @@ func (d *Deriver) apply(e match.Event, c *Context) error {
 		member := f.Player != nil && d.isMember(f.Player.Steam64)
 		c.Taken = member && !c.BombIgnored && c.Enemy
 		c.Dealt = member && c.Enemy && d.isMember(f.Attacker.Steam64)
-		c.EcoDamage = !f.Warmup && c.Enemy && !c.BombIgnored
 	case fact.Flashed:
 		d.flashed(f, c)
 	case fact.BombPlanted:
@@ -487,9 +483,6 @@ func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 	}
 	c.Expected = true
 	c.BombIgnored = d.bombIgnored(*f.Weapon)
-	if k, v := f.Killer, f.Victim; !c.BombIgnored && k != nil && v != nil {
-		c.EcoKill = !(k.Steam64 == v.Steam64 && !k.IsBot || k.Side == v.Side)
-	}
 	c.Victim = f.Victim != nil && d.isMember(f.Victim.Steam64) && !c.BombIgnored
 	c.Killer = f.Killer != nil && d.isMember(f.Killer.Steam64) && !c.BombIgnored
 	if c.Victim {

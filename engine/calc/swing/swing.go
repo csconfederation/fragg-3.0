@@ -186,7 +186,7 @@ func (s *state) event(e *round.Event) {
 	case fact.Kill:
 		s.kill(f, e)
 	case fact.Hurt:
-		if e.EcoDamage {
+		if e.Dealt {
 			s.row(f.Attacker.Steam64).damage += f.HealthDamageTaken
 			s.t.RecordDamage(f.Attacker.Steam64, f.Player.Steam64, f.HealthDamageTaken, s.seconds(f.Tick))
 		}
@@ -209,7 +209,7 @@ func (s *state) event(e *round.Event) {
 }
 
 // kill is the oracle's handleKill, as far as swing reads it. A kill reaches swing's kill transition when
-// it counts for eco (an enemy kill by or on anyone) and the victim is a member (EcoKill, Victim).
+// it is an enemy kill between members (Enemy).
 func (s *state) kill(f fact.Kill, e *round.Event) {
 	if len(e.Avenged) > 0 { // a trade refunds the oldest avenged death's swing penalty
 		oldest := e.Avenged[0].Steam
@@ -224,7 +224,7 @@ func (s *state) kill(f fact.Kill, e *round.Event) {
 		}
 	}
 	swung := false
-	if e.EcoKill {
+	if e.Enemy {
 		swung = e.Victim
 		attacker, victim := f.Killer, f.Victim
 		killer, vr := s.row(attacker.Steam64), s.row(victim.Steam64)

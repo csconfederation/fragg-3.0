@@ -54,20 +54,20 @@ func TestWinPlacement(t *testing.T) {
 // The flags the calculators read (mid9217-1 round 2: enemy damage and kills, then a team's).
 func TestGateFlags(t *testing.T) {
 	r := replay(t, "mid9217-1-r02").Round
-	type flags struct{ dealt, taken, ecoDamage, ecoKill bool }
+	type flags struct{ dealt, taken bool }
 	cases := []struct {
 		event int
 		why   string
 		want  flags
 	}{
-		{26, "enemy damage", flags{true, true, true, false}},
-		{38, "enemy kill", flags{false, false, false, true}},
-		{39, "team damage", flags{false, false, false, false}},
-		{41, "team kill", flags{false, false, false, false}},
+		{26, "enemy damage", flags{true, true}},
+		{38, "enemy kill", flags{false, false}},
+		{39, "team damage", flags{false, false}},
+		{41, "team kill", flags{false, false}},
 	}
 	for _, c := range cases {
 		x := r.Events[c.event].Context
-		if got := (flags{x.Dealt, x.Taken, x.EcoDamage, x.EcoKill}); got != c.want {
+		if got := (flags{x.Dealt, x.Taken}); got != c.want {
 			t.Errorf("event %d, %s: %+v, want %+v", c.event, c.why, got, c.want)
 		}
 	}

@@ -60,7 +60,7 @@ func Calc(r *round.Round, out *row.Round) {
 					p.KillPoints += killValue(e, f, won, assister)
 				}
 			}
-			if e.EcoKill && e.Before.Phase == round.Decided && ecos[f.Killer.Steam64] {
+			if e.Enemy && e.Before.Phase == round.Decided && ecos[f.Killer.Steam64] {
 				if p := out.Players[f.Killer.Steam64]; p != nil {
 					p.ExitFrags++
 				}

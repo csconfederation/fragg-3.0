@@ -45,7 +45,7 @@ func Calc(r *round.Round, out *row.Round) {
 			if e.Taken {
 				rows[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
 			}
-			if e.EcoDamage && f.Attacker != nil {
+			if e.Dealt && f.Attacker != nil {
 				if x := ecos[f.Attacker.Steam64]; x != nil {
 					x.damage += f.HealthDamageTaken
 				}
@@ -157,7 +157,7 @@ func kill(rows map[uint64]*row.Combat, ecos map[uint64]*eco, damage map[uint64]m
 			k.Hs++
 		}
 	}
-	if x := ecos[killerID(f)]; e.EcoKill && x != nil {
+	if x := ecos[killerID(f)]; e.Enemy && x != nil {
 		x.kills++
 		if f.Headshot {
 			x.perfect++
@@ -179,7 +179,7 @@ func kill(rows map[uint64]*row.Combat, ecos map[uint64]*eco, damage map[uint64]m
 	}
 }
 
-// killerID is the killer's Steam64; EcoKill has a killer.
+// killerID is the killer's Steam64; an enemy kill has a killer.
 func killerID(f fact.Kill) uint64 {
 	if f.Killer == nil {
 		return 0

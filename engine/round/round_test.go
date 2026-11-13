@@ -272,3 +272,19 @@ func TestWinAt(t *testing.T) {
 		}
 	}
 }
+
+// D33: a player who joins alive mid-round is alive in the counts, so a clutch starts at the right
+// size and the last death of a side leaves the right count.
+func TestJoinerCountsAlive(t *testing.T) {
+	tr := newRound() // 2v3
+	join := match.Member{Steam64: 3, Side: fact.SideT, TeamID: 2}
+	if err := tr.Event(match.Event{Fact: fact.TeamChange{}, Live: true, Join: &join}); err != nil {
+		t.Fatal(err)
+	}
+	if tr.s.TAlive != 3 || tr.s.CTAlive != 3 {
+		t.Errorf("alive %dv%d after a T joiner, want 3v3", tr.s.TAlive, tr.s.CTAlive)
+	}
+	if !tr.isMember(3) {
+		t.Error("the joiner is not a member")
+	}
+}

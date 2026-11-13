@@ -1,5 +1,6 @@
 // Package kast is the KAST family: the rounds a player got a kill, an assist, a trade of their
-// death, or survived (design note section 3). Eco's rounds count only the round's humans.
+// death, or survived (design note section 3). CSC's rule counts enemy kills; eco's, kept as
+// EcoKastRounds until D31 unifies the gates, counts the same kills and only the round's humans.
 package kast
 
 import (
@@ -47,6 +48,12 @@ func Calc(r *round.Round, out *row.Round) {
 			csc[f.Assister.Steam64] = true
 			if _, ok := ecoK[f.Assister.Steam64]; ok {
 				ecoK[f.Assister.Steam64] = true
+			}
+		}
+		if e.FlashAssisted { // D35: a flash assist is an assist
+			csc[e.FlashAssister] = true
+			if _, ok := ecoK[e.FlashAssister]; ok {
+				ecoK[e.FlashAssister] = true
 			}
 		}
 		if e.Enemy {

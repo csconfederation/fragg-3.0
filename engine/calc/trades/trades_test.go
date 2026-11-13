@@ -64,8 +64,8 @@ func TestTrade(t *testing.T) {
 		t.Errorf("first killer %+v: a trade clears his pending denial", got)
 	}
 	trade.Avenged[0].Tick = 1064
-	if got := run(kill(1064, 11, 1, nil, open), kill(1064, 2, 11, nil, trade)).Players[2].Trades.FastTrades; got != 0 {
-		t.Errorf("same-tick trade is fast %d times (D42 changes this)", got)
+	if got := run(kill(1064, 11, 1, nil, open), kill(1064, 2, 11, nil, trade)).Players[2].Trades.FastTrades; got != 1 {
+		t.Errorf("same-tick trade is fast %d times, want 1 (D42)", got)
 	}
 }
 

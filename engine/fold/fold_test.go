@@ -168,3 +168,15 @@ func TestSummable(t *testing.T) {
 	}
 	plan(reflect.TypeFor[row.Team]())
 }
+
+// D40: the shared bot row is not part of the averages players are rated against.
+func TestAverageSkipsBots(t *testing.T) {
+	rows := map[uint64]*row.Player{
+		1: {ID: row.ID{Rounds: 10}, Combat: row.Combat{Kills: 10, Deaths: 5, Damage: 800}, Objectives: row.Objectives{ImpactPoints: 20}, KAST: row.KAST{KastRounds: 7}},
+		0: {ID: row.ID{Rounds: 10, IsBot: true}, Combat: row.Combat{Kills: 30, Deaths: 30, Damage: 4000}, Objectives: row.Objectives{ImpactPoints: 60}, KAST: row.KAST{KastRounds: 10}},
+	}
+	want := averages{impact: 2, kills: 1, deaths: .5, kast: .7, adr: 80}
+	if got := average(rows); got != want {
+		t.Errorf("averages %+v, want %+v", got, want)
+	}
+}

@@ -231,7 +231,8 @@ func derive(rows map[uint64]*row.Player) {
 	}
 }
 
-// averages are a row set's match-wide per-round averages.
+// averages are a row set's match-wide per-round averages over its human rows: the shared bot row
+// isn't a player to rate against (D40).
 type averages struct{ impact, kills, deaths, kast, adr float64 }
 
 func average(rows map[uint64]*row.Player) averages {
@@ -239,6 +240,9 @@ func average(rows map[uint64]*row.Player) averages {
 	n := 0
 	for _, id := range slices.Sorted(maps.Keys(rows)) {
 		p := rows[id]
+		if p.IsBot {
+			continue
+		}
 		n += p.Rounds
 		a.impact += p.ImpactPoints
 		a.kills += float64(p.Kills)

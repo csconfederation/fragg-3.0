@@ -27,8 +27,7 @@ type teamBuy struct {
 }
 
 type roundRow struct {
-	Num    int  `json:"num"`
-	Pistol bool `json:"pistol"` // the lifecycle's pistol flag: both sides at $800
+	Num int `json:"num"`
 	// FreezeEnd is the last open being the freeze-end one; otherwise the round committed from its
 	// early open and the equipment is from before the buy.
 	FreezeEnd bool    `json:"freezeEnd"`
@@ -65,7 +64,7 @@ func buy(r *round.Round, side fact.Side) teamBuy {
 // round snapshot; kills after the win aren't counted.
 func (c *collector) Round(r *round.Round) error {
 	c.data.RecordRoundStart(0, 0, false, "")
-	k := commit{row: roundRow{Num: r.Num, Pistol: r.Pistol, FreezeEnd: r.FreezeEnd,
+	k := commit{row: roundRow{Num: r.Num, FreezeEnd: r.FreezeEnd,
 		T: buy(r, fact.SideT), CT: buy(r, fact.SideCT)}}
 	end, cur := round.State{}, round.State{TAlive: r.InitT, CTAlive: r.InitCT} // cur: the state before event i
 	wins := r.WinList()

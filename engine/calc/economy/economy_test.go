@@ -12,7 +12,7 @@ import (
 
 func newRound(num int, freeze bool, tEquip, ctEquip int) *round.Round {
 	open := fact.Snapshot{Players: []fact.Player{{EquipValue: tEquip}, {EquipValue: tEquip + 200}, {EquipValue: ctEquip}}}
-	return &round.Round{Num: num, FreezeEnd: freeze, Pistol: num == 1, TClan: "a", CTClan: "b", Open: open,
+	return &round.Round{Num: num, FreezeEnd: freeze, TClan: "a", CTClan: "b", Open: open,
 		Roster: match.Roster{T: []int{0, 1}, CT: []int{2}}, OpenMembers: map[uint64]match.Member{1: {}, 2: {}, 0: {}}}
 }
 
@@ -37,6 +37,9 @@ func TestBuys(t *testing.T) {
 	}{
 		// Rounds 1 and 13 are pistol rounds whatever the money; the CT wins every round here.
 		{"pistol", newRound(1, false, 800, 800), row.BuyPistol, row.BuyPistol,
+			row.TeamEconomy{Pistols: 1, Buy: row.BuyPistol}, row.TeamEconomy{Pistols: 1, PistolsW: 1, Buy: row.BuyPistol}},
+		// D39: round 13 is a pistol round by number, even when the money isn't 800 (s18 mid7366 r13).
+		{"pistol by number", newRound(13, true, 4000, 4000), row.BuyPistol, row.BuyPistol,
 			row.TeamEconomy{Pistols: 1, Buy: row.BuyPistol}, row.TeamEconomy{Pistols: 1, PistolsW: 1, Buy: row.BuyPistol}},
 		// T average 1,000 (an eco) against a CT full buy: the CT's is an anti-eco, and won.
 		{"anti-eco", newRound(2, true, 900, 4500), row.BuyEco, row.BuyFull,

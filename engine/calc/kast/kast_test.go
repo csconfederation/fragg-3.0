@@ -50,6 +50,11 @@ func TestKAST(t *testing.T) {
 			e.Fact = func() fact.Kill { k := e.Fact.(fact.Kill); k.Assister = player(12); return k }()
 			return []round.Event{e, kill(13, 2, enemy), kill(1, 13, enemy)}
 		}, map[uint64]got{12: {1, 1}, 13: {1, 1}, 1: {1, 1}, 2: {0, 0}}},
+		{"a flash assist counts for the flasher (D35)", func() []round.Event {
+			fa := enemy
+			fa.FlashAssisted, fa.FlashAssister = true, 12
+			return []round.Event{kill(1, 12, enemy), kill(11, 2, fa)}
+		}, map[uint64]got{12: {1, 1}, 1: {1, 1}, 2: {0, 0}}},
 		{"a traded death counts", func() []round.Event {
 			x := enemy
 			x.Avenged = []round.Death{{Steam: 1, Tick: 1}}

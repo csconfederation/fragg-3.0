@@ -9,9 +9,12 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/row"
 )
 
+// isolated is the distance, in units (about 25 m), a T's nearest teammate must exceed for a blip.
+const isolated = 1000
+
 // Calc writes each player's row.Positioning. Every 4 s of a round after its first 18 s, with more
-// than two Ts alive and the round undecided, the T whose distance sum to the others is smallest
-// and positive gets a blip; the T with more than 3 blips, alone at the most, is the round's lurker.
+// than two Ts alive and the round undecided, the T farthest from its nearest teammate gets a blip
+// (see sample); the T with more than 3 blips, alone at the most, is the round's lurker.
 func Calc(r *round.Round, out *row.Round) {
 	sides := map[uint64]fact.Side{} // the players with a row so far: one who joins mid-round has none before
 	for id, m := range r.OpenMembers {
@@ -50,40 +53,33 @@ func Calc(r *round.Round, out *row.Round) {
 	}
 }
 
-// sample is one tick of the sampler over the Ts of the round's roster that have rows.
+// sample is one tick of the sampler over the Ts of the round's roster that have rows (D38): the living
+// T whose nearest living teammate is farthest away gets a blip, if that is over isolated units and
+// no other T is as far. A close moment costs only that sample.
 func sample(out *row.Round, sides map[uint64]fact.Side, members []fact.Player) {
 	var ts []fact.Player
 	for _, t := range members {
-		if _, ok := sides[t.Steam64]; ok && out.Players[t.Steam64] != nil {
+		if _, ok := sides[t.Steam64]; ok && out.Players[t.Steam64] != nil && t.Alive {
 			ts = append(ts, t)
 		}
 	}
-	for _, t := range ts {
-		if !t.Alive {
-			continue
-		}
-		for _, mate := range ts {
-			if t.Steam64 == mate.Steam64 || !mate.Alive {
-				continue
-			}
-			p := out.Players[t.Steam64]
-			dist := int(distance(t.Pos, mate.Pos))
-			if dist < 500 {
-				p.DistanceToTeammates = -999999
-			}
-			p.DistanceToTeammates += dist
-		}
-	}
 	var lurker uint64
-	best := 999999
+	far, tied := 0.0, false
 	for _, t := range ts {
-		if t.Alive {
-			if d := out.Players[t.Steam64].DistanceToTeammates; d < best && d > 0 {
-				best, lurker = d, t.Steam64
+		near := math.Inf(1)
+		for _, mate := range ts {
+			if t.Steam64 != mate.Steam64 {
+				near = min(near, distance(t.Pos, mate.Pos))
 			}
 		}
+		switch {
+		case near > far:
+			far, lurker, tied = near, t.Steam64, false
+		case near == far:
+			tied = true
+		}
 	}
-	if lurker != 0 {
+	if far > isolated && !tied {
 		out.Players[lurker].LurkerBlips++
 	}
 }

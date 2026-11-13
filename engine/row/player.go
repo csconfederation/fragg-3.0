@@ -156,7 +156,7 @@ type Economy struct {
 
 type Positioning struct {
 	LurkerBlips         int `json:"lurkerBlips" fold:"-"`
-	DistanceToTeammates int `json:"distanceToTeammates" fold:"-"`
+	DistanceToTeammates int `json:"distanceToTeammates" fold:"-"` // 0 since D38 (the lurk rule no longer sums distances); kept in the payload
 	LurkRounds          int `json:"lurkRounds"`
 }
 

@@ -84,8 +84,20 @@ func TestDenialByExpiry(t *testing.T) {
 	if got := out.Players[2].Trades.TradeDenials; got != 0 {
 		t.Errorf("player 2 denials %d, want 0: his own kills had no teammate near", got)
 	}
-	if got := run(kill(1000, 1, 11, near, enemy)).Players[1].Trades.TradeDenials; got != 0 {
-		t.Errorf("denials %d at the round's end, want 0: expiry is lazy", got)
+}
+
+// D41: a window that has run out when the round ends is a denial, though no later kill ran the expiry.
+func TestDenialAtRoundEnd(t *testing.T) {
+	near := []mate{{12, 100}, {13, 200}}
+	end := func(tick int) *row.Round {
+		ms := map[uint64]match.Member{1: {Steam64: 1}, 11: {Steam64: 11}}
+		return calc.Run(&round.Round{OpenMembers: ms, Events: []round.Event{kill(1000, 1, 11, near, enemy)}, Commit: 1, EndTick: tick})
+	}
+	if got := end(1321).Players[1].Trades.TradeDenials; got != 1 {
+		t.Errorf("denials %d, want 1: two entries, expired at the end, count once", got)
+	}
+	if got := end(1320).Players[1].Trades.TradeDenials; got != 0 {
+		t.Errorf("denials %d, want 0: the window is still open at the round's end", got)
 	}
 }
 

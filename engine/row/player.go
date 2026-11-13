@@ -177,7 +177,7 @@ type Rates struct {
 	DrDiff                      float64 `json:"drDiff"`
 	Kast                        float64 `json:"kast"`
 	Tr                          float64 `json:"tr"`
-	Atd                         int     `json:"atd"`
+	Atd                         float64 `json:"atd"`
 	KillPointAvg                float64 `json:"killPointAvg"`
 	Iiwr                        float64 `json:"iiwr"`
 	UtilThrown                  int     `json:"utilThrown"`

@@ -70,7 +70,7 @@ antiEcoRounds	int	player	row.Buys	round-player=0
 antiEcoRoundsWon	int	player	row.Buys	round-player=0
 assistedKills	int	player	row.Combat	round-player=0;bot=0
 assists	int	player	row.Combat	
-atd	int	player	row.Rates	round-player=0
+atd	float64	player	row.Rates	round-player=0
 avgTimeToDeath	float64	player	row.Rates	round-player=0;bot=0;side-T=0;side-CT=0
 avgTimeToKill	float64	player	row.Swing	round-player=0;bot=0;side-T=0;side-CT=0
 awpDeaths	int	player	row.Combat	round-player=0;bot=0

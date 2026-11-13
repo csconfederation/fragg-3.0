@@ -199,6 +199,20 @@ func TestFlashes(t *testing.T) {
 	if !c.Assist || c.FlashAssisted || c.FlashAssister != 0 {
 		t.Errorf("own kill: assist %v, flash assist %v by %d", c.Assist, c.FlashAssisted, c.FlashAssister)
 	}
+
+	// A bot's flash on another bot's kill is not told apart from its own: kept, not suppressed.
+	bot := func(uid int) *fact.Player { p := player(1); p.Steam64, p.IsBot, p.UserID = 0, true, uid; return p }
+	tr.members[0] = match.Member{IsBot: true}
+	tr.blind[11] = Blind{0, 2000}
+	k = killAt(1090, bot(5), player(11))
+	k.Assister = bot(6)
+	c = Context{}
+	if err := tr.kill(k, match.Roster{}, &c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.FlashAssisted {
+		t.Error("a bot's flash assist on another bot's kill was dropped")
+	}
 }
 
 // A disconnect recounts the alive members; a player relisted alive mid-round without joining the

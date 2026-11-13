@@ -140,6 +140,7 @@ type Survival struct {
 	TicksAlive     int     `json:"ticksAlive"`
 	Saves          int     `json:"saves"`
 	EarlyDeaths    int     `json:"earlyDeaths"`
+	LeftAlive      int     `json:"-" fold:"-"` // disconnected without dying (D44): not a survivor, for the fold's HLTV survivals
 
 	// Eco's seconds into the round of the last death and of survival, for the fold's time sums; 0 on the bot row.
 	EcoDeathTime float64 `json:"-"`

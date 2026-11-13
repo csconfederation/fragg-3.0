@@ -154,6 +154,18 @@ func (r *Round) WinAt(i int) (Win, bool) {
 	return w, ok
 }
 
+// Disconnected is who left before the commit (D44). Combined with "no counted death" it is a player
+// who disconnected alive, who did not survive the round.
+func (r *Round) Disconnected() map[uint64]bool {
+	left := map[uint64]bool{}
+	for _, e := range r.Events[:r.Commit] {
+		if d, ok := e.Fact.(fact.Disconnect); ok && !e.Dropped {
+			left[d.Steam64] = true
+		}
+	}
+	return left
+}
+
 // SideOf is the side of one of the round's two clans, 0 for any other.
 func (r *Round) SideOf(clan string) fact.Side {
 	switch clan {

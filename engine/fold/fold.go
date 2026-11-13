@@ -186,10 +186,11 @@ func count(dst, p *row.Player, tallies map[*row.Player]*tally) {
 	if k := p.EcoKills; k >= 1 && k <= 5 {
 		t.multi[k]++
 	}
-	if p.Deaths == 0 {
-		t.survived++
-	} else {
+	switch {
+	case p.Deaths > 0:
 		t.died++
+	case p.LeftAlive == 0: // D44: a disconnect alive is neither a death nor a survival
+		t.survived++
 	}
 }
 

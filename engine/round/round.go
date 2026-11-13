@@ -538,6 +538,9 @@ func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 		} else if b := d.blind[f.Victim.Steam64]; float64(f.Tick) < b.Until {
 			c.FlashAssister, c.FlashAssisted = b.Flasher, true
 		}
+		if f.Killer != nil && c.FlashAssister == f.Killer.Steam64 { // D34: no assist on one's own kill
+			c.FlashAssister, c.FlashAssisted = 0, false
+		}
 	}
 	return nil
 }

@@ -188,6 +188,17 @@ func TestFlashes(t *testing.T) {
 	if !c.FlashAssisted || c.FlashAssister != 1 {
 		t.Errorf("flash assist %v by %d", c.FlashAssisted, c.FlashAssister)
 	}
+
+	// D34: the latest flasher who made the kill got no assist on it.
+	k = killAt(1090, player(1), player(11))
+	k.Assister = player(2)
+	c = Context{}
+	if err := tr.kill(k, match.Roster{}, &c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Assist || c.FlashAssisted || c.FlashAssister != 0 {
+		t.Errorf("own kill: assist %v, flash assist %v by %d", c.Assist, c.FlashAssisted, c.FlashAssister)
+	}
 }
 
 // A disconnect recounts the alive members; a player relisted alive mid-round without joining the

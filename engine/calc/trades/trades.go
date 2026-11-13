@@ -2,7 +2,7 @@
 // Deriver's (Context.Avenged, D22). CSC's fields are trades and traded; the six eco-origin ones
 // (tradeKills, fastTrades, tradeDenials, savedByTeammate, savedTeammate, openingDeathsTraded)
 // follow eco's gates until D31 unifies them, and its trade denials, which come from nearby
-// teammates and lazy expiry (eco/trade_detector.go), from the Kill snapshots.
+// teammates and window expiry (checked at each kill and at the round's end, D41), from the Kill snapshots.
 package trades
 
 import (
@@ -37,6 +37,29 @@ func Calc(r *round.Round, out *row.Round) {
 	}
 	clock := func(tick int) float64 { return float64(tick-r.StartTick) / float64(fact.TickRate) }
 	pending := map[uint64][]int{} // each killer's pending trades: the tick of the death, once per nearby teammate
+
+	expire := func(tick int) { // a pass drops what's past the window; a killer is denied once per pass
+		for id, ticks := range pending {
+			kept, expired := ticks[:0], false
+			for _, t := range ticks {
+				if tick-t > rating.TradeWindowTicks {
+					expired = true
+				} else {
+					kept = append(kept, t)
+				}
+			}
+			if expired {
+				if k := ecos[id]; k != nil {
+					k.denials++
+				}
+			}
+			if len(kept) > 0 {
+				pending[id] = kept
+			} else {
+				delete(pending, id)
+			}
+		}
+	}
 
 	for _, e := range r.Events[:r.Commit] {
 		if e.Dropped {
@@ -86,26 +109,7 @@ func Calc(r *round.Round, out *row.Round) {
 		if known {
 			delete(pending, f.Victim.Steam64) // the victim's kills can't be traded any more
 		}
-		for id, ticks := range pending { // a pass drops what's past the window; a killer is denied once
-			kept, expired := ticks[:0], false
-			for _, t := range ticks {
-				if f.Tick-t > rating.TradeWindowTicks {
-					expired = true
-				} else {
-					kept = append(kept, t)
-				}
-			}
-			if expired {
-				if k := ecos[id]; k != nil {
-					k.denials++
-				}
-			}
-			if len(kept) > 0 {
-				pending[id] = kept
-			} else {
-				delete(pending, id)
-			}
-		}
+		expire(f.Tick)
 		if !known {
 			continue
 		}
@@ -123,6 +127,8 @@ func Calc(r *round.Round, out *row.Round) {
 			}
 		}
 	}
+
+	expire(r.EndTick) // D41: a window that runs out at the round's end still denies
 
 	for id, t := range rows {
 		p := out.Players[id]

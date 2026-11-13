@@ -178,6 +178,7 @@ func (s *state) event(e *round.Event) {
 		if _, ok := s.rows[e.Join.Steam64]; !ok && !e.Join.IsBot {
 			s.rows[e.Join.Steam64] = &member{side: e.Join.Side}
 		}
+		s.t.SetAlive(e.After.TAlive, e.After.CTAlive)
 		return
 	}
 	switch f := e.Fact.(type) {

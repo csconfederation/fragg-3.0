@@ -2,6 +2,8 @@ package row
 
 // Team is a team's match stats. The payload adds its name and score.
 type Team struct {
+	Clan string `json:"-" fold:"-"` // a round row's team, for the fold's match rows by clan
+
 	TeamOpenings
 	TeamClutches
 	TeamSurvival

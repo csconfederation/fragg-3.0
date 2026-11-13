@@ -12,8 +12,8 @@ import (
 
 // eco is the eco collector's per-round counters behind the eco-origin fields.
 type eco struct {
-	awpKills, assists, utilKills, perfect int
-	knife, pistolVsRifle, lostAWP         bool
+	kills, damage, awpKills, assists, utilKills, perfect int
+	knife, pistolVsRifle, lostAWP                        bool
 }
 
 // Calc writes each player's Combat.
@@ -45,6 +45,11 @@ func Calc(r *round.Round, out *row.Round) {
 			if e.Taken {
 				rows[f.Player.Steam64].DamageTaken += f.HealthDamageTaken
 			}
+			if e.EcoDamage && f.Attacker != nil {
+				if x := ecos[f.Attacker.Steam64]; x != nil {
+					x.damage += f.HealthDamageTaken
+				}
+			}
 			if e.Dealt {
 				hurt(rows[f.Attacker.Steam64], f)
 				if damage[f.Player.Steam64] == nil {
@@ -65,6 +70,7 @@ func Calc(r *round.Round, out *row.Round) {
 			continue
 		}
 		if x := ecos[id]; x != nil {
+			c.EcoKills, c.EcoDamage, c.EcoAWPKills = x.kills, x.damage, x.awpKills
 			c.AssistedKills = x.assists
 			c.UtilityKills = x.utilKills
 			c.PerfectKills = x.perfect
@@ -152,6 +158,7 @@ func kill(rows map[uint64]*row.Combat, ecos map[uint64]*eco, damage map[uint64]m
 		}
 	}
 	if x := ecos[killerID(f)]; e.EcoKill && x != nil {
+		x.kills++
 		if f.Headshot {
 			x.perfect++
 		}

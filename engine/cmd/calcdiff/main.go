@@ -89,7 +89,8 @@ var families = []family{
 // of the eco fold's lines for each (the fold sums these over rounds).
 func ecoCombat(old *row.Player, rs *model.RoundStats) {
 	c := &old.Combat
-	c.AssistedKills = 0 // side_stats.go updateSupportStats: Assists when GotAssist
+	c.EcoKills, c.EcoDamage, c.EcoAWPKills = rs.Kills, rs.Damage, rs.AWPKills // fold.go FoldRound
+	c.AssistedKills = 0                                                       // side_stats.go updateSupportStats: Assists when GotAssist
 	if rs.GotAssist {
 		c.AssistedKills = rs.Assists
 	}

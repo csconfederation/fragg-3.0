@@ -61,6 +61,11 @@ type Combat struct {
 	PistolVsRifleKills int `json:"pistolVsRifleKills"`
 	UtilityKills       int `json:"utilityKills"`
 	PerfectKills       int `json:"perfectKills"`
+
+	// Eco's kills, damage and AWP kills, by its gates, for the eco ratings (D31 unifies them with the CSC ones).
+	EcoKills    int `json:"-"`
+	EcoDamage   int `json:"-"`
+	EcoAWPKills int `json:"-"`
 }
 
 type KAST struct {

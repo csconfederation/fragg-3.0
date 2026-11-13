@@ -46,6 +46,7 @@ func TestFixtures(t *testing.T) {
 			for id, op := range old.Players {
 				if rs := got.Rows.Eco[id]; rs != nil {
 					c := &op.Combat
+					c.EcoKills, c.EcoDamage, c.EcoAWPKills = rs.Kills, rs.Damage, rs.AWPKills
 					c.AssistedKills = 0
 					if rs.GotAssist {
 						c.AssistedKills = rs.Assists
@@ -142,7 +143,7 @@ func TestKillAssistTrade(t *testing.T) {
 	f.Victim.Weapons = []int{fact.EqAWP}
 	out := run(build(ev(f, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, Assist: true, EcoKill: true,
 		Avenged: []round.Death{{Steam: 13, Tick: 1}}})))
-	if got, want := out.Players[11].Combat, (row.Combat{Kills: 1, AwpKills: 1, CtAWP: 1, Hs: 1, RoundsWithAWPKill: 1, PerfectKills: 1}); got != want {
+	if got, want := out.Players[11].Combat, (row.Combat{Kills: 1, AwpKills: 1, CtAWP: 1, Hs: 1, RoundsWithAWPKill: 1, PerfectKills: 1, EcoKills: 1, EcoAWPKills: 1}); got != want {
 		t.Errorf("killer %+v, want %+v", got, want)
 	}
 	if got, want := out.Players[12].Combat, (row.Combat{Assists: 1, Eac: 1, SuppRounds: 1, AssistedKills: 1}); got != want {

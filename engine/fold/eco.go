@@ -27,10 +27,8 @@ func (m *Match) eco(id uint64, tallies map[*row.Player]*tally) {
 	if whole.KillsWithTTK > 0 {
 		whole.AvgTimeToKill = whole.TimeToKillSum / float64(whole.KillsWithTTK)
 	}
-	// HLTV (Q46, D43 pending): the survival count goes through a rate and back, which can drop one.
-	survivals := int(float64(w.survived) / rounds * rounds)
 	whole.HLTVRating = rating.ComputeHLTVRating(rating.HLTVInput{RoundsPlayed: whole.Rounds, Kills: whole.EcoKills,
-		Survivals: survivals, MultiKills: w.multi})
+		Survivals: w.survived, MultiKills: w.multi})
 
 	for _, s := range []*row.Player{t, ct} {
 		if s == nil {

@@ -123,15 +123,15 @@ func TestSidesAndIdentity(t *testing.T) {
 	}
 }
 
-// HLTV counts the whole row's rounds survived through a rate (Q46), which drops one for 15 of 22
-// (15/22*22 is 14.999...); a side row uses the exact count.
+// D43: the whole row's HLTV rating uses the exact survival count, as a side row does (15/22*22
+// is 14.999..., which a rate round trip would truncate to 14).
 func TestHLTVSurvivals(t *testing.T) {
 	mk := func() *row.Player { return &row.Player{ID: row.ID{Rounds: 22}} }
 	m := &Match{Whole: map[uint64]*row.Player{1: mk()}, T: map[uint64]*row.Player{1: mk()}, CT: map[uint64]*row.Player{}}
 	tallies := map[*row.Player]*tally{m.Whole[1]: {survived: 15}, m.T[1]: {survived: 15}}
 	m.eco(1, tallies)
-	if m.Whole[1].HLTVRating >= m.T[1].HLTVRating {
-		t.Errorf("whole %v, side %v: the whole row should count 14 survivals, the side 15", m.Whole[1].HLTVRating, m.T[1].HLTVRating)
+	if m.Whole[1].HLTVRating != m.T[1].HLTVRating {
+		t.Errorf("whole %v, side %v: both rows should count 15 survivals", m.Whole[1].HLTVRating, m.T[1].HLTVRating)
 	}
 }
 

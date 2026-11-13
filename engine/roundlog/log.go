@@ -71,7 +71,7 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// File is one fixture: a committed round's deriver input and the rows the collectors made from it.
+// File is one fixture: a committed round's deriver input and the rows the calculators made from it.
 type File struct {
 	Version int    `json:"version"`
 	Demo    string `json:"demo"` // the demo's file name

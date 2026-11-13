@@ -1,57 +1,14 @@
 package kast_test
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/csconfederation/fragg-3.0/engine/calc"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
-	"github.com/csconfederation/fragg-3.0/engine/payload"
 	"github.com/csconfederation/fragg-3.0/engine/round"
-	"github.com/csconfederation/fragg-3.0/engine/roundlog"
 	"github.com/csconfederation/fragg-3.0/engine/row"
 )
-
-// Every PR 2 fixture: the calculator's KAST against the collectors' rows. Eco's KAST round is
-// restored from its round row as the fold counts it (side_stats.go UpdateCommonRoundStats).
-func TestFixtures(t *testing.T) {
-	files, _ := filepath.Glob("../../roundlog/testdata/*.json.gz")
-	if len(files) == 0 {
-		t.Fatal("no fixtures")
-	}
-	for _, path := range files {
-		t.Run(strings.TrimSuffix(filepath.Base(path), ".json.gz"), func(t *testing.T) {
-			gz, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			raw, err := roundlog.Gunzip(gz)
-			if err != nil {
-				t.Fatal(err)
-			}
-			f, err := roundlog.Decode(raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got, err := roundlog.Replay(f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			old, cur := payload.RoundRow(got.Rows.CSC.Round), calc.Run(got.Round)
-			for id, op := range old.Players {
-				if rs := got.Rows.Eco[id]; rs != nil && (rs.GotKill || rs.GotAssist || rs.Survived || rs.Traded) {
-					op.EcoKastRounds = 1
-				}
-				if np := cur.Players[id]; np == nil || op.KAST != np.KAST {
-					t.Errorf("player %d: old %+v, new %+v", id, op.KAST, np)
-				}
-			}
-		})
-	}
-}
 
 // Hand-built rounds: players 1-2 T, 11-13 CT; 0 is the shared bot row; 99 isn't a member.
 func player(steam uint64) *fact.Player {

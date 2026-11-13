@@ -91,8 +91,8 @@ func read(t *testing.T, path string) []byte {
 	return raw
 }
 
-// Each fixture decodes and encodes to the same bytes, and replays through the Deriver and today's
-// collectors to the stored rows.
+// Each fixture decodes and encodes to the same bytes, and replays through the Deriver and the
+// calculators to the stored rows. -update (shared with the status test) rewrites the rows after an approved output change.
 func TestFixtures(t *testing.T) {
 	paths, err := filepath.Glob("testdata/*.json.gz")
 	if err != nil {
@@ -125,6 +125,21 @@ func TestFixtures(t *testing.T) {
 			rows, err := marshal(got.Rows)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if *update {
+				f.Rows = rows
+				enc, err := Encode(f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				gz, err := Gzip(enc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, gz, 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return
 			}
 			if !bytes.Equal(rows, f.Rows) {
 				t.Errorf("replayed rows differ from the stored ones (%d vs %d bytes)", len(rows), len(f.Rows))

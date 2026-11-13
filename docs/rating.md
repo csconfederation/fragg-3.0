@@ -392,7 +392,7 @@ ProbabilitySwingPerRound = ProbabilitySwing / RoundsPlayed
 
 ## Part 5: Final rating formula
 
-Implemented in `rating.ComputeFinalRating`; Stats stores it as `swing_rating` (the side ratings as the T and CT rows' `swing_rating`):
+Implemented in `rating.ComputeSideRating` (the fold calls it once per row); Stats stores it as `swing_rating` (the side ratings as the T and CT rows' `swing_rating`):
 
 ```
 adr  = total_damage / rounds_played

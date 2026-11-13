@@ -1,7 +1,6 @@
-// Package calc holds the stat calculators that replace the collectors (Core-planning#681). Each
-// reads one committed round, as the Deriver handed it over, and writes only its own family of the
-// round's row model. The payload runs them through Run and folds the rows (engine/fold); cmd/calcdiff
-// compares them with the collectors until PR 18 deletes those.
+// Package calc holds the stat calculators (Core-planning#681). Each reads one committed round, as
+// the Deriver handed it over, and writes only its own family of the round's row model. The payload
+// runs them through Run and folds the rows (engine/fold).
 package calc
 
 import (

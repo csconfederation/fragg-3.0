@@ -1,6 +1,6 @@
 // Package roundlog stores a committed round's deriver input as a gzipped JSON fixture, with the
-// rows today's collectors produce from it, and replays the fixture through the Deriver and the
-// collectors (stat-layer rebuild PR 2). Facts are tagged by kind: {"kind": "Kill", "fact": {...}}.
+// rows the calculators produce from it, and replays the fixture through the Deriver and the
+// calculators (stat-layer rebuild PR 2). Facts are tagged by kind: {"kind": "Kill", "fact": {...}}.
 package roundlog
 
 import (

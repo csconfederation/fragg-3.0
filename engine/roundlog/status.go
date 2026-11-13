@@ -7,7 +7,6 @@ import (
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
-	"github.com/csconfederation/fragg-3.0/engine/payload"
 	"github.com/csconfederation/fragg-3.0/engine/round"
 )
 
@@ -52,7 +51,7 @@ type Want struct {
 	Detail  string `json:"detail,omitempty"`
 }
 
-// Run feeds the facts to the lifecycle with the Deriver and the collectors, as payload.Run does,
+// Run feeds the facts to the lifecycle with the Deriver, as payload.Run does,
 // and returns what Finish gives. A fact's error doesn't stop the feed: the lifecycle keeps its
 // first error, and the facts after it must not change it.
 func (s *Status) Run() (Want, error) {
@@ -60,7 +59,7 @@ func (s *Status) Run() (Want, error) {
 	if err != nil {
 		return Want{}, err
 	}
-	d := round.NewDeriver(payload.NewReplay())
+	d := round.NewDeriver(discard{})
 	m := match.New(d)
 	for i, e := range s.Facts {
 		f := e.Fact
@@ -83,6 +82,11 @@ func (s *Status) Run() (Want, error) {
 	}
 	return Want{Outcome: res.Outcome.String(), Detail: res.Detail}, nil
 }
+
+// discard takes the Deriver's rounds and keeps none.
+type discard struct{}
+
+func (discard) Round(*round.Round) error { return nil }
 
 // EncodeStatus is the fixture's JSON, uncompressed.
 func EncodeStatus(s *Status) ([]byte, error) { return marshal(s) }

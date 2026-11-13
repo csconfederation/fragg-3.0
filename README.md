@@ -10,14 +10,12 @@ csgo-demo-worker calls `payload.Run`; nothing else in this repo is an entry poin
 |---|---|
 | `engine/ingest` | Reads the demo (demoinfocs v6) and emits facts (`engine/fact`) |
 | `engine/match` | The match lifecycle: live state, round opens, wins, commits, outcome |
-| `engine/round` | Shared round state and one definition per shared concept: alive counts, phase, opening, clutches, deaths, assists, trades, flashes. Collectors read its `Context` |
-| `engine/cscstats` | CSC's stats per round |
-| `engine/eco` | Eco stats and the probability swing (`rating/swing`, `rating/probability`) |
-| `engine/calc` | The stat calculators that replace the collectors, one family per PR (empty until then; `cmd/calcdiff` compares them with the collectors) |
+| `engine/round` | Shared round state and one definition per shared concept: alive counts, phase, opening, clutches, deaths, assists, trades, flashes. Calculators read its `Context` |
+| `engine/calc` | The stat calculators, one family each: a committed round in, its row parts out (swing uses `rating/swing`, `rating/probability`) |
 | `engine/row` | The payload's row model: player, team and round rows as per-family structs |
-| `engine/fold` | Folds both into match, T and CT rows and derives the ratings |
+| `engine/fold` | Folds the round rows into match, T and CT rows and derives the ratings |
 | `engine/payload` | `Run`: the whole pipeline, the payload and its error sentinels |
-| `rating`, `model` | Rating formulas and weights; eco's per-round and per-player structs |
+| `rating` | Rating formulas and weights |
 
 Rating formulas: [docs/rating.md](docs/rating.md).
 
@@ -31,8 +29,8 @@ go run ./engine/cmd/factdump DEMO.dem              # the facts as JSON lines, fo
 ## Adding a stat
 
 1. If the demo doesn't carry it yet, add it to a fact in `engine/fact` and read it in `engine/ingest`.
-2. If CSC and eco both use the concept, decide it once in `engine/round` and expose it on `Context`.
-3. Count it in `engine/cscstats` or `engine/eco`, and fold it in `engine/fold`.
+2. If more than one family uses the concept, decide it once in `engine/round` and expose it on `Context`.
+3. Count it in its family's calculator in `engine/calc`, and fold it in `engine/fold`.
 4. Add the payload field to its family in `engine/row`, then regenerate `engine/payload/fields.tsv` (`go test ./engine/payload -run TestFieldList -update`), then add the Stats column (CSC-Stats).
 
 ## Tests

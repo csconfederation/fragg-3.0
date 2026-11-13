@@ -31,7 +31,7 @@ type Clutch struct {
 
 // State is the shared round state.
 type State struct {
-	Num         int // the open round's number (CSC's int8 roundNum); 0 before the first
+	Num         int // the open round's number; 0 before the first
 	Phase       Phase
 	BombDecided bool // a defuse or explosion decided the round
 	TMoney      bool // the T side earns the bomb or win money this round
@@ -112,13 +112,11 @@ type Round struct {
 	Events []Event
 	// Commit is the index of the first event after the commit.
 	Commit int
-	// OldWins are the round's Wins where today's hold runs them (PR 18 deletes them). Wins are the
-	// same Wins, one entry each in the same order, placed by the rule of design note section 6: the
-	// index of the event the Win takes effect before. A Win is a RoundEnd with Win set; a Win whose
-	// RoundEnd is at or after Commit is a tail's, and calculators skip it.
-	OldWins []OldWin
-	Wins    []int
-	End     State // at the commit
+	// Wins are the round's Wins, one per RoundEnd with Win set, placed by the rule of design note
+	// section 6: the index of the event the Win takes effect before. A Win whose RoundEnd is at or
+	// after Commit is a tail's, and calculators skip it.
+	Wins []int
+	End  State // at the commit
 	// committed is set by Commit; the deriver hands over only committed rounds.
 	committed bool
 }
@@ -167,15 +165,6 @@ func (r *Round) SideOf(clan string) fact.Side {
 	return 0
 }
 
-// OldWin is a Win as today's hold runs it: before event At (len(Events) after the last), for the
-// RoundEnd at index Event, with the residual alive members and the state at that moment.
-type OldWin struct {
-	At, Event  int
-	PostCommit bool // ran after the round's commit
-	Alive      []fact.Player
-	State      State
-}
-
 // Event is a buffered fact with its context.
 type Event struct {
 	match.Event
@@ -200,9 +189,6 @@ type Deriver struct {
 	mapName   string
 	opened    bool // a round has opened: the eco pipeline is active
 	winner    fact.Side
-	post      bool // the open round has committed
-	pending   *int // an explosion's Win, as the index of its RoundEnd, until the bomb's facts are in (D27)
-	last      Context
 }
 
 // NewDeriver returns the state before any round.
@@ -214,22 +200,17 @@ func NewDeriver(out Handover) *Deriver {
 // State is the current state.
 func (d *Deriver) State() State { return d.s }
 
-// Last is the context of the latest event; derivediff reads it.
-func (d *Deriver) Last() Context { return d.last }
-
 func (d *Deriver) Open(r *match.Round, s fact.Snapshot, roster match.Roster) error {
-	d.endWave()
 	if err := d.handover(); err != nil {
 		return err
 	}
-	// Num wraps like CSC's int8 roundNum past round 127, as the gates always read it.
-	d.s = State{Num: int(int8(r.Num)), Phase: PrePlant, Opening: true, TAlive: r.InitT, CTAlive: r.InitCT}
+	d.s = State{Num: r.Num, Phase: PrePlant, Opening: true, TAlive: r.InitT, CTAlive: r.InitCT}
 	d.members = maps.Clone(r.Members)
 	d.deaths = map[uint64]int{}
 	d.cscDeaths = map[uint64]int{}
 	d.kills = map[uint64][]*kill{}
 	d.blind = map[uint64]Blind{}
-	d.opened, d.winner, d.post = true, 0, false
+	d.opened, d.winner = true, 0
 	d.cur = &Round{Key: r, Num: r.Num, StartTick: r.StartTick, InitT: r.InitT, InitCT: r.InitCT, Pistol: r.Pistol,
 		FreezeEnd: r.FreezeEnd, TClan: r.TClan, CTClan: r.CTClan, Map: d.mapName, Open: s, Roster: roster,
 		OpenMembers: maps.Clone(r.Members)}
@@ -245,7 +226,6 @@ func (d *Deriver) Commit(r *match.Round, tick int) error {
 		}
 	}
 	d.cur.committed, d.cur.Commit, d.cur.EndTick, d.cur.End = true, len(d.cur.Events), tick, d.s
-	d.post = true
 	return nil
 }
 
@@ -266,15 +246,19 @@ func (d *Deriver) handover() error {
 // the last bomb Kill or Hurt of its wave, the events up to the next RoundEnd, the commit (when the
 // RoundEnd is before it) or the buffer's end. Dropped events are skipped and nothing is reordered.
 func (r *Round) placeWins() {
-	r.Wins = make([]int, 0, len(r.OldWins))
-	for _, w := range r.OldWins {
-		at := w.Event + 1
-		if r.Events[w.Event].Fact.(fact.RoundEnd).Reason == fact.ReasonTargetBombed {
+	r.Wins = nil
+	for i, e := range r.Events {
+		re, ok := e.Fact.(fact.RoundEnd)
+		if !ok || !e.Win {
+			continue
+		}
+		at := i + 1
+		if re.Reason == fact.ReasonTargetBombed {
 			end := len(r.Events)
-			if w.Event < r.Commit {
+			if i < r.Commit {
 				end = r.Commit
 			}
-			for j := w.Event + 1; j < end; j++ {
+			for j := i + 1; j < end; j++ {
 				if _, ok := r.Events[j].Fact.(fact.RoundEnd); ok {
 					break
 				}
@@ -290,10 +274,6 @@ func (r *Round) placeWins() {
 // Event applies one fact: the checks the old pipeline made (round, then eco, then CSC), the state,
 // and the context. Live events join the open round's buffer.
 func (d *Deriver) Event(e match.Event) error {
-	if d.pending != nil && (e.Final || endsBombWave(e.Fact)) {
-		d.endWave()
-	}
-	d.last = Context{}
 	var c Context
 	switch f := e.Fact.(type) {
 	case nil: // Final
@@ -318,11 +298,7 @@ func (d *Deriver) Event(e match.Event) error {
 		c.After = d.s
 		d.add(e, c)
 		if e.Win {
-			if i := len(d.cur.Events) - 1; f.Reason == fact.ReasonTargetBombed {
-				d.pending = &i
-			} else {
-				d.win(i)
-			}
+			d.s.Phase, d.winner = Decided, f.Winner
 		}
 		return nil
 	default:
@@ -347,7 +323,6 @@ func (d *Deriver) Event(e match.Event) error {
 		case fact.BombDefused:
 			c.Alive = d.Alive(e.Roster, f.Snapshot)
 		}
-		d.last = c
 		if err := d.checks(e, c); err != nil {
 			return err
 		}
@@ -403,22 +378,6 @@ func (d *Deriver) checks(e match.Event, c Context) error {
 	return nil
 }
 
-// endsBombWave reports whether f ends the wait for an explosion's facts: any other kill, damage or
-// flash, a change to the round's members, or the next round end. A kill between the bomb's facts
-// still ends it early (seen in 3 of 906 explosion rounds); holding facts back would replay them
-// out of order.
-func endsBombWave(f fact.Fact) bool {
-	switch f := f.(type) {
-	case fact.Kill, fact.Hurt, fact.Flashed:
-		return !bombFact(f)
-	case fact.PlayerInfo:
-		return f.Found
-	case fact.Disconnect, fact.TeamChange, fact.RoundEnd:
-		return true
-	}
-	return false
-}
-
 // bombFact reports whether f is the bomb's damage or kill.
 func bombFact(f fact.Fact) bool {
 	var w *int
@@ -429,25 +388,6 @@ func bombFact(f fact.Fact) bool {
 		w = f.Weapon
 	}
 	return w != nil && *w == fact.EqBomb
-}
-
-// win is the Win of the RoundEnd at event i, where today's hold runs it.
-func (d *Deriver) win(i int) {
-	d.s.Phase = Decided
-	e := d.cur.Events[i]
-	re := e.Fact.(fact.RoundEnd)
-	d.winner = re.Winner
-	d.cur.OldWins = append(d.cur.OldWins, OldWin{At: len(d.cur.Events), Event: i, PostCommit: d.post,
-		Alive: d.Alive(e.Roster, re.Snapshot), State: d.s})
-}
-
-// endWave runs the explosion's Win that is waiting for its wave to end.
-func (d *Deriver) endWave() {
-	if d.pending != nil {
-		i := *d.pending
-		d.pending = nil
-		d.win(i)
-	}
 }
 
 // Alive is the open round's members alive in s, T then CT.

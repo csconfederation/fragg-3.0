@@ -135,7 +135,7 @@ func kill(rows map[uint64]*row.Combat, ecos map[uint64]*eco, damage map[uint64]m
 		a.Eac++
 		a.SuppRounds = 1
 		// A flasher who is also the damage assister has Eac once (D34); bots, sharing Steam64 0, count twice.
-		if e.FlashAssisted && (f.Assister.IsBot || e.FlashAssister != f.Assister.Steam64) {
+		if e.FlashAssisted && !f.AssistedFlash && (f.Assister.IsBot || e.FlashAssister != f.Assister.Steam64) {
 			if fl := rows[e.FlashAssister]; fl != nil {
 				fl.Eac++
 				fl.SuppRounds = 1

@@ -27,13 +27,13 @@ func Calc(r *round.Round, out *row.Round) {
 			attempt(&p.Clutches, s.c.Size)
 		}
 	}
-	// A clutch won is the winner's slot, for a clutcher who isn't a bot. A size outside 1v0 to 1v5
-	// has no bonus in CSC, so it is no clutch; the bonus index doesn't reach 6.
+	// A clutch won is the winner's slot, for a clutcher who isn't a bot. A size outside 1v1 to 1v5
+	// is no clutch (D32): a last player with no enemy left faced none, and 1v6 has no bonus.
 	for _, s := range slots {
 		if win.Side != s.side || s.c.Steam == 0 {
 			continue
 		}
-		if s.c.Size < 0 || s.c.Size > 5 {
+		if s.c.Size < 1 || s.c.Size > 5 {
 			break
 		}
 		if t := out.Teams[r.SideOf(win.Clan)]; t != nil { // the winner's team row

@@ -47,10 +47,10 @@ func TestWonAndAttempts(t *testing.T) {
 	}
 }
 
-// Q5: a clutch against no one is a clutch for the team, with no size to count; eco counts no attempt.
+// D32: a last player with no enemy left faced none: no team clutch, no size to count, no attempt.
 func TestNoEnemiesLeft(t *testing.T) {
 	out := run(fact.SideT, round.Clutch{Size: 0, Steam: 1}, round.Clutch{})
-	if out.Teams[fact.SideT].Clutches != 1 {
+	if out.Teams[fact.SideT].Clutches != 0 {
 		t.Error("team clutch")
 	}
 	if got := out.Players[1].Clutches; got != (row.Clutches{}) {

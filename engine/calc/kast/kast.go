@@ -68,11 +68,12 @@ func Calc(r *round.Round, out *row.Round) {
 		}
 	}
 
+	left := r.Disconnected() // D44: a disconnect while alive is not surviving
 	for id, p := range out.Players {
-		if csc[id] || !died[id] {
+		if csc[id] || !died[id] && !left[id] {
 			p.KastRounds = 1
 		}
-		if got, human := ecoK[id]; human && (got || !ecoDied[id]) {
+		if got, human := ecoK[id]; human && (got || !ecoDied[id] && !left[id]) {
 			p.EcoKastRounds = 1
 		}
 	}

@@ -7,7 +7,6 @@ package objectives
 
 import (
 	"maps"
-	"math"
 	"slices"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
@@ -255,12 +254,12 @@ func Finish(r *round.Round, out *row.Round) {
 		if out.EndDueToBombEvent {
 			share = 70
 		}
-		p.Rws = share * (float64(p.Damage) / float64(out.WinTeamDmg))
+		p.Rws = 0 // D46: with no winning damage the damage share is 0, and the bonus below still counts
+		if out.WinTeamDmg > 0 {
+			p.Rws = share * (float64(p.Damage) / float64(out.WinTeamDmg))
+		}
 		if out.EndDueToBombEvent && (m.Side == fact.SideT && out.Planter == id || m.Side == fact.SideCT && out.Defuser == id) {
 			p.Rws += 30
-		}
-		if math.IsNaN(p.Rws) {
-			p.Rws = 0
 		}
 	}
 }

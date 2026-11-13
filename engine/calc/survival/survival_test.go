@@ -80,7 +80,8 @@ func TestDisconnectedIsNotASave(t *testing.T) {
 	}
 	if out.Teams[fact.SideCT].Saves != 1 {
 		t.Errorf("team saves %d, want 1 (player 3 only)", out.Teams[fact.SideCT].Saves)
-||||||| parent of b54cfd9 (engine: a mid-round joiner counts as alive (D33))
+	}
+}
 
 // D33: placement counts the players who joined the side mid-round.
 func TestPlacementWithJoiner(t *testing.T) {

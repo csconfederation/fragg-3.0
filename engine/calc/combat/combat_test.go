@@ -1,81 +1,15 @@
 package combat_test
 
 import (
-	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/csconfederation/fragg-3.0/engine/calc"
 	"github.com/csconfederation/fragg-3.0/engine/calc/combat"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
-	"github.com/csconfederation/fragg-3.0/engine/payload"
 	"github.com/csconfederation/fragg-3.0/engine/round"
-	"github.com/csconfederation/fragg-3.0/engine/roundlog"
 	"github.com/csconfederation/fragg-3.0/engine/row"
 )
-
-// Every PR 2 fixture: the calculator's Combat against the collectors' rows. The eco-origin fields are
-// restored from eco's round rows as the fold reads them (side_stats.go, fold.go).
-func TestFixtures(t *testing.T) {
-	files, _ := filepath.Glob("../../roundlog/testdata/*.json.gz")
-	if len(files) == 0 {
-		t.Fatal("no fixtures")
-	}
-	for _, path := range files {
-		t.Run(strings.TrimSuffix(filepath.Base(path), ".json.gz"), func(t *testing.T) {
-			gz, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			raw, err := roundlog.Gunzip(gz)
-			if err != nil {
-				t.Fatal(err)
-			}
-			f, err := roundlog.Decode(raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got, err := roundlog.Replay(f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			old, cur := payload.RoundRow(got.Rows.CSC.Round), calc.Run(got.Round)
-			for id, op := range old.Players {
-				if rs := got.Rows.Eco[id]; rs != nil {
-					c := &op.Combat
-					c.EcoKills, c.EcoDamage, c.EcoAWPKills = rs.Kills, rs.Damage, rs.AWPKills
-					c.AssistedKills = 0
-					if rs.GotAssist {
-						c.AssistedKills = rs.Assists
-					}
-					c.AWPMultiKillRounds, c.AWPDeaths, c.RoundsWithAWPKill = b2i(rs.AWPKills >= 2), b2i(rs.LostAWP), b2i(rs.AWPKill)
-					c.KnifeKills, c.PistolVsRifleKills = b2i(rs.KnifeKill), b2i(rs.PistolVsRifleKill)
-					c.UtilityKills, c.PerfectKills = rs.UtilityKills, rs.PerfectKills
-				}
-				np := cur.Players[id]
-				if np == nil {
-					t.Fatalf("player %d: no row", id)
-				}
-				if !reflect.DeepEqual(op.Combat, np.Combat) {
-					t.Errorf("player %d:\nold %+v\nnew %+v", id, op.Combat, np.Combat)
-				}
-			}
-			if len(old.Players) != len(cur.Players) {
-				t.Errorf("%d rows, want %d", len(cur.Players), len(old.Players))
-			}
-		})
-	}
-}
-
-func b2i(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
 
 // Hand-built rounds: players 1-2 T, 11-13 CT; 0 is the shared bot row.
 func player(steam uint64) *fact.Player {

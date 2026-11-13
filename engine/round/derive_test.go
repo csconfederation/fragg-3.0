@@ -31,26 +31,21 @@ func replay(t *testing.T, name string) *roundlog.Replayed {
 }
 
 // Win placement (design note section 6). Expected indices are read off each fixture's events: the
-// explosion's RoundEnd, the hold's ender, and the bomb's Hurts and Kills (weapon 404) after it.
+// explosion's RoundEnd and the bomb's Hurts and Kills (weapon 404) after it.
 func TestWinPlacement(t *testing.T) {
 	cases := []struct {
 		fixture, why string
-		old, wins    []int
+		wins         []int
 	}{
-		{"mid9223-1-r03", "RoundEnd 85; a Hurt ends the hold at 87; the bomb's Hurt and Kill at 88, 89 come after", []int{87}, []int{90}},
-		{"mid9275-0-r23", "RoundEnd 73; a Hurt ends the hold at 75; no bomb facts", []int{75}, []int{74}},
-		{"mid5754-0-r04", "RoundEnd 88; a Hurt ends the hold at 90; no bomb facts", []int{90}, []int{89}},
-		{"mid9217-1-r02", "not an explosion: right after its RoundEnd, 117", []int{118}, []int{118}},
+		{"mid9223-1-r03", "RoundEnd 85; the bomb's Hurt and Kill at 88, 89 come after a Hurt at 87", []int{90}},
+		{"mid9275-0-r23", "RoundEnd 73; a Hurt at 75; no bomb facts", []int{74}},
+		{"mid5754-0-r04", "RoundEnd 88; a Hurt at 90; no bomb facts", []int{89}},
+		{"mid9217-1-r02", "not an explosion: right after its RoundEnd, 117", []int{118}},
 	}
 	for _, c := range cases {
 		t.Run(c.fixture, func(t *testing.T) {
-			r := replay(t, c.fixture).Round
-			var old []int
-			for _, w := range r.OldWins {
-				old = append(old, w.At)
-			}
-			if !slices.Equal(old, c.old) || !slices.Equal(r.Wins, c.wins) {
-				t.Errorf("%s: OldWins at %v, Wins %v; want %v, %v", c.why, old, r.Wins, c.old, c.wins)
+			if r := replay(t, c.fixture).Round; !slices.Equal(r.Wins, c.wins) {
+				t.Errorf("%s: Wins %v, want %v", c.why, r.Wins, c.wins)
 			}
 		})
 	}

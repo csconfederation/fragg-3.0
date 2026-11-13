@@ -169,15 +169,6 @@ func New(stats ...Stats) *Match {
 	return m
 }
 
-// Live reports whether the match is live (the oracle's IsGameLive).
-func (m *Match) Live() bool { return m.isGameLive }
-
-// InRound reports whether a round is in play (the oracle's InRound).
-func (m *Match) InRound() bool { return m.inRound }
-
-// Members is the oracle's getTeamMembers over s for side.
-func (m *Match) Members(s fact.Snapshot, side fact.Side) []fact.Player { return m.members(s, side) }
-
 // lurkTicks is the lurk sampler's cadence: 4 s at the oracle's tick rate.
 const lurkTicks = 4 * fact.TickRate
 

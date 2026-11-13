@@ -67,13 +67,13 @@ func (c *collector) Round(r *round.Round) error {
 	c.data.RecordRoundStart(0, 0, false, "")
 	k := commit{row: roundRow{Num: r.Num, Pistol: r.Pistol, FreezeEnd: r.FreezeEnd,
 		T: buy(r, fact.SideT), CT: buy(r, fact.SideCT)}}
-	var end round.State
+	end, cur := round.State{}, round.State{TAlive: r.InitT, CTAlive: r.InitCT} // cur: the state before event i
+	wins := r.WinList()
 	for i := 0; i <= r.Commit; i++ {
-		for _, w := range r.OldWins {
-			if w.At == i && !w.PostCommit {
-				re := r.Events[w.Event].Fact.(fact.RoundEnd)
-				end, k.pending = w.State, c.data.TakePending()
-				k.row.Winner, k.row.Reason = int(re.Winner), re.Reason
+		for _, w := range wins {
+			if w.At == i && w.Event < r.Commit {
+				end, k.pending = cur, c.data.TakePending()
+				k.row.Winner, k.row.Reason = int(w.Side), r.Events[w.Event].Fact.(fact.RoundEnd).Reason
 			}
 		}
 		if i == r.Commit {
@@ -83,6 +83,7 @@ func (c *collector) Round(r *round.Round) error {
 		if e.Dropped {
 			continue
 		}
+		cur = e.After
 		snap := func(planted bool) {
 			c.data.RecordStateSnapshot(min(e.Before.TAlive, 5), min(e.Before.CTAlive, 5), planted)
 		}

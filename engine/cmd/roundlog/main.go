@@ -1,5 +1,5 @@
 // Command roundlog writes round-log fixtures: for each requested round of a demo, the deriver's
-// input as gzipped JSON with the rows today's collectors made from it. It refuses to write a round
+// input as gzipped JSON with the rows the calculators make from it. It refuses to write a round
 // whose fixture doesn't replay to the same buffer and rows.
 //
 //	go run ./engine/cmd/roundlog [-n] [-o DIR] DEMO.dem ROUND...
@@ -27,26 +27,24 @@ import (
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/ingest"
 	"github.com/csconfederation/fragg-3.0/engine/match"
-	"github.com/csconfederation/fragg-3.0/engine/payload"
 	"github.com/csconfederation/fragg-3.0/engine/round"
 	"github.com/csconfederation/fragg-3.0/engine/roundlog"
 )
 
 var matchID = regexp.MustCompile(`mid\d+-\d`)
 
-// handover replays every committed round into the collectors and keeps the wanted ones.
+// handover keeps the wanted committed rounds.
 type handover struct {
-	replay *payload.Replay
-	want   map[int]bool
-	all    bool
-	got    map[*match.Round]*round.Round
+	want map[int]bool
+	all  bool
+	got  map[*match.Round]*round.Round
 }
 
 func (h *handover) Round(r *round.Round) error {
 	if h.all || h.want[r.Num] {
 		h.got[r.Key] = r
 	}
-	return h.replay.Round(r)
+	return nil
 }
 
 func main() {
@@ -84,8 +82,7 @@ func run(path string, rounds []string, out string, dry bool) error {
 	defer f.Close()
 	sum := sha256.New()
 
-	rp := payload.NewReplay()
-	h := &handover{replay: rp, want: want, all: all, got: map[*match.Round]*round.Round{}}
+	h := &handover{want: want, all: all, got: map[*match.Round]*round.Round{}}
 	d := round.NewDeriver(h)
 	rec := &roundlog.Recorder{Next: d, Want: func(n int) bool { return all || want[n] }}
 	m := match.New(rec)
@@ -127,12 +124,8 @@ func run(path string, rounds []string, out string, dry bool) error {
 		if lf == nil || got == nil || lf.Commit < 0 {
 			return fmt.Errorf("%s: round %d wasn't recorded", name, n)
 		}
-		rows, err := roundlog.RowsOf(rp, key)
-		if err != nil {
-			return err
-		}
 		lf.Demo, lf.Sha256 = name, hex.EncodeToString(sum.Sum(nil))
-		if err := roundlog.Check(lf, got, rows); err != nil {
+		if err := roundlog.Check(lf, got, roundlog.RowsOf(got)); err != nil {
 			return fmt.Errorf("%s round %d: %w", name, n, err)
 		}
 		if dry {
@@ -185,6 +178,6 @@ func describe(r *round.Round) string {
 	for _, k := range slices.Sorted(maps.Keys(tail)) {
 		ks = append(ks, fmt.Sprintf("%s %d", k, tail[k]))
 	}
-	return fmt.Sprintf("events %d, commit %d; wins %d (explosion events %s), oldWins %d; trades after a Win %d; disconnects %d, joins %d; tail [%s]",
-		len(r.Events), r.Commit, wins, strings.Join(explosions, ","), len(r.OldWins), trades, disconnects, joins, strings.Join(ks, ", "))
+	return fmt.Sprintf("events %d, commit %d; wins %d (explosion events %s); trades after a Win %d; disconnects %d, joins %d; tail [%s]",
+		len(r.Events), r.Commit, wins, strings.Join(explosions, ","), trades, disconnects, joins, strings.Join(ks, ", "))
 }

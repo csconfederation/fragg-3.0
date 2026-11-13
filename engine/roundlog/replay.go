@@ -4,25 +4,22 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/csconfederation/fragg-3.0/engine/cscstats"
+	"github.com/csconfederation/fragg-3.0/engine/calc"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
-	"github.com/csconfederation/fragg-3.0/engine/payload"
 	"github.com/csconfederation/fragg-3.0/engine/round"
-	"github.com/csconfederation/fragg-3.0/model"
+	"github.com/csconfederation/fragg-3.0/engine/row"
 )
 
-// Replayed is a fixture run through the Deriver and today's collectors.
+// Replayed is a fixture run through the Deriver and the calculators.
 type Replayed struct {
 	Round *round.Round // the handed-over round; Key is the fixture's own lifecycle round
-	Rows  *Rows
+	Rows  *Rows        // the calculators' rows for Round
 }
 
-// Replay feeds the fixture's input to a fresh Deriver and replays the committed round through
-// fresh collectors, the way payload.Run does for a whole match.
+// Replay feeds the fixture's input to a fresh Deriver, the way payload.Run does for a whole match.
 func Replay(f *File) (*Replayed, error) {
-	rp := payload.NewReplay()
-	h := &handover{replay: rp}
+	h := &handover{}
 	d := round.NewDeriver(h)
 	mr := f.Round.Lifecycle()
 	if err := d.Event(match.Event{Fact: fact.ServerInfo{Map: f.Map}}); err != nil {
@@ -53,22 +50,15 @@ func Replay(f *File) (*Replayed, error) {
 	if h.got == nil {
 		return nil, fmt.Errorf("the round was not handed over")
 	}
-	rows, err := RowsOf(rp, h.got.Key)
-	if err != nil {
-		return nil, err
-	}
-	return &Replayed{Round: h.got, Rows: rows}, nil
+	return &Replayed{Round: h.got, Rows: RowsOf(h.got)}, nil
 }
 
-// handover keeps the round the Deriver hands over, and replays it.
-type handover struct {
-	replay *payload.Replay
-	got    *round.Round
-}
+// handover keeps the round the Deriver hands over.
+type handover struct{ got *round.Round }
 
 func (h *handover) Round(r *round.Round) error {
 	h.got = r
-	return h.replay.Round(r)
+	return nil
 }
 
 // Lifecycle is the match.Round the round was opened with.
@@ -102,42 +92,16 @@ func cmpU(a, b uint64) int {
 	return 0
 }
 
-// Rows are what today's collectors hold for the round: the CSC round with its player and team
-// rows, and eco's player rows.
+// Rows are the calculators' rows for a round: the round row, and its player and team rows, which the
+// round row's JSON hides.
 type Rows struct {
-	CSC CSC                          `json:"csc"`
-	Eco map[uint64]*model.RoundStats `json:"eco"`
+	Round   *row.Round              `json:"round"`
+	Players map[uint64]*row.Player  `json:"players"`
+	Teams   map[fact.Side]*row.Team `json:"teams"`
 }
 
-// CSC is a cscstats.Round with the rows its JSON hides.
-type CSC struct {
-	Round   *cscstats.Round       `json:"round"`
-	Players map[uint64]*player    `json:"players"`
-	Teams   map[string]*teamStats `json:"teams"`
-}
-
-type player struct {
-	*cscstats.PlayerStats
-	DamageList map[uint64]int `json:"damageList"`
-}
-
-type teamStats struct {
-	*cscstats.TeamStats
-	Buy cscstats.Buy `json:"buy"`
-}
-
-// RowsOf collects the rows of the round with this lifecycle key.
-func RowsOf(rp *payload.Replay, key *match.Round) (*Rows, error) {
-	c, e := rp.Rows(key)
-	if c == nil || e == nil {
-		return nil, fmt.Errorf("no rows for the round")
-	}
-	rows := &Rows{CSC: CSC{Round: c, Players: map[uint64]*player{}, Teams: map[string]*teamStats{}}, Eco: e.Stats()}
-	for id, p := range c.PlayerStats {
-		rows.CSC.Players[id] = &player{p, p.DamageList}
-	}
-	for clan, t := range c.TeamStats {
-		rows.CSC.Teams[clan] = &teamStats{t, t.Buy}
-	}
-	return rows, nil
+// RowsOf is calc.Run of r.
+func RowsOf(r *round.Round) *Rows {
+	out := calc.Run(r)
+	return &Rows{Round: out, Players: out.Players, Teams: out.Teams}
 }

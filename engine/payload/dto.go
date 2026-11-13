@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/csconfederation/fragg-3.0/engine/cscstats"
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/fold"
 	"github.com/csconfederation/fragg-3.0/engine/match"
@@ -94,31 +93,4 @@ func withConstants(p *row.Player, scope string) *row.Player {
 		setConstants(p, scopeBot)
 	}
 	return p
-}
-
-// RoundRow is a committed round's row as the payload holds it, constants applied. cmd/calcdiff compares
-// the calculators with it.
-func RoundRow(src *cscstats.Round) *row.Round {
-	r := &row.Round{Players: map[uint64]*row.Player{}}
-	copyRow(r, src)
-	setConstants(r, scopeRound)
-	for steam, ps := range src.PlayerStats {
-		p := &row.Player{}
-		copyRow(p, ps)
-		setConstants(p, scopeRoundPlayer)
-		if p.SteamID == "0" {
-			setConstants(p, scopeBot)
-		}
-		r.Players[steam] = p
-	}
-	return r
-}
-
-// RoundTeam is a team's row in a round, without the match row's constants. cmd/calcdiff compares the
-// calculators with it.
-func RoundTeam(src *cscstats.TeamStats) *row.Team {
-	t := &row.Team{}
-	copyRow(t, src)
-	t.Buy = row.Buy(src.Buy)
-	return t
 }

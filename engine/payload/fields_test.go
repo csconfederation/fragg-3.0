@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/csconfederation/fragg-3.0/engine/cscstats"
 	"github.com/csconfederation/fragg-3.0/engine/row"
 )
 
@@ -175,22 +174,4 @@ func TestConstants(t *testing.T) {
 	if p.Health != 100 {
 		t.Errorf("round-player health %d, want 100", p.Health)
 	}
-}
-
-// The copy loses no field and no value: every JSON name is on both sides, and integers widen.
-func TestCopyRow(t *testing.T) {
-	src := &cscstats.PlayerStats{Kills: 255, Assists: 28, Deaths: 53, TKills: 200, Rating: 1.25, Name: "n",
-		SteamID: "76561198000000000", MostRecentFlasher: 7, Health: 100}
-	var p row.Player
-	copyRow(&p, src)
-	if p.Kills != 255 || p.Assists != 28 || p.Deaths != 53 || p.TKills != 200 || p.Rating != 1.25 || p.Name != "n" ||
-		p.SteamID != "76561198000000000" || p.MostRecentFlasher != 7 || p.Health != 100 {
-		t.Errorf("copy: %+v", p)
-	}
-	r := &row.Round{}
-	copyRow(r, &cscstats.Round{RoundNum: 66, Planter: 5})
-	if r.RoundNum != 66 || r.Planter != 5 {
-		t.Errorf("round copy: %+v", r)
-	}
-	copyRow(&row.Team{}, &cscstats.TeamStats{TR: 3})
 }

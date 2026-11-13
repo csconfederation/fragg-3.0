@@ -21,7 +21,7 @@ func Calc(r *round.Round, out *row.Round) {
 	for side, b := range map[fact.Side][2]row.Buy{fact.SideT: {t, ct}, fact.SideCT: {ct, t}} {
 		tm := out.Teams[side]
 		tm.Buy = b[0]
-		if r.Pistol {
+		if r.Num == fact.FirstPistolRound || r.Num == fact.SecondPistolRound {
 			tm.Pistols = 1
 		}
 		switch b[0] {

@@ -102,7 +102,7 @@ type Round struct {
 	// Key identifies the lifecycle's round for the caller; nothing reads through it.
 	Key                           *match.Round
 	Num, StartTick, InitT, InitCT int
-	Pistol, FreezeEnd             bool
+	FreezeEnd                     bool
 	TClan, CTClan, Map            string // Map: ServerInfo's map at the open
 	Open                          fact.Snapshot
 	Roster                        match.Roster
@@ -223,7 +223,7 @@ func (d *Deriver) Open(r *match.Round, s fact.Snapshot, roster match.Roster) err
 	d.kills = map[uint64][]*kill{}
 	d.blind = map[uint64]Blind{}
 	d.opened, d.winner = true, 0
-	d.cur = &Round{Key: r, Num: r.Num, StartTick: r.StartTick, InitT: r.InitT, InitCT: r.InitCT, Pistol: r.Pistol,
+	d.cur = &Round{Key: r, Num: r.Num, StartTick: r.StartTick, InitT: r.InitT, InitCT: r.InitCT,
 		FreezeEnd: r.FreezeEnd, TClan: r.TClan, CTClan: r.CTClan, Map: d.mapName, Open: s, Roster: roster,
 		OpenMembers: maps.Clone(r.Members)}
 	return nil

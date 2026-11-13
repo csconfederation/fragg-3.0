@@ -150,6 +150,12 @@ func TestHLTVDisconnect(t *testing.T) {
 	if left.Whole[1].HLTVRating >= m.Whole[1].HLTVRating {
 		t.Errorf("rating %v with a disconnect, %v without: want lower", left.Whole[1].HLTVRating, m.Whole[1].HLTVRating)
 	}
+	// The disconnect is not a death either: it leaves the average time to death alone.
+	r1.Players[1].Deaths, r1.Players[1].EcoDeathTime = 1, 30
+	died, _ := Fold([]*row.Round{r1, r2})
+	if got := died.Whole[1].AvgTimeToDeath; got != 30 {
+		t.Errorf("avg time to death %v with one death and one disconnect, want 30", got)
+	}
 }
 
 // Every field of a Player is summed, computed by the fold, or round-only: a new field of another

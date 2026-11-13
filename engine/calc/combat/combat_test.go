@@ -58,11 +58,11 @@ func TestDamage(t *testing.T) {
 		hurt(2, 12, fact.EqBomb, 50, round.Context{}), // ignored or team damage: no flag
 		hurt(11, 1, 7, 15, round.Context{Dealt: false, Taken: true}),
 	))
-	want := row.Combat{Damage: 40 + 20, UtilDmg: 20, NadeDmg: 20, DamageTaken: 15}
+	want := row.Combat{Damage: 40 + 20, UtilDmg: 20, NadeDmg: 20, DamageTaken: 15, EcoDamage: 60}
 	if got := out.Players[1].Combat; got != want {
 		t.Errorf("player 1: %+v, want %+v", got, want)
 	}
-	if got := out.Players[2].Combat; got != (row.Combat{Damage: 10, UtilDmg: 10, InfernoDmg: 10}) {
+	if got := out.Players[2].Combat; got != (row.Combat{Damage: 10, UtilDmg: 10, InfernoDmg: 10, EcoDamage: 10}) {
 		t.Errorf("player 2: %+v", got)
 	}
 	if got := out.Players[11].Combat.DamageTaken; got != 70 {
@@ -75,7 +75,7 @@ func TestKillAssistTrade(t *testing.T) {
 	awp := fact.EqAWP
 	f := fact.Kill{Killer: player(11), Victim: player(1), Assister: player(12), Weapon: &awp, Headshot: true}
 	f.Victim.Weapons = []int{fact.EqAWP}
-	out := run(build(ev(f, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, Assist: true, EcoKill: true,
+	out := run(build(ev(f, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, Assist: true,
 		Avenged: []round.Death{{Steam: 13, Tick: 1}}})))
 	if got, want := out.Players[11].Combat, (row.Combat{Kills: 1, AwpKills: 1, CtAWP: 1, Hs: 1, RoundsWithAWPKill: 1, PerfectKills: 1, EcoKills: 1, EcoAWPKills: 1}); got != want {
 		t.Errorf("killer %+v, want %+v", got, want)
@@ -134,7 +134,7 @@ func TestSupporters(t *testing.T) {
 // Bots share row 0: a second bot death re-adds the victim's whole damage list, and eco has no bot row.
 func TestBotRow(t *testing.T) {
 	d := round.Context{Dealt: true}
-	k := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+	k := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 	f := kill(11, 0, fact.EqKnife, true)
 	out := run(build(
 		hurt(12, 0, 7, 30, d),
@@ -154,9 +154,9 @@ func TestBotRow(t *testing.T) {
 	}
 }
 
-// EcoKill has no membership test: a killer who isn't in the round gets no row.
+// A kill by a killer who isn't in the round counts nowhere (D31).
 func TestNonMemberKiller(t *testing.T) {
-	x := round.Context{Expected: true, EcoKill: true}
+	x := round.Context{Expected: true}
 	out := run(build(ev(kill(99, 1, fact.EqAWP, true), x)))
 	if len(out.Players) != 6 || out.Players[99] != nil {
 		t.Errorf("players %d, want the 6 members only", len(out.Players))
@@ -168,7 +168,7 @@ func TestNonMemberKiller(t *testing.T) {
 
 // A human who joins mid-round has an eco row from the join: an earlier kill was a scratch row's.
 func TestLateJoiner(t *testing.T) {
-	x := round.Context{Expected: true, EcoKill: true}
+	x := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 	join := ev(fact.TeamChange{}, round.Context{})
 	join.Join = &match.Member{Steam64: 99}
 	out := calc.Run(build(ev(kill(99, 1, fact.EqKnife, true), x), join, ev(kill(99, 2, fact.EqKnife, true), x)))
@@ -179,7 +179,7 @@ func TestLateJoiner(t *testing.T) {
 
 // Utility, pistol-vs-rifle and AWP multi-kill rounds are eco's gates.
 func TestEcoOrigin(t *testing.T) {
-	x := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+	x := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 	rifle := kill(1, 11, 1, false) // P2000 against a rifle buy
 	rifle.Victim.EquipValue = 4000
 	eco := kill(1, 12, 1, false)

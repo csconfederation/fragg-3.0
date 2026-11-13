@@ -80,7 +80,7 @@ func Calc(r *round.Round, out *row.Round) {
 		}
 		// Eco's kill handler runs for kills that count, unless both players are known and it's a
 		// suicide or team kill. Until the victim and killer are both known, only the expiry runs.
-		if e.BombIgnored || f.Killer != nil && f.Victim != nil && !e.EcoKill {
+		if e.BombIgnored || f.Killer != nil && f.Victim != nil && !e.Enemy {
 			continue
 		}
 		known := f.Killer != nil && f.Victim != nil

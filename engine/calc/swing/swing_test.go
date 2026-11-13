@@ -20,10 +20,10 @@ func TestCalc(t *testing.T) {
 	open := fact.Snapshot{Players: []fact.Player{{Steam64: 1, Side: fact.SideT, Alive: true}, {Steam64: 2, Side: fact.SideT, Alive: true},
 		{Steam64: 3, Side: fact.SideCT, Alive: true}, {Steam64: 4, Side: fact.SideCT, Alive: true}}}
 	hurt := round.Event{Event: match.Event{Fact: fact.Hurt{Snapshot: fact.Snapshot{Tick: 640}, Attacker: t1, Player: c3, HealthDamageTaken: 100}, Live: true},
-		Context: round.Context{EcoDamage: true, Enemy: true, After: round.State{TAlive: 2, CTAlive: 2}}}
+		Context: round.Context{Dealt: true, Enemy: true, After: round.State{TAlive: 2, CTAlive: 2}}}
 	kill := func(k, v *fact.Player, tick int, after round.State, alive ...fact.Player) round.Event {
 		return round.Event{Event: match.Event{Fact: fact.Kill{Snapshot: fact.Snapshot{Tick: tick}, Killer: k, Victim: v, Weapon: &weapon}, Live: true},
-			Context: round.Context{Expected: true, EcoKill: true, Victim: true, Killer: true, Enemy: true, After: after, Alive: alive}}
+			Context: round.Context{Expected: true, Victim: true, Killer: true, Enemy: true, After: after, Alive: alive}}
 	}
 	end := round.Event{Event: match.Event{Fact: fact.RoundEnd{Snapshot: fact.Snapshot{Tick: 1000, Players: []fact.Player{
 		{Steam64: 1, Side: fact.SideT, Alive: true}, {Steam64: 2, Side: fact.SideT, Alive: true}}}, Winner: fact.SideT},

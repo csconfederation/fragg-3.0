@@ -53,7 +53,7 @@ func Calc(r *round.Round, out *row.Round) {
 			in[e.Join.Steam64] = true
 		}
 		k, ok := e.Fact.(fact.Kill)
-		if !ok || e.Dropped || !e.EcoKill {
+		if !ok || e.Dropped || !e.Enemy {
 			continue
 		}
 		// Eco has no bot rows: a bot's share of the kill or death goes nowhere.

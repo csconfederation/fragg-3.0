@@ -35,7 +35,7 @@ func run(events ...round.Event) *row.Round {
 type got struct{ csc, eco float64 }
 
 func TestKAST(t *testing.T) {
-	enemy := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+	enemy := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 	cases := []struct {
 		name   string
 		events func() []round.Event
@@ -46,7 +46,7 @@ func TestKAST(t *testing.T) {
 		{"a kill counts for the killer, the death does not", func() []round.Event { return []round.Event{kill(11, 1, enemy)} },
 			map[uint64]got{11: {1, 1}, 1: {0, 0}, 12: {1, 1}}},
 		{"an assist counts for the assister", func() []round.Event {
-			e := kill(11, 1, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, Assist: true, EcoKill: true})
+			e := kill(11, 1, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, Assist: true})
 			e.Fact = func() fact.Kill { k := e.Fact.(fact.Kill); k.Assister = player(12); return k }()
 			return []round.Event{e, kill(13, 2, enemy), kill(1, 13, enemy)}
 		}, map[uint64]got{12: {1, 1}, 13: {1, 1}, 1: {1, 1}, 2: {0, 0}}},
@@ -58,10 +58,10 @@ func TestKAST(t *testing.T) {
 		{"a team kill counts for nobody; the victim died", func() []round.Event {
 			return []round.Event{kill(12, 11, round.Context{Expected: true, Killer: true, Victim: true})}
 		}, map[uint64]got{12: {1, 1}, 11: {0, 0}}},
-		{"an eco kill of a non-member: eco counts the killer, CSC does not", func() []round.Event {
-			k := kill(1, 99, round.Context{Expected: true, EcoKill: true})
+		{"a kill of a non-member counts for nobody (D31)", func() []round.Event {
+			k := kill(1, 99, round.Context{Expected: true})
 			return []round.Event{kill(11, 1, enemy), k}
-		}, map[uint64]got{1: {0, 1}, 11: {1, 1}}},
+		}, map[uint64]got{1: {0, 0}, 11: {1, 1}}},
 		{"D44: a player who disconnects alive did not survive", func() []round.Event {
 			return []round.Event{{Event: match.Event{Fact: fact.Disconnect{Steam64: 1}, Live: true}}}
 		}, map[uint64]got{1: {0, 0}, 2: {1, 1}}},
@@ -84,23 +84,23 @@ func TestKAST(t *testing.T) {
 	}
 }
 
-// The eco gate: a human's kill of a non-member is theirs in eco, nobody's in CSC.
+// D31: a kill of a non-member is nobody's, in CSC or eco.
 func TestEcoGate(t *testing.T) {
-	out := run(kill(1, 99, round.Context{Expected: true, EcoKill: true}), kill(11, 2, round.Context{Expected: true, Victim: true}))
+	out := run(kill(1, 99, round.Context{Expected: true}), kill(11, 2, round.Context{Expected: true, Victim: true}))
 	if p := out.Players[1]; p.KastRounds != 1 || p.EcoKastRounds != 1 {
 		t.Errorf("killer survived either way: %+v", p.KAST)
 	}
-	out = run(kill(1, 99, round.Context{Expected: true, EcoKill: true}), kill(11, 1, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}))
-	if p := out.Players[1]; p.KastRounds != 0 || p.EcoKastRounds != 1 {
-		t.Errorf("killer died: csc 0, eco 1 expected, got %+v", p.KAST)
+	out = run(kill(1, 99, round.Context{Expected: true}), kill(11, 1, round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}))
+	if p := out.Players[1]; p.KastRounds != 0 || p.EcoKastRounds != 0 {
+		t.Errorf("killer died: no KAST either way, got %+v", p.KAST)
 	}
 }
 
 // A human who joins mid-round has an eco row from the join: an earlier kill was a scratch row's.
 func TestLateJoiner(t *testing.T) {
-	x := round.Context{Expected: true, EcoKill: true}
+	x := round.Context{Expected: true}
 	join := round.Event{Event: match.Event{Fact: fact.TeamChange{}, Join: &match.Member{Steam64: 99}}}
-	died := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, EcoKill: true}
+	died := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true}
 	out := run(kill(99, 1, x), join, kill(11, 99, died))
 	if got := out.Players[99].EcoKastRounds; got != 0 {
 		t.Errorf("eco KAST %v, want 0: the kill came before the join and the joiner died", got)

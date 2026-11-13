@@ -71,9 +71,9 @@ func Calc(r *round.Round, out *row.Round) {
 				}
 			}
 		}
-		if e.EcoKill {
+		if e.Enemy {
 			if x := ecos[f.Killer.Steam64]; x != nil {
-				if e.Before.Opening && e.Enemy && f.Weapon != nil && *f.Weapon == fact.EqAWP {
+				if e.Before.Opening && f.Weapon != nil && *f.Weapon == fact.EqAWP {
 					x.awpOpening = true
 				}
 				ka, va := alive(e.Before, f.Killer.Side), alive(e.Before, f.Victim.Side)

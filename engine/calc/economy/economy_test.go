@@ -65,7 +65,7 @@ func TestKills(t *testing.T) {
 	victim := &fact.Player{Steam64: 2, EquipValue: 1000}
 	bot := &fact.Player{Steam64: 0, IsBot: true, EquipValue: 1000}
 	kill := func(k, v *fact.Player, eco bool) round.Event {
-		return round.Event{Event: match.Event{Fact: fact.Kill{Killer: k, Victim: v}}, Context: round.Context{EcoKill: eco}}
+		return round.Event{Event: match.Event{Fact: fact.Kill{Killer: k, Victim: v}}, Context: round.Context{Enemy: eco}}
 	}
 	dropped := kill(killer, victim, true)
 	dropped.Dropped = true

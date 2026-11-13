@@ -91,8 +91,8 @@ func TestKillAssistTrade(t *testing.T) {
 	}
 }
 
-// A flash assist goes to the assister when the game marks it, else to the victim's latest flasher
-// (D34 is not applied: the assister keeps eac for both).
+// A flash assist goes to the assister when the game marks it, else to the victim's latest flasher.
+// D34: a flasher who is the damage assister has eac once.
 func TestFlashAssist(t *testing.T) {
 	x := round.Context{Expected: true, Killer: true, Victim: true, Enemy: true, Assist: true, FlashAssisted: true, FlashAssister: 13}
 	f := kill(11, 1, 7, false)
@@ -101,13 +101,13 @@ func TestFlashAssist(t *testing.T) {
 	if got, want := out.Players[13].Combat, (row.Combat{Eac: 1, SuppRounds: 1}); got != want {
 		t.Errorf("flasher %+v, want %+v", got, want)
 	}
-	f.AssistedFlash = true
-	out = run(build(ev(f, x)))
-	if got := out.Players[13].Combat; got != (row.Combat{}) {
-		t.Errorf("marked flash assist: flasher %+v, want nothing from combat", got)
-	}
-	if got := out.Players[12].Combat.Eac; got != 1 {
-		t.Errorf("assister eac %d, want 1", got)
+	x.FlashAssister = 12 // the latest flasher is the damage assister
+	for _, marked := range []bool{false, true} {
+		f.AssistedFlash = marked
+		out = run(build(ev(f, x)))
+		if got := out.Players[12].Combat.Eac; got != 1 {
+			t.Errorf("assister eac %d, want 1 (marked %v)", got, marked)
+		}
 	}
 }
 

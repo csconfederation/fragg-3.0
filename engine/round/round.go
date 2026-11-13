@@ -538,6 +538,11 @@ func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 		} else if b := d.blind[f.Victim.Steam64]; float64(f.Tick) < b.Until {
 			c.FlashAssister, c.FlashAssisted = b.Flasher, true
 		}
+		// D34: no assist on one's own kill. Bots share Steam64 0 and the flasher's actor isn't kept,
+		// so a bot killer is never matched.
+		if f.Killer != nil && !f.Killer.IsBot && c.FlashAssister == f.Killer.Steam64 {
+			c.FlashAssister, c.FlashAssisted = 0, false
+		}
 	}
 	return nil
 }

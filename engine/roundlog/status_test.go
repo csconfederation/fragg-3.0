@@ -19,7 +19,16 @@ var update = flag.Bool("update", false, "rewrite testdata/status from the builde
 type sim struct {
 	facts        []Event
 	tick, played int
+	alpha, bravo int  // rounds won
+	money        *int // every player's money, when not the default
+	warmup       bool // the snapshots' Warmup flag
+	reason       int  // the next round end's reason, 9 by default
 }
+
+// restore sets the game's round counter back (or forward) with the scores of its rounds.
+func (s *sim) restore(played, alpha, bravo int) { s.played, s.alpha, s.bravo = played, alpha, bravo }
+
+func (s *sim) setMoney(m int) { s.money = &m }
 
 func (s *sim) add(f ...fact.Fact) {
 	for _, f := range f {
@@ -36,7 +45,10 @@ func (s *sim) snapshot(num int) fact.Snapshot {
 	if num == 1 || num == 13 {
 		money = 800
 	}
-	snap := fact.Snapshot{Tick: s.tick, RoundsPlayed: s.played,
+	if s.money != nil {
+		money = *s.money
+	}
+	snap := fact.Snapshot{Tick: s.tick, RoundsPlayed: s.played, Warmup: s.warmup,
 		T: fact.Team{Side: fact.SideT, ID: 2, Clan: t}, CT: fact.Team{Side: fact.SideCT, ID: 3, Clan: ct}}
 	for i := uint64(1); i <= 10; i++ {
 		side := fact.SideT
@@ -59,29 +71,50 @@ func (s *sim) player(steam uint64) *fact.Player {
 }
 
 // open starts the next round at freeze end.
-func (s *sim) open() {
+func (s *sim) open() { s.openWith(false) }
+
+// openWith is open, after a frame that opens the round early when early is set.
+func (s *sim) openWith(early bool) {
 	s.tick += 100
 	s.add(fact.RoundStart{Tick: s.tick, RoundsPlayed: s.played})
+	if early {
+		snap := s.snapshot(s.played + 1)
+		snap.Tick = s.tick + 2
+		s.facts = append(s.facts, Event{match.Event{Fact: fact.Frame{Tick: s.tick + 2}, Sample: &snap}})
+	}
 	s.tick += 100
 	s.add(fact.FreezeEnd{Snapshot: s.snapshot(s.played + 1)})
 }
 
 // end ends the open round, won by Alpha, with an official end unless it decides the match.
-func (s *sim) end(official bool) {
+func (s *sim) end(official bool) { s.endBy(official, true) }
+
+func (s *sim) endBy(official, alphaWins bool) {
 	num := s.played + 1
 	t, ct := "Alpha", "Bravo"
 	if num > 12 {
 		t, ct = ct, t
 	}
-	side, winner, loser := fact.SideT, fact.Team{Side: fact.SideT, ID: 2, Clan: t}, fact.Team{Side: fact.SideCT, ID: 3, Clan: ct}
-	if t != "Alpha" {
-		side, winner, loser = fact.SideCT, fact.Team{Side: fact.SideCT, ID: 3, Clan: ct}, fact.Team{Side: fact.SideT, ID: 2, Clan: t}
+	tSide, ctSide := fact.Team{Side: fact.SideT, ID: 2, Clan: t}, fact.Team{Side: fact.SideCT, ID: 3, Clan: ct}
+	side, winner, loser := fact.SideT, tSide, ctSide
+	if (t == "Alpha") != alphaWins {
+		side, winner, loser = fact.SideCT, ctSide, tSide
 	}
 	s.tick += 1000
 	s.played++
-	winner.Score, loser.Score = s.played, 0
+	if alphaWins {
+		s.alpha++
+	} else {
+		s.bravo++
+	}
+	wins := map[string]int{"Alpha": s.alpha, "Bravo": s.bravo}
+	winner.Score, loser.Score = wins[winner.Clan], wins[loser.Clan]
+	reason := 9
+	if s.reason != 0 {
+		reason, s.reason = s.reason, 0
+	}
 	s.add(fact.ScoreUpdated{Tick: s.tick, Team: winner, Opponent: loser})
-	s.add(fact.RoundEnd{Snapshot: s.snapshot(num), Winner: side, Reason: 9, WinnerTeam: winner, LoserTeam: loser})
+	s.add(fact.RoundEnd{Snapshot: s.snapshot(num), Winner: side, Reason: reason, WinnerTeam: winner, LoserTeam: loser})
 	if official {
 		s.tick += 300
 		s.add(fact.RoundEndOfficial{Snapshot: fact.Snapshot{Tick: s.tick, RoundsPlayed: s.played}})
@@ -98,9 +131,26 @@ func (s *sim) play(n int) {
 // match13 plays Alpha's 13-0, the deciding round without an official end, and the game end.
 func (s *sim) match13() {
 	s.play(12)
+	s.deciding()
+}
+
+// deciding plays the round that completes Alpha's 13-0, without an official end, then the game end.
+func (s *sim) deciding() {
 	s.open()
 	s.end(false)
+	s.gameEnd()
+}
+
+func (s *sim) gameEnd() {
 	s.add(fact.GamePhase{Tick: s.tick, Phase: fact.GamePhaseEnded}, fact.WinPanelMatch{Tick: s.tick})
+}
+
+// playAlt plays n rounds with an official end each, Alpha taking the odd ones.
+func (s *sim) playAlt(n int) {
+	for i := 0; i < n; i++ {
+		s.open()
+		s.endBy(true, i%2 == 0)
+	}
 }
 
 func (s *sim) terminal(kind string) Terminal {
@@ -109,7 +159,7 @@ func (s *sim) terminal(kind string) Terminal {
 }
 
 // statuses are the fixtures. Each Want is written here from the lifecycle's rules (match.keep,
-// Finish's precedence), and checked against the baseline build (fragg ca9fe6b) when added.
+// Finish's precedence), and checked against the build they were added on (parser-v6 eac6b04).
 func statuses() []*Status {
 	var out []*Status
 
@@ -164,7 +214,7 @@ func statuses() []*Status {
 		Why:      "warmup facts before the start, ScoreUpdated and RoundEndOfficial each round, the game end, a clean terminal",
 		Facts:    s.facts,
 		Terminal: s.terminal("Clean"),
-		Want:     Want{Outcome: "Ended"}})
+		Want:     Want{Outcome: "Ended", Rounds: "1-13", Scores: "Alpha 13, Bravo 0"}})
 
 	s = &sim{}
 	s.play(3)
@@ -172,12 +222,201 @@ func statuses() []*Status {
 		Why:      "three rounds, then the stream ends before the match does (D8)",
 		Facts:    s.facts,
 		Terminal: s.terminal("Truncated"),
-		Want:     Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 3"}})
+		Want:     Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 3", Rounds: "1-3", Scores: "Alpha 3, Bravo 0"}})
 
 	out = append(out, &Status{Name: "invalid-file",
 		Why:      "no facts and a file that isn't a demo",
 		Terminal: Terminal{Kind: "InvalidFileType", Err: "not a CS2 demo"},
 		Want:     Want{Error: "not a CS2 demo"}})
+
+	// ended is what a 13-0 for Alpha gives.
+	ended := Want{Outcome: "Ended", Rounds: "1-13", Scores: "Alpha 13, Bravo 0"}
+	add := func(name, why string, s *sim, term Terminal, want Want) {
+		out = append(out, &Status{Name: name, Why: why, Facts: s.facts, Terminal: term, Want: want})
+	}
+
+	// Go-live: the first round open where both first members have 800 money. Before it, rounds don't
+	// commit or score; the Warmup flag isn't read (D62).
+	s = &sim{}
+	s.setMoney(4000)
+	s.open()
+	s.end(true)
+	s.money, s.played, s.alpha = nil, 0, 0
+	s.match13()
+	add("go-live-first-800", "a played round on 4000 money before the first 800/800 open: no go-live, nothing committed", s, s.terminal("Clean"), ended)
+
+	s = &sim{warmup: true}
+	s.match13()
+	add("go-live-ignores-warmup", "the 800/800 opens carry the Warmup flag and go live anyway (D62)", s, s.terminal("Clean"), ended)
+
+	s = &sim{}
+	s.openWith(true)
+	s.end(true)
+	s.play(11)
+	s.deciding()
+	add("go-live-at-early-open", "the first 800/800 open is the early open at a frame; the freeze-end reopen replaces it", s, s.terminal("Clean"), ended)
+
+	// Knife before the match is live: nothing starts, and the next 800/800 open is the go-live.
+	s = &sim{}
+	s.setMoney(0)
+	s.open()
+	s.end(true)
+	s.money, s.played, s.alpha = nil, 0, 0
+	s.match13()
+	add("knife-before-live", "a knife round (0/0 at freeze end) before go-live is not a round; the 800/800 open after it goes live", s, s.terminal("Clean"), ended)
+
+	s = &sim{}
+	s.setMoney(0)
+	s.openWith(true)
+	s.end(true)
+	s.money, s.played, s.alpha = nil, 0, 0
+	s.match13()
+	add("knife-before-live-early-open", "as knife-before-live, the knife round also opened early at a frame", s, s.terminal("Clean"), ended)
+
+	// Knife while live (Q66): the flag goes on the round open when freeze end arrives, before the
+	// new round replaces it. Without an early open that is the last committed round, which Finish
+	// then drops; with one it is the early-open round, which the freeze end replaces unflagged.
+	s = &sim{}
+	s.play(3)
+	s.setMoney(0)
+	s.open()
+	s.end(true)
+	add("knife-while-live-flags-previous-round", "0/0 at freeze end while live, no early open: the flag lands on committed round 3, which is dropped; the knife round 4 commits as a normal round", s, s.terminal("Truncated"),
+		Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 4", Rounds: "1-2,4", Scores: "Alpha 4, Bravo 0"})
+
+	s = &sim{}
+	s.play(3)
+	s.setMoney(0)
+	s.openWith(true)
+	s.end(true)
+	add("knife-while-live-early-open", "0/0 at freeze end while live after an early open: the flag lands on the replaced early-open round, so rounds 1-4 all commit", s, s.terminal("Truncated"),
+		Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 4", Rounds: "1-4", Scores: "Alpha 4, Bravo 0"})
+
+	s = &sim{}
+	s.play(3)
+	s.setMoney(0)
+	s.open()
+	s.end(true)
+	s.money = nil
+	s.restore(0, 0, 0)
+	s.match13()
+	add("knife-while-live-restart", "after a live knife the next 800/800 open restarts the match: scores reset, the new rounds supersede the old", s, s.terminal("Clean"), ended)
+
+	// D12: a restore replays from an earlier round; committing round n removes rounds n and up.
+	s = &sim{}
+	s.play(5)
+	s.restore(2, 2, 0)
+	s.play(10)
+	s.deciding()
+	add("restore-supersedes", "rounds 1-5 played, restored to after round 2 and replayed: the replay's rounds replace 3-5 (D12)", s, s.terminal("Clean"), ended)
+
+	s = &sim{}
+	s.play(5)
+	s.restore(2, 2, 0)
+	s.play(1)
+	s.restore(4, 4, 0)
+	s.play(8)
+	s.deciding()
+	add("restore-gap-partial", "the replay commits round 3, then the counter jumps to 4: round 4 is never committed (D9)", s, s.terminal("Clean"),
+		Want{Outcome: "Partial", Detail: "round 4 is missing", Rounds: "1-3,5-13", Scores: "Alpha 13, Bravo 0"})
+
+	// The deciding round won by the bomb waits for the explosion's facts and commits at the first of
+	// the official end, the win panel and the end of the stream (D15).
+	s = &sim{}
+	s.play(12)
+	s.open()
+	s.reason = fact.ReasonTargetBombed
+	s.end(true)
+	add("bomb-deciding-official-end", "the bomb wins the deciding round; the official end commits it", s, s.terminal("Clean"), ended)
+
+	s = &sim{}
+	s.play(12)
+	s.open()
+	s.reason = fact.ReasonTargetBombed
+	s.end(false)
+	add("bomb-deciding-stream-end", "the bomb wins the deciding round; no official end or game end, so Finish commits it", s, s.terminal("Clean"), ended)
+
+	s = &sim{}
+	s.play(12)
+	s.open()
+	s.reason = fact.ReasonTargetBombed
+	s.end(false)
+	s.gameEnd()
+	add("bomb-deciding-win-panel", "the bomb wins the deciding round; the win panel commits it", s, s.terminal("Clean"), ended)
+
+	// The game's end can arrive before the final RoundEnd (fact.GamePhase).
+	s = &sim{}
+	s.play(12)
+	s.open()
+	s.gameEnd()
+	s.end(false)
+	add("game-end-before-final-round-end", "game phase Ended and the win panel, then the deciding round's RoundEnd: it still scores and commits", s, s.terminal("Clean"), ended)
+
+	// A game end that isn't the clinch or a tie (D56): a 500 today.
+	s = &sim{}
+	s.play(7)
+	s.open()
+	s.reason = 18 // CTSurrender
+	s.end(false)
+	s.gameEnd()
+	add("surrender-game-end", "CT surrenders in round 8 of an undecided match: the game ends, not by the clinch, and the round never commits", s, s.terminal("Clean"),
+		Want{Error: fmt.Sprintf("match invariant at tick %d: the game ended, but not by our match-end rule", s.tick+500)})
+
+	s = &sim{}
+	s.play(7)
+	s.add(fact.GamePhase{Tick: s.tick, Phase: fact.GamePhaseEnded})
+	add("admin-end-game-phase", "game phase Ended between rounds of an undecided match, no win panel: the same error", s, s.terminal("Clean"),
+		Want{Error: fmt.Sprintf("match invariant at tick %d: the game ended, but not by our match-end rule", s.tick+500)})
+
+	// Ties: the game ends at a level score; the last round has no official end. A Combine can end
+	// 15-15 after one overtime (D63).
+	tied := func(s *sim) Terminal {
+		t := s.terminal("Clean")
+		t.End.T.Score, t.End.CT.Score = 15, 15
+		return t
+	}
+	s = &sim{}
+	s.playAlt(29)
+	s.open()
+	s.endBy(false, false)
+	s.gameEnd()
+	add("tie-game-end", "15-15 after round 30, game end, no official end for round 30: the tie fallback commits it", s, tied(s),
+		Want{Outcome: "Ended", Rounds: "1-30", Scores: "Alpha 15, Bravo 15"})
+
+	s = &sim{}
+	s.playAlt(29)
+	s.open()
+	s.endBy(false, false)
+	add("tie-without-game-end", "the same level score with no game end: not a tie, the demo just stopped", s, tied(s),
+		Want{Outcome: "Unfinished", Detail: "demo stopped (clean) after round 29", Rounds: "1-29", Scores: "Alpha 15, Bravo 15"})
+
+	// Streams that end badly.
+	s = &sim{}
+	s.playAlt(29)
+	s.open()
+	s.endBy(false, false)
+	s.gameEnd()
+	term := tied(s)
+	term.Kind, term.Err = "Decode", "decode failed after the game end"
+	add("tie-game-end-then-decode-error", "the tie facts, then a decode failure: the fallback needs a clean stream, so it's an error today", s, term,
+		Want{Error: "decode failed after the game end"})
+
+	s = &sim{}
+	s.play(3)
+	term = s.terminal("Decode")
+	term.Err = "decode failed mid-match"
+	add("decode-mid-match", "three rounds, then a decode failure before the end", s, term, Want{Error: "decode failed mid-match"})
+
+	s = &sim{}
+	s.match13()
+	term = s.terminal("Decode")
+	term.Err = "decode failed after the clinch"
+	add("decode-after-clinch", "the match ended by the clinch, then a decode failure: still Ended", s, term, ended)
+
+	s = &sim{}
+	s.open()
+	add("truncated-no-rounds", "go-live and one open round, then the stream stops: nothing committed", s, s.terminal("Truncated"),
+		Want{Outcome: "NoRounds", Scores: "Alpha 0, Bravo 0"})
 
 	for _, st := range out {
 		st.Version = Version

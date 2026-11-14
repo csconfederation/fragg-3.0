@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/csconfederation/fragg-3.0/engine/fact"
 	"github.com/csconfederation/fragg-3.0/engine/match"
@@ -44,11 +48,39 @@ func (t Terminal) fact() (fact.Terminal, error) {
 	return fact.Terminal{}, fmt.Errorf("unknown terminal kind %q", t.Kind)
 }
 
-// Want is Finish's result: its error's text, or the outcome and its detail.
+// Want is Finish's result: its error's text, or the outcome and its detail, the committed
+// rounds ("1-12,14": numbers, knife rounds left out) and the scores ("Alpha 13, Bravo 0": by clan).
 type Want struct {
 	Error   string `json:"error,omitempty"`
 	Outcome string `json:"outcome,omitempty"`
 	Detail  string `json:"detail,omitempty"`
+	Rounds  string `json:"rounds,omitempty"`
+	Scores  string `json:"scores,omitempty"`
+}
+
+func rangesOf(rounds []*match.Round) string {
+	var out []string
+	for i := 0; i < len(rounds); {
+		j := i
+		for j+1 < len(rounds) && rounds[j+1].Num == rounds[j].Num+1 {
+			j++
+		}
+		if i == j {
+			out = append(out, strconv.Itoa(rounds[i].Num))
+		} else {
+			out = append(out, fmt.Sprintf("%d-%d", rounds[i].Num, rounds[j].Num))
+		}
+		i = j + 1
+	}
+	return strings.Join(out, ",")
+}
+
+func scoresOf(scores map[string]int) string {
+	var out []string
+	for _, k := range slices.Sorted(maps.Keys(scores)) {
+		out = append(out, fmt.Sprintf("%s %d", k, scores[k]))
+	}
+	return strings.Join(out, ", ")
 }
 
 // Run feeds the facts to the lifecycle with the Deriver, as payload.Run does,
@@ -80,7 +112,7 @@ func (s *Status) Run() (Want, error) {
 	if err := d.Close(); err != nil {
 		return Want{Error: err.Error()}, nil
 	}
-	return Want{Outcome: res.Outcome.String(), Detail: res.Detail}, nil
+	return Want{Outcome: res.Outcome.String(), Detail: res.Detail, Rounds: rangesOf(res.Rounds), Scores: scoresOf(res.Scores)}, nil
 }
 
 // discard takes the Deriver's rounds and keeps none.

@@ -1,7 +1,6 @@
 // Package match runs the round lifecycle over facts: when the match goes live, which rounds commit,
-// how the match ends, and the outcome (Core-planning#301, engine core design). The lifecycle ports
-// the oracle's (fragg csc/parser.go at tag oracle-v6port-rc.1) so rounds, sides, scores, and
-// player sets match it; the outcome rules (D8, D9) are new.
+// how the match ends, and the outcome. docs/lifecycle.md has the rules; the state machine below is
+// their implementation.
 package match
 
 import (
@@ -63,11 +62,14 @@ type Round struct {
 	FreezeEnd bool
 	InitT     int
 	InitCT    int
-	// TClan and CTClan are the round's team names by side, as the oracle names them at the open.
+	// TClan and CTClan are the round's team names by side, named at the open.
 	TClan, CTClan string
 	Members       map[uint64]Member
 	committed     bool
 	sideClans     map[fact.Side]string
+	scored        bool // a ScoreUpdated set the scores, so the win doesn't add its point
+	winNum        int  // the round number of its valid RoundEnd, 0 before it
+	winTick       int
 }
 
 // Result is the lifecycle's output.
@@ -86,8 +88,8 @@ type Result struct {
 	HeaderMatchID int
 }
 
-// Stats computes stats over the lifecycle (engine/round's Deriver). Match calls it where the oracle's
-// CSC pipeline runs, after updating its own state. Every hook is called in fact order, and an error
+// Stats computes stats over the lifecycle (engine/round's Deriver). Match calls it after updating its
+// own state. Every hook is called in fact order, and an error
 // is kept as the match's first error.
 type Stats interface {
 	// Open is a round open while the match is live; roster is the open's members.
@@ -105,7 +107,7 @@ type Event struct {
 	// Roster is the members after the lifecycle applied the fact: Kill, Bomb*, Disconnect, RoundEnd
 	// and a sampled Frame.
 	Roster Roster
-	Live   bool // the match is live (the oracle's IsGameLive)
+	Live   bool // the match is live
 	// Dropped is a fact the deciding round's wait filters out (D15); it reaches no stat.
 	Dropped bool
 	// Join is a TeamChange that added this member to the open round.
@@ -133,32 +135,68 @@ func (r Roster) Members(s fact.Snapshot, side fact.Side) []fact.Player {
 	return out
 }
 
+// state is where the map is in its lifecycle. Transitions (an event not listed leaves the state):
+//
+//	event                                  from                          to        action
+//	open at 800/800 money, start pending   PreLive, Ended               Between   scores to 0 (rule 1)
+//	open (live)                            Between, Open, Won           Open      the unclosed round is replaced
+//	RoundEnd, winner and number agree      Between, Open, Won           Won       score
+//	  ... and it clinches, not by the bomb Between, Open, Won           Ended     commit
+//	  ... and it clinches by the bomb      Between, Open, Won           Deciding  hold the commit for the bomb's facts
+//	RoundEndOfficial, number agrees        Won, Between                 Between   commit
+//	RoundEndOfficial, WinPanelMatch,       Deciding                     Ended     commit
+//	  open, RoundEnd or stream end
+//	stream end after a game end, level     Won                          Ended     commit if the number agrees
+//
+// A live knife (rule 3) doesn't change the state: it only makes the next 800/800 open a start
+// (restart), until the Restart state lands with D58. The game's end (GamePhase, WinPanelMatch) is
+// recorded in gameEnded and changes no state until D56. A fact that fails an invariant keeps its
+// error in err, after which no fact is applied.
+type state uint8
+
+const (
+	preLive  state = iota // before go-live: nothing commits
+	between               // live, no open round
+	open                  // live, a round is open
+	won                   // the open round has its RoundEnd and waits for its closing event
+	deciding              // won, and decided by the bomb: its facts keep arriving until it commits (D15)
+	ended                 // terminal: the clinch, or the tie fallback
+)
+
 // Match is a fact.Sink. Feed it every fact, then call Finish once.
 type Match struct {
-	stats                                           Stats
-	hasGameStarted, isGameLive, inRound             bool
-	didRoundEndFire, didScoreUpdateFire, haveInit   bool
-	integrityStart, integrityEnd, integrityOfficial int
-	roundStartedAt                                  int
-	result                                          string
-	winnerClan                                      string
-	totalRounds                                     int
-	teams                                           map[string]int // clan -> tracked score; nil before the first start
-	potential                                       *Round
-	rounds                                          []*Round // in commit order
-	connectedAfterStart                             map[uint64]bool
-	reconnected                                     map[uint64]bool // the oracle's ReconnectedPlayers, which drives membership
-	gameEnded                                       bool
-	pendingFinal                                    *fact.RoundEnd // the deciding round, until it commits (D15)
-	lurkClock                                       int            // the tick of the last lurk-cadence frame
-	mapName, serverName                             string
-	err                                             *InvariantError
+	stats               Stats
+	state               state
+	restart             bool // a live knife made the next 800/800 open a start
+	roundStartedAt      int
+	winnerClan          string
+	totalRounds         int
+	teams               map[string]int // clan -> tracked score; nil before the first start
+	potential           *Round
+	rounds              []*Round // in commit order
+	connectedAfterStart map[uint64]bool
+	reconnected         map[uint64]bool // players seen connecting; drives membership
+	gameEnded           bool            // the game's own end was seen
+	lurkClock           int             // the tick of the last lurk-cadence frame
+	mapName, serverName string
+	err                 *InvariantError
 }
+
+// live is whether the map is live (a round can open, score or commit).
+func (m *Match) live() bool { return m.state >= between && m.state <= deciding }
+
+// inRound is whether a round that opened at freeze end is still running (until it closes).
+func (m *Match) inRound() bool {
+	return m.potential.FreezeEnd && (m.state == open || m.state == won || m.state == deciding)
+}
+
+// earlyOpened is whether the last round opened at a frame, before its freeze end, which stops
+// another early open until a freeze end reopens.
+func (m *Match) earlyOpened() bool { return m.potential.Num != 0 && !m.potential.FreezeEnd }
 
 // New returns a lifecycle before any fact, with an optional stats collector.
 func New(stats ...Stats) *Match {
 	m := &Match{
-		integrityStart: -1, integrityEnd: -1, integrityOfficial: -1,
 		potential:           &Round{Members: map[uint64]Member{}},
 		connectedAfterStart: map[uint64]bool{},
 		reconnected:         map[uint64]bool{},
@@ -169,7 +207,7 @@ func New(stats ...Stats) *Match {
 	return m
 }
 
-// lurkTicks is the lurk sampler's cadence: 4 s at the oracle's tick rate.
+// lurkTicks is the lurk sampler's cadence: 4 s at the demo's tick rate.
 const lurkTicks = 4 * fact.TickRate
 
 // collect passes a stat fact to the stats, after the lifecycle's own update. Only a lurk-cadence
@@ -178,11 +216,11 @@ func (m *Match) collect(f fact.Fact) error {
 	if m.stats == nil {
 		return nil
 	}
-	e := Event{Fact: f, Live: m.isGameLive, Dropped: m.pendingFinal != nil && !bombFact(f)}
+	e := Event{Fact: f, Live: m.live(), Dropped: m.state == deciding && !bombFact(f)}
 	if !e.Dropped {
 		switch f := f.(type) {
 		case fact.Frame:
-			if !e.Live || !m.inRound || m.lurkClock+lurkTicks >= f.Tick {
+			if !e.Live || !m.inRound() || m.lurkClock+lurkTicks >= f.Tick {
 				return nil
 			}
 			m.lurkClock = f.Tick
@@ -251,7 +289,7 @@ func (m *Match) Fact(f fact.Fact) error {
 	case fact.RoundStart:
 		m.roundStartedAt = f.Tick
 	case fact.Frame:
-		if m.roundStartedAt > 0 && m.roundStartedAt+fact.RoundStartWindow > f.Tick && !m.haveInit {
+		if m.roundStartedAt > 0 && m.roundStartedAt+fact.RoundStartWindow > f.Tick && !m.earlyOpened() {
 			if err := m.open(f.Sample(), false); err != nil {
 				return err
 			}
@@ -264,8 +302,8 @@ func (m *Match) Fact(f fact.Fact) error {
 	case fact.RoundEnd:
 		return m.roundEnd(f)
 	case fact.ScoreUpdated:
-		if m.isGameLive {
-			m.didScoreUpdateFire = true
+		if m.live() {
+			m.potential.scored = true
 			team, err := m.teamName(f.Tick, f.Team.Clan, f.Team.Side)
 			if err != nil {
 				return err
@@ -280,18 +318,15 @@ func (m *Match) Fact(f fact.Fact) error {
 			return m.setScore(f.Tick, opp, f.Opponent.Score)
 		}
 	case fact.RoundEndOfficial:
-		if m.pendingFinal != nil {
+		if m.state == deciding {
 			return m.flush()
 		}
-		if !m.didRoundEndFire {
-			m.integrityEnd--
-		}
-		if m.isGameLive && m.integrityEnd == f.RoundsPlayed {
+		if m.live() && m.potential.winNum == f.RoundsPlayed {
 			return m.final(f.Tick, f.RoundsPlayed, false)
 		}
 	case fact.TeamChange:
 		var join *Member
-		if m.isGameLive && m.inRound && m.pendingFinal == nil && f.NewSide > fact.SideSpectator {
+		if m.inRound() && m.state != deciding && f.NewSide > fact.SideSpectator {
 			if _, ok := m.potential.Members[f.Player.Steam64]; !ok && f.Player.Alive {
 				clan, err := m.teamName(f.Tick, f.NewTeam.Clan, f.NewTeam.Side)
 				if err != nil {
@@ -304,16 +339,16 @@ func (m *Match) Fact(f fact.Fact) error {
 			}
 		}
 		if m.stats != nil {
-			return m.event(Event{Fact: f, Live: m.isGameLive, Join: join})
+			return m.event(Event{Fact: f, Live: m.live(), Join: join})
 		}
 	case fact.PlayerInfo:
 		if f.Found {
 			m.reconnected[f.Resolved] = true
-			if m.inRound && m.isGameLive {
+			if m.inRound() {
 				m.connectedAfterStart[f.Resolved] = true
 			}
 			if m.stats != nil {
-				return m.event(Event{Fact: f, Live: m.isGameLive})
+				return m.event(Event{Fact: f, Live: m.live()})
 			}
 		}
 	case fact.Disconnect:
@@ -321,10 +356,6 @@ func (m *Match) Fact(f fact.Fact) error {
 			m.reconnected[f.Steam64] = false
 		}
 		return m.collect(f)
-	case fact.Footstep:
-		if m.isGameLive {
-			m.inRound = true
-		}
 	case fact.GamePhase:
 		if f.Phase == fact.GamePhaseEnded {
 			m.gameEnded = true
@@ -336,7 +367,7 @@ func (m *Match) Fact(f fact.Fact) error {
 	return nil
 }
 
-// open is the oracle's round open: at a frame within the early window, or at freeze end (which
+// open is a round open: at a frame within the early window, or at freeze end (which
 // also detects knife rounds and always reopens).
 func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 	if err := m.flush(); err != nil {
@@ -348,7 +379,7 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 		tMoney, ctMoney := t[0].Money+t[0].Spent, ct[0].Money+ct[0].Spent
 		switch {
 		case tMoney == 800 && ctMoney == 800:
-			if !m.hasGameStarted {
+			if m.state == preLive || m.restart {
 				if err := m.startGame(s); err != nil {
 					return err
 				}
@@ -356,21 +387,16 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 			pistol = true
 		case freezeEnd && tMoney == 0 && ctMoney == 0:
 			m.potential.Knife = true
-			m.hasGameStarted = false
+			m.restart = true
 		}
 	}
-	if !m.isGameLive {
+	if !m.live() {
 		return nil
-	}
-	if freezeEnd {
-		m.inRound = true
 	}
 	if err := m.initRound(s); err != nil {
 		return err
 	}
-	if !freezeEnd {
-		m.haveInit = true
-	}
+	m.state = open
 	m.potential.Pistol, m.potential.FreezeEnd = pistol, freezeEnd
 	if m.stats != nil {
 		m.lurkClock = 0
@@ -382,7 +408,7 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 }
 
 func (m *Match) startGame(s fact.Snapshot) error {
-	m.hasGameStarted, m.isGameLive = true, true
+	m.state, m.restart = between, false
 	m.teams = map[string]int{}
 	for _, team := range []fact.Team{s.T, s.CT} {
 		name, err := m.teamName(s.Tick, team.Clan, team.Side)
@@ -391,23 +417,21 @@ func (m *Match) startGame(s fact.Snapshot) error {
 		}
 		m.teams[name] = 0
 	}
-	m.result = ""
 	return nil
 }
 
-// initRound opens a new round. As the oracle, it clears the late-connect filter before reading the
+// initRound opens a new round. It clears the late-connect filter before reading the
 // rosters, so they can differ from the ones the money check used.
 func (m *Match) initRound(s fact.Snapshot) error {
 	m.connectedAfterStart = map[uint64]bool{}
 	t, ct := m.members(s, fact.SideT), m.members(s, fact.SideCT)
-	m.integrityStart = s.RoundsPlayed + 1
-	r := &Round{Num: m.integrityStart, StartTick: s.Tick, Members: map[uint64]Member{}, InitT: len(t), InitCT: len(ct),
+	r := &Round{Num: s.RoundsPlayed + 1, StartTick: s.Tick, Members: map[uint64]Member{}, InitT: len(t), InitCT: len(ct),
 		sideClans: map[fact.Side]string{}}
 	for _, team := range []struct {
 		state   fact.Team
 		players []fact.Player
 	}{{s.T, t}, {s.CT, ct}} {
-		// The oracle names teams before the new round replaces the old one.
+		// Teams are named before the new round replaces the old one.
 		clan, err := m.teamName(s.Tick, team.state.Clan, team.state.Side)
 		if err != nil {
 			return err
@@ -424,14 +448,13 @@ func (m *Match) initRound(s fact.Snapshot) error {
 		}
 	}
 	m.potential = r
-	m.didRoundEndFire, m.didScoreUpdateFire, m.haveInit = false, false, false
 	m.roundStartedAt = 0
 	return nil
 }
 
-// members is the oracle's getTeamMembers over a snapshot: listed records on the side, minus players
+// members is the players of side in a snapshot: listed records on the side, minus players
 // who connected after the round started, then each reconnected player's last record replacing
-// their listed one. Reconnected players go in Steam64 order (the oracle's map order is random).
+// their listed one. Reconnected players go in Steam64 order (map order is random).
 func (m *Match) members(s fact.Snapshot, side fact.Side) []fact.Player {
 	var out []fact.Player
 	for _, i := range m.memberIdx(s, side) {
@@ -473,11 +496,10 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if err := m.flush(); err != nil {
 		return err
 	}
-	if !m.isGameLive {
+	if !m.live() {
 		return nil
 	}
-	m.didRoundEndFire = true
-	if f.Winner < fact.SideT || m.integrityStart != f.RoundsPlayed {
+	if f.Winner < fact.SideT || m.potential.Num != f.RoundsPlayed {
 		return m.roundEndEvent(f, false)
 	}
 	winner, err := m.teamName(f.Tick, f.WinnerTeam.Clan, f.WinnerTeam.Side)
@@ -488,10 +510,11 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if err != nil {
 		return err
 	}
-	m.integrityEnd = f.RoundsPlayed
+	m.potential.winNum, m.potential.winTick = f.RoundsPlayed, f.Tick
 	m.totalRounds = f.RoundsPlayed
 	m.potential.WinnerClan = winner
-	if !m.potential.Knife && !m.didScoreUpdateFire {
+	m.state = won
+	if !m.potential.Knife && !m.potential.scored {
 		if err := m.setScore(f.Tick, winner, m.teams[winner]+1); err != nil {
 			return err
 		}
@@ -511,7 +534,7 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 		}
 		// The explosion's damage and kills arrive after RoundEnd: the deciding round commits at the
 		// win panel or the demo's end, and only those facts reach it meanwhile (D15).
-		m.pendingFinal = &f
+		m.state = deciding
 	}
 	return nil
 }
@@ -548,36 +571,32 @@ func bombFact(f fact.Fact) bool {
 	return w != nil && *w == fact.EqBomb
 }
 
-// flush commits the pending deciding round and ends the match.
+// flush commits the deciding round held for the bomb's facts and ends the match.
 func (m *Match) flush() error {
-	f := m.pendingFinal
-	if f == nil {
+	if m.state != deciding {
 		return nil
 	}
-	m.pendingFinal = nil
-	return m.final(f.Tick, f.RoundsPlayed, true)
+	return m.final(m.potential.winTick, m.potential.winNum, true)
 }
 
-// final is the oracle's processRoundFinal: commit the pending round if it ran uninterrupted, and
-// end the match on the last round.
+// final closes the open round: it commits if its number agrees at open, RoundEnd and close, and it
+// ends the match when last.
 func (m *Match) final(tick, roundsPlayed int, last bool) error {
-	m.inRound = false
 	m.potential.EndTick = tick
-	m.integrityOfficial = roundsPlayed
 	if m.stats != nil {
-		if err := m.event(Event{Final: true, Live: m.isGameLive}); err != nil {
+		if err := m.event(Event{Final: true, Live: m.live()}); err != nil {
 			return err
 		}
 	}
-	if m.integrityStart == m.integrityEnd && m.integrityEnd == m.integrityOfficial && !m.potential.committed {
+	m.state = between
+	if m.potential.Num == m.potential.winNum && m.potential.winNum == roundsPlayed && !m.potential.committed {
 		r := m.potential
 		if r.WinnerClan != r.sideClans[fact.SideT] && r.WinnerClan != r.sideClans[fact.SideCT] {
-			// The oracle panics here (TeamStats[WinnerClanName] is nil).
+			// A winner outside the round's teams has no team stats.
 			return m.fail(tick, "round %d winner %q isn't one of its teams %v", r.Num, r.WinnerClan, r.sideClans)
 		}
 		// An in-demo restore (D12) replays from round r.Num: the rounds committed from it on are
-		// superseded. The oracle's removeInvalidRounds agrees when the replay commits every number;
-		// if it skips one, the gap is left for Finish to report as ScoreOnly (D9).
+		// superseded. If the replay skips a number, the gap is left for Finish to report as ScoreOnly (D9).
 		m.rounds = slices.DeleteFunc(m.rounds, func(c *Round) bool { return c.Num >= r.Num })
 		if m.stats != nil {
 			if err := m.stats.Commit(r, tick); err != nil {
@@ -589,13 +608,12 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 	}
 	if last {
 		m.totalRounds = roundsPlayed
-		m.isGameLive = false
-		m.result = "Ended"
+		m.state = ended
 	}
 	return nil
 }
 
-// teamName is the oracle's validateTeamName: a clan name, cleaned of a "[tag] " prefix, or a
+// teamName is a clan name, cleaned of a "[tag] " prefix, or a
 // side-based name when the demo has no clan names.
 func (m *Match) teamName(tick int, clan string, side fact.Side) (string, error) {
 	if _, noClans := m.teams["StartedT"]; clan != "" && !noClans {
@@ -604,9 +622,9 @@ func (m *Match) teamName(tick int, clan string, side fact.Side) (string, error) 
 		}
 		parts := strings.Split(clan, "] ")
 		if len(parts) < 2 || parts[1] == "" {
-			return clan, nil // "[Name]" or "[tag] ": no tag to strip (the oracle indexes past the split, or names the team "")
+			return clan, nil // "[Name]" or "[tag] ": no tag to strip (indexing past the split would fail, or name the team "")
 		}
-		name := parts[1]     // the oracle's split: "[t] A] B" is "A"
+		name := parts[1]     // split on "] ": "[t] A] B" is "A"
 		if len(clan) == 31 { // truncated by the game: match a known team that contains it
 			for _, team := range slices.Sorted(maps.Keys(m.teams)) {
 				if strings.Contains(team, name) {
@@ -633,7 +651,7 @@ func (m *Match) teamName(tick int, clan string, side fact.Side) (string, error) 
 	}
 }
 
-// matchIsDecided is the oracle's clinch rule for MR12 (13 to win, OT blocks of 6); a level score is
+// matchIsDecided is the clinch rule for MR12 (13 to win, OT blocks of 6); a level score is
 // left to the tie fallback. See fragg-3.0#23.
 func matchIsDecided(roundsToWin, winner, loser int) bool {
 	if roundsToWin != fact.MR+1 {
@@ -664,15 +682,15 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	if err := m.flush(); err != nil {
 		return nil, err
 	}
-	// The oracle's tie fallback (fragg#23/#25), which now also needs the game's own match end.
-	if m.isGameLive && !m.potential.committed && m.integrityStart == m.integrityEnd &&
+	// Tie fallback: a level score at the game's own end commits the last round and ends the match.
+	if m.live() && !m.potential.committed && m.potential.Num == m.potential.winNum &&
 		t.Kind != fact.Decode && t.End.CT.Score == t.End.T.Score && m.gameEnded {
 		if err := m.final(t.End.Tick, t.End.RoundsPlayed, true); err != nil {
 			return nil, err
 		}
 	}
-	ended := m.result == "Ended"
-	if !ended && (t.Kind == fact.Decode || t.Kind == fact.Failed || t.Kind == fact.Stopped) {
+	over := m.state == ended
+	if !over && (t.Kind == fact.Decode || t.Kind == fact.Failed || t.Kind == fact.Stopped) {
 		return nil, t.Err
 	}
 
@@ -688,9 +706,9 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	switch {
 	case len(res.Rounds) == 0:
 		res.Outcome = NoRounds
-	case !ended && m.gameEnded:
+	case !over && m.gameEnded:
 		return nil, &InvariantError{Tick: t.End.Tick, Reason: "the game ended, but not by our match-end rule"}
-	case !ended:
+	case !over:
 		res.Outcome, res.Detail = Unfinished, fmt.Sprintf("demo stopped (%s) after round %d", kind(t.Kind), res.Rounds[len(res.Rounds)-1].Num)
 	default:
 		res.Outcome, res.Detail = Ended, ""

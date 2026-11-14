@@ -310,7 +310,7 @@ func TestScoreOnly(t *testing.T) {
 		s.play("Alpha")
 	}
 	res, err := s.run(t, fact.Terminal{Kind: fact.Clean})
-	// No 800/800 open, so the match never goes live: the oracle needs a pistol round to start.
+	// No 800/800 open, so the match never goes live: a start needs a pistol round.
 	want(t, res, err, NoRounds, 0)
 
 	// The same restore going live (pistol money at the first open): rounds 5..13 commit.
@@ -494,7 +494,7 @@ func TestPlayerInfoMarksLateConnect(t *testing.T) {
 }
 
 // An in-demo restore (D12; S19 mid7801 replays round 13) supersedes the rounds committed from the
-// restored round on: the replays commit in their place, as the oracle keeps each number's last commit.
+// restored round on: the replays commit in their place, each number keeps its last commit.
 func TestInDemoRestoreReplaysRounds(t *testing.T) {
 	s := newSim()
 	for i := 0; i < 5; i++ {
@@ -579,7 +579,7 @@ func TestEarlyOpen(t *testing.T) {
 	for _, f := range []fact.Fact{fact.RoundStart{Tick: 100}, frame(late)} {
 		_ = m.Fact(f)
 	}
-	if m.isGameLive {
+	if m.live() {
 		t.Error("a frame outside the window opened the match")
 	}
 }
@@ -698,7 +698,7 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 }
 
 // A bracketed clan without a "] " tag separator, or with nothing after it, is the team's name; the
-// oracle indexes past the split, or names the team "".
+// indexing past the split would fail, or name the team "".
 func TestBracketedClanWithoutTag(t *testing.T) {
 	m := New()
 	for clan, want := range map[string]string{"[Example]": "[Example]", "[tag] ": "[tag] ", "[CSC] Hydras": "Hydras"} {

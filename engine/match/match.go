@@ -69,7 +69,6 @@ type Round struct {
 	sideClans     map[fact.Side]string
 	scored        bool // a ScoreUpdated set the scores, so the win doesn't add its point
 	winNum        int  // the round number of its valid RoundEnd, 0 before it
-	winTick       int
 }
 
 // Result is the lifecycle's output.
@@ -108,7 +107,7 @@ type Event struct {
 	// and a sampled Frame.
 	Roster Roster
 	Live   bool // the match is live
-	// Dropped is a fact the deciding round's wait filters out (D15); it reaches no stat.
+	// Dropped is a fact the stat layer skips; the lifecycle no longer sets it (recorded fixtures do).
 	Dropped bool
 	// Join is a TeamChange that added this member to the open round.
 	Join *Member
@@ -144,8 +143,7 @@ func (r Roster) Members(s fact.Snapshot, side fact.Side) []fact.Player {
 //	open, not 800/800 money                Restart                      Restart   the round is a knife round
 //	RoundEnd, RoundEndOfficial             Restart                      Restart   nothing scores or commits
 //	RoundEnd, winner and number agree      Between, Open, Won           Won       score
-//	  ... and it clinches, not by the bomb Between, Open, Won           Ended     commit
-//	  ... and it clinches by the bomb      Between, Open, Won           Deciding  hold the commit for the bomb's facts
+//	  ... and it clinches                  Between, Open, Won           Deciding  the facts keep counting
 //	RoundEndOfficial, number agrees        Won, Between                 Between   commit
 //	RoundEndOfficial, WinPanelMatch,       Deciding                     Ended     commit
 //	  open, RoundEnd or stream end
@@ -160,7 +158,7 @@ const (
 	between               // live, no open round
 	open                  // live, a round is open
 	won                   // the open round has its RoundEnd and waits for its closing event
-	deciding              // won, and decided by the bomb: its facts keep arriving until it commits (D15)
+	deciding              // won, and decided: its facts keep arriving until its closing event (rule 4)
 	restart               // a knife ran while live: rounds open as knife rounds until an 800/800 open
 	ended                 // terminal: the clinch, or the tie fallback
 )
@@ -179,6 +177,7 @@ type Match struct {
 	connectedAfterStart map[uint64]bool
 	reconnected         map[uint64]bool // players seen connecting; drives membership
 	gameEnded           bool            // the game's own end was seen
+	panel               bool            // the win panel was seen
 	lurkClock           int             // the tick of the last lurk-cadence frame
 	mapName, serverName string
 	err                 *InvariantError
@@ -219,34 +218,30 @@ func (m *Match) collect(f fact.Fact) error {
 	if m.stats == nil {
 		return nil
 	}
-	e := Event{Fact: f, Live: m.live(), Dropped: m.state == deciding && !bombFact(f)}
-	if !e.Dropped {
-		switch f := f.(type) {
-		case fact.Frame:
-			if !e.Live || !m.inRound() || m.lurkClock+lurkTicks >= f.Tick {
-				return nil
-			}
-			m.lurkClock = f.Tick
-			s := f.Sample()
-			f.Sample = nil
-			e.Fact, e.Sample, e.Roster = f, &s, m.roster(s)
-		case fact.Kill:
-			if e.Live {
-				e.Roster = m.roster(f.Snapshot)
-			}
-		case fact.BombPlanted:
-			e.Roster = m.roster(f.Snapshot)
-		case fact.BombDefused:
-			e.Roster = m.roster(f.Snapshot)
-		case fact.BombExplode:
-			e.Roster = m.roster(f.Snapshot)
-		case fact.Disconnect:
-			if e.Live {
-				e.Roster = m.roster(f.Snapshot)
-			}
+	e := Event{Fact: f, Live: m.live()}
+	switch f := f.(type) {
+	case fact.Frame:
+		if !e.Live || !m.inRound() || m.lurkClock+lurkTicks >= f.Tick {
+			return nil
 		}
-	} else if _, ok := f.(fact.Frame); ok {
-		return nil
+		m.lurkClock = f.Tick
+		s := f.Sample()
+		f.Sample = nil
+		e.Fact, e.Sample, e.Roster = f, &s, m.roster(s)
+	case fact.Kill:
+		if e.Live {
+			e.Roster = m.roster(f.Snapshot)
+		}
+	case fact.BombPlanted:
+		e.Roster = m.roster(f.Snapshot)
+	case fact.BombDefused:
+		e.Roster = m.roster(f.Snapshot)
+	case fact.BombExplode:
+		e.Roster = m.roster(f.Snapshot)
+	case fact.Disconnect:
+		if e.Live {
+			e.Roster = m.roster(f.Snapshot)
+		}
 	}
 	return m.event(e)
 }
@@ -322,14 +317,14 @@ func (m *Match) Fact(f fact.Fact) error {
 		}
 	case fact.RoundEndOfficial:
 		if m.state == deciding {
-			return m.flush()
+			return m.flush(f.Tick)
 		}
 		if m.live() && m.potential.winNum == f.RoundsPlayed {
 			return m.final(f.Tick, f.RoundsPlayed, false)
 		}
 	case fact.TeamChange:
 		var join *Member
-		if m.inRound() && m.state != deciding && f.NewSide > fact.SideSpectator {
+		if m.inRound() && f.NewSide > fact.SideSpectator {
 			if _, ok := m.potential.Members[f.Player.Steam64]; !ok && f.Player.Alive {
 				clan, err := m.teamName(f.Tick, f.NewTeam.Clan, f.NewTeam.Side)
 				if err != nil {
@@ -366,8 +361,8 @@ func (m *Match) Fact(f fact.Fact) error {
 			m.gameEnded = true
 		}
 	case fact.WinPanelMatch:
-		m.gameEnded = true
-		return m.flush()
+		m.gameEnded, m.panel = true, true
+		return m.flush(f.Tick)
 	}
 	return nil
 }
@@ -375,7 +370,7 @@ func (m *Match) Fact(f fact.Fact) error {
 // open is a round open: at a frame within the early window, or at freeze end (which
 // also detects knife rounds and always reopens).
 func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
-	if err := m.flush(); err != nil {
+	if err := m.flush(s.Tick); err != nil {
 		return err
 	}
 	pistol, knife := false, false
@@ -503,7 +498,7 @@ func (m *Match) roster(s fact.Snapshot) Roster {
 }
 
 func (m *Match) roundEnd(f fact.RoundEnd) error {
-	if err := m.flush(); err != nil {
+	if err := m.flush(f.Tick); err != nil {
 		return err
 	}
 	if !m.live() {
@@ -520,7 +515,7 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if err != nil {
 		return err
 	}
-	m.potential.winNum, m.potential.winTick = f.RoundsPlayed, f.Tick
+	m.potential.winNum = f.RoundsPlayed
 	m.totalRounds = f.RoundsPlayed
 	m.potential.WinnerClan = winner
 	m.state = won
@@ -539,12 +534,12 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	}
 	if matchIsDecided(fact.MR+1, w, l) {
 		m.winnerClan = winner
-		if f.Reason != fact.ReasonTargetBombed {
-			return m.final(f.Tick, f.RoundsPlayed, true)
-		}
-		// The explosion's damage and kills arrive after RoundEnd: the deciding round commits at the
-		// win panel or the demo's end, and only those facts reach it meanwhile (D15).
+		// The round's facts (the bomb's damage and kills among them) keep arriving until its
+		// closing event (rule 4): the official end, the win panel, or the stream's end.
 		m.state = deciding
+		if m.panel {
+			return m.flush(f.Tick)
+		}
 	}
 	return nil
 }
@@ -569,24 +564,12 @@ func (m *Match) setScore(tick int, team string, score int) error {
 	return nil
 }
 
-// bombFact reports whether f is the bomb's damage or kill.
-func bombFact(f fact.Fact) bool {
-	var w *int
-	switch f := f.(type) {
-	case fact.Hurt:
-		w = f.Weapon
-	case fact.Kill:
-		w = f.Weapon
-	}
-	return w != nil && *w == fact.EqBomb
-}
-
-// flush commits the deciding round held for the bomb's facts and ends the match.
-func (m *Match) flush() error {
+// flush closes the deciding round at the closing event's tick and ends the match.
+func (m *Match) flush(tick int) error {
 	if m.state != deciding {
 		return nil
 	}
-	return m.final(m.potential.winTick, m.potential.winNum, true)
+	return m.final(tick, m.potential.winNum, true)
 }
 
 // final closes the open round: it commits if its number agrees at open, RoundEnd and close, and it
@@ -689,7 +672,7 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	if t.Kind == fact.InvalidFileType {
 		return nil, t.Err
 	}
-	if err := m.flush(); err != nil {
+	if err := m.flush(t.End.Tick); err != nil {
 		return nil, err
 	}
 	// Tie fallback: a level score at the game's own end commits the last round and ends the match.

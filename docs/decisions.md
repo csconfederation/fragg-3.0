@@ -20,7 +20,7 @@ row. Status: **done** (in the parser), **planned** (decided, not yet built), **h
 | D12 | A replayed round supersedes the rounds from its number up; a skipped number leaves a gap (ScoreOnly) | done | in-demo restores happen |
 | D13 | The pistol rating uses rounds 1 and 13, no overtime | done | the old open counter hit other rounds |
 | D14 | The bomb's kill counts with its damage (D10) | done | same reason as D10 |
-| D15 | The deciding round waits for the bomb's facts before it commits | done; replaced by D59 | CS2 sends the explosion's damage after `RoundEnd` |
+| D15 | The deciding round waits for the bomb's facts before it commits | replaced by D59 | CS2 sends the explosion's damage after `RoundEnd` |
 | D16 | Keep and compute every stat field, even unread ones; validate them | process | a later view may use them |
 | D17 | `ecoStatsOK` leaves the payload; Stats writes `true` for engine imports | done | marks maps without eco stats |
 | D18 | A score-only import never replaces a match that has player rows | process | the richer record wins |
@@ -64,7 +64,7 @@ row. Status: **done** (in the parser), **planned** (decided, not yet built), **h
 | D56 | The map ends at the clinch or the game's own end, whichever comes first; a surrender or admin end is Ended with a reason; a disagreement is logged | planned | the "ended, not by our rule" 500 trips Core's Stats breaker |
 | D57 | The payload carries `outcome` and `reason`; a 422 body is JSON `{outcome, reason, detail}` | planned | Core sees only a status code and text |
 | D58 | The knife flag goes on the round being opened; a knife while live is a restart that commits nothing | done | the flag lands on the previous round today |
-| D59 | One commit rule for every round, the deciding round included | planned | removes the deciding-round special case and the bomb hold |
+| D59 | One commit rule for every round, the deciding round included; the final round closes at the win panel | done for the deciding round; ties with D56 | removes the deciding-round special case and the bomb hold |
 | D60 | `Partial` is `ScoreOnly`; `lifecycle.md` defines map, match and series against Core's terms | done | Core's `STATS_PARTIAL` is a different thing |
 | D61 | A restore into a new recording stays ScoreOnly; no stitching of recordings | process | Core sends only the latest recording |
 | D62 | Go-live is the first open where both first members have 800 money; the `Warmup` flag is not read | done | parity; add a `!Warmup` gate only if a count shows a difference |

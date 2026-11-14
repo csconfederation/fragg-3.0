@@ -16,7 +16,7 @@ import (
 // strings.
 type Payload struct {
 	SchemaVersion int    `json:"schemaVersion"` // 2; the oracle's payload has no version
-	FullStatsOK   bool   `json:"fullStatsOK"`   // false: a partial demo, teams and score only (D9)
+	FullStatsOK   bool   `json:"fullStatsOK"`   // false: a score-only map, teams and score only (D9)
 	MapName       string `json:"mapName"`
 	TickRate      int    `json:"tickRate"`
 	TotalRounds   int    `json:"totalRounds"`

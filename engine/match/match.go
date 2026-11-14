@@ -21,13 +21,13 @@ type Outcome uint8
 
 const (
 	Ended      Outcome = iota + 1 // the match ended and rounds 1..N committed
-	Partial                       // the match ended, but the committed rounds don't cover it (D9)
+	ScoreOnly                     // the match ended, but the committed rounds don't cover it (D9, D60)
 	Unfinished                    // rounds were played, but the demo stopped before the match ended (D8)
 	NoRounds                      // nothing committed
 )
 
 func (o Outcome) String() string {
-	return [...]string{"", "Ended", "Partial", "Unfinished", "NoRounds"}[o]
+	return [...]string{"", "Ended", "ScoreOnly", "Unfinished", "NoRounds"}[o]
 }
 
 // InvariantError is a state the lifecycle doesn't support. The worker reports it as a 500.
@@ -73,7 +73,7 @@ type Round struct {
 // Result is the lifecycle's output.
 type Result struct {
 	Outcome Outcome
-	// Detail says why the outcome isn't Ended (the partial or unfinished reason).
+	// Detail says why the outcome isn't Ended (the score-only or unfinished reason).
 	Detail string
 	// Rounds are the committed rounds in order.
 	Rounds []*Round
@@ -577,7 +577,7 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 		}
 		// An in-demo restore (D12) replays from round r.Num: the rounds committed from it on are
 		// superseded. The oracle's removeInvalidRounds agrees when the replay commits every number;
-		// if it skips one, the gap is left for Finish to report as Partial (D9).
+		// if it skips one, the gap is left for Finish to report as ScoreOnly (D9).
 		m.rounds = slices.DeleteFunc(m.rounds, func(c *Round) bool { return c.Num >= r.Num })
 		if m.stats != nil {
 			if err := m.stats.Commit(r, tick); err != nil {
@@ -695,7 +695,7 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	default:
 		res.Outcome, res.Detail = Ended, ""
 		if d := coverage(res.Rounds, res.Scores); d != "" {
-			res.Outcome, res.Detail = Partial, d
+			res.Outcome, res.Detail = ScoreOnly, d
 		}
 	}
 	return res, nil

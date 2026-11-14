@@ -317,8 +317,8 @@ func statuses() []*Status {
 	s.restore(4, 4, 0)
 	s.play(8)
 	s.deciding()
-	add("restore-gap-partial", "the replay commits round 3, then the counter jumps to 4: round 4 is never committed (D9)", s, s.terminal("Clean"),
-		Want{Outcome: "Partial", Detail: "round 4 is missing", Rounds: "1-3,5-13", Scores: "Alpha 13, Bravo 0"})
+	add("restore-gap-score-only", "the replay commits round 3, then the counter jumps to 4: round 4 is never committed (D9)", s, s.terminal("Clean"),
+		Want{Outcome: "ScoreOnly", Detail: "round 4 is missing", Rounds: "1-3,5-13", Scores: "Alpha 13, Bravo 0"})
 
 	// The deciding round won by the bomb waits for the explosion's facts and commits at the first of
 	// the official end, the win panel and the end of the stream (D15).

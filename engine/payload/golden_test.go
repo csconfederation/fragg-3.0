@@ -38,7 +38,7 @@ type ciDemo struct {
 	} `json:"transform"`
 	Want struct {
 		Golden    bool   `json:"golden"`
-		ScoreOnly bool   `json:"scoreOnly"` // a partial demo (D9)
+		ScoreOnly bool   `json:"scoreOnly"` // a score-only map (D9)
 		Err       string `json:"err"`       // the error Run returns
 	} `json:"want"`
 }

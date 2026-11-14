@@ -26,7 +26,7 @@ var (
 	ErrDecode          = errors.New("demo data could not be decoded")
 )
 
-// Run parses r and returns the payload and the match result. A partial demo (D9) is a score-only
+// Run parses r and returns the payload and the match result. A map the rounds don't cover (D9) is a score-only
 // payload; a stream that breaks after the match ended still yields the full payload.
 func Run(ctx context.Context, r io.Reader) (*Payload, *match.Result, error) {
 	s := &rows{rows: map[*match.Round]*row.Round{}}

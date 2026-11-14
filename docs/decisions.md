@@ -59,7 +59,7 @@ row. Status: **done** (in the parser), **planned** (decided, not yet built), **h
 | D51 | Column renames ship in this release; no alias period | planned | no API stability contract |
 | D52 | The parser cutover waits for the whole stat-layer rebuild | process | one production cutover |
 | D53 | The lifecycle rebuild is in scope | process | the old parser was its only spec |
-| D54 | Drop `distanceToTeammates` | planned | working sum of the old lurk rule, never a distance |
+| D54 | Drop `distanceToTeammates` | done | working sum of the old lurk rule, never a distance |
 | D55 | D44 leaves eco `timeAlive` unchanged; D47's decimal `atd` is accepted | done | the rulings covered survival and the fraction only |
 | D56 | The map ends at the clinch or the game's own end, whichever comes first; a surrender or admin end is Ended with a reason; a disagreement is logged | planned | the "ended, not by our rule" 500 trips Core's Stats breaker |
 | D57 | The payload carries `outcome` and `reason`; a 422 body is JSON `{outcome, reason, detail}` | planned | Core sees only a status code and text |

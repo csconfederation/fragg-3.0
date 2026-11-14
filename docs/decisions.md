@@ -68,7 +68,7 @@ row. Status: **done** (in the parser), **planned** (decided, not yet built), **h
 | D60 | `Partial` is `ScoreOnly`; `lifecycle.md` defines map, match and series against Core's terms | done | Core's `STATS_PARTIAL` is a different thing |
 | D61 | A restore into a new recording stays ScoreOnly; no stitching of recordings | process | Core sends only the latest recording |
 | D62 | Go-live is the first open where both first members have 800 money; the `Warmup` flag is not read | done | parity; add a `!Warmup` gate only if a count shows a difference |
-| D63 | A tie is Ended with reason `tie`, never a rejection | done (the reason comes with D57) | the parser can't know the match type; Combine ties are legal |
+| D63 | A tie is Ended with reason `tie`, never a rejection | done | the parser can't know the match type; Combine ties are legal |
 | D64 | The match-model and parser cutovers share one window after 2026-12-01 | process | one rehearsal, one production change |
 | D65 | Manual scores are authoritative: Core gets a "score entered manually" flag on `MatchStats`, set by the forfeit tool and admin edits; every score writer skips a flagged map's score, winner and map name; a reparse takes them from Core's result | planned | a demo can disagree with an official adjusted result |
 | D66 | Played stats for manual maps only where the official result is an adjusted score; forfeit and void maps keep none | planned | forfeits and voids have no real play |

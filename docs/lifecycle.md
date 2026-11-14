@@ -20,7 +20,7 @@ Rules marked **planned** are decided but not yet in the parser; see [Not yet bui
 |---|---|
 | 1 | **Go-live (D62).** A map goes live at the first round open where the first listed T and the first listed CT member each have 800 money (money + spent). Going live sets both scores to 0. The `Warmup` flag isn't read |
 | 2 | **Round open.** A round opens at a frame within 64 ticks of `RoundStart` (an early open) or at `FreezeEnd`. `FreezeEnd` always reopens and replaces an early open. A fact belongs to the open round |
-| 3 | **Knife (D58, planned).** A round whose freeze ends with both first members on 0 money is a knife round. The flag goes on the round being opened. A knife round never commits or scores. A knife while live is a restart: the map waits for the next 800/800 open, which resets the scores |
+| 3 | **Knife (D58).** A round whose freeze ends with both first members on 0 money is a knife round. The flag goes on the round being opened. A knife round never commits or scores. A knife while live is a restart: the map waits for the next 800/800 open, which resets the scores |
 | 4 | **Round commit (D59, planned).** One rule for every round, the deciding round included. A round commits at its closing event if its number agrees at open, `RoundEnd` and close, and its winner is one of its two teams. The closing event is `RoundEndOfficial`; for the final round it is the first of `RoundEndOfficial`, a game end after its `RoundEnd`, or the stream's end. A round with no `RoundEnd`, or one replaced by a new open before it closes, is rejected with its facts |
 | 5 | **Restores and replays (D12).** A committing round `n` removes every committed round numbered `n` or higher. A replay that skips a number leaves a gap, and the map is ScoreOnly (D9) |
 | 6 | **Score.** A live `ScoreUpdated` sets both teams' scores. A round with none gives its winner +1. Knife rounds don't score |
@@ -48,7 +48,6 @@ Rules marked **planned** are decided but not yet in the parser; see [Not yet bui
 Today's parser differs from the rules above in these places; each PR that closes one updates this list.
 
 - **D56:** a game end without a clinch is an error ("the game ended, but not by our match-end rule", a 500), except the tie fallback, which commits the last round at a level score. A decode failure after a game end with no clinch is a 500.
-- **D58:** the knife flag goes on the previous round. A knife while live only clears the start flag, and the knife round itself commits.
 - **D59:** the deciding round commits at its `RoundEnd`, except a bomb-ended one, which waits for the bomb's facts (the D15/D27 hold).
 - **D57:** the payload has no `outcome` or `reason`; a 422 body is a string.
 

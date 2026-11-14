@@ -273,24 +273,34 @@ func statuses() []*Status {
 	s.match13()
 	add("knife-before-live-early-open", "as knife-before-live, the knife round also opened early at a frame", s, s.terminal("Clean"), ended)
 
-	// Knife while live (Q66): the flag goes on the round open when freeze end arrives, before the
-	// new round replaces it. Without an early open that is the last committed round, which Finish
-	// then drops; with one it is the early-open round, which the freeze end replaces unflagged.
+	// Knife while live (D58): the round being opened is the knife round, and the map waits for an
+	// 800/800 open. The knife round, with or without an early open, and the rounds after it don't
+	// commit or score; the committed rounds before it stay.
 	s = &sim{}
 	s.play(3)
 	s.setMoney(0)
 	s.open()
 	s.end(true)
-	add("knife-while-live-flags-previous-round", "0/0 at freeze end while live, no early open: the flag lands on committed round 3, which is dropped; the knife round 4 commits as a normal round", s, s.terminal("Truncated"),
-		Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 4", Rounds: "1-2,4", Scores: "Alpha 4, Bravo 0"})
+	add("knife-while-live-no-commit", "0/0 at freeze end while live, no early open: the knife round 4 doesn't commit or score", s, s.terminal("Truncated"),
+		Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 3", Rounds: "1-3", Scores: "Alpha 3, Bravo 0"})
 
 	s = &sim{}
 	s.play(3)
 	s.setMoney(0)
 	s.openWith(true)
 	s.end(true)
-	add("knife-while-live-early-open", "0/0 at freeze end while live after an early open: the flag lands on the replaced early-open round, so rounds 1-4 all commit", s, s.terminal("Truncated"),
-		Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 4", Rounds: "1-4", Scores: "Alpha 4, Bravo 0"})
+	add("knife-while-live-early-open", "0/0 at freeze end while live after an early open: the freeze-end reopen is the knife round, and it doesn't commit", s, s.terminal("Truncated"),
+		Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 3", Rounds: "1-3", Scores: "Alpha 3, Bravo 0"})
+
+	s = &sim{}
+	s.play(3)
+	s.setMoney(0)
+	s.open()
+	s.end(true)
+	s.money = nil
+	s.play(2)
+	add("knife-while-live-later-rounds", "after a live knife, rounds that don't open at 800/800 money don't commit either", s, s.terminal("Truncated"),
+		Want{Outcome: "Unfinished", Detail: "demo stopped (truncated) after round 3", Rounds: "1-3", Scores: "Alpha 3, Bravo 0"})
 
 	s = &sim{}
 	s.play(3)

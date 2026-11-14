@@ -754,3 +754,26 @@ func TestExplosionFactsKeepTheirOrder(t *testing.T) {
 		t.Errorf("calls %s; want %s", got, want)
 	}
 }
+
+func TestFootstepMarksRoundWithoutFreezeEnd(t *testing.T) {
+	// A round opened at a frame whose FreezeEnd never arrives is in play from its first Footstep
+	// (a lurk-sampled round on 8 archive maps), until it closes.
+	s := newSim()
+	s.tick = 102
+	s.add(fact.RoundStart{Tick: 100}, frame(s.snapshot(1)))
+	m := New()
+	for _, f := range s.facts {
+		if err := m.Fact(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if m.inRound() {
+		t.Fatal("in play before any Footstep")
+	}
+	if err := m.Fact(fact.Footstep{Tick: 200}); err != nil {
+		t.Fatal(err)
+	}
+	if !m.inRound() {
+		t.Fatal("not in play after a Footstep")
+	}
+}

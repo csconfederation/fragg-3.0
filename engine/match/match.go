@@ -169,6 +169,7 @@ const (
 type Match struct {
 	stats               Stats
 	state               state
+	moving              bool // a Footstep while live marked the round in play, until it closes
 	roundStartedAt      int
 	winnerClan          string
 	totalRounds         int
@@ -186,9 +187,10 @@ type Match struct {
 // live is whether the map is live (a round can open, score or commit).
 func (m *Match) live() bool { return m.state >= between && m.state <= restart }
 
-// inRound is whether a round that opened at freeze end is still running (until it closes).
+// inRound is whether a round that opened at freeze end, or that saw a Footstep, is still running
+// (until it closes). The Footstep covers a round whose FreezeEnd never arrives (50a0871cf3cf7c61 R5).
 func (m *Match) inRound() bool {
-	return m.potential.FreezeEnd && (m.state == open || m.state == won || m.state == deciding)
+	return m.moving || m.potential.FreezeEnd && (m.state == open || m.state == won || m.state == deciding)
 }
 
 // earlyOpened is whether the last round opened at a frame, before its freeze end, which stops
@@ -357,6 +359,8 @@ func (m *Match) Fact(f fact.Fact) error {
 			m.reconnected[f.Steam64] = false
 		}
 		return m.collect(f)
+	case fact.Footstep:
+		m.moving = m.moving || m.live()
 	case fact.GamePhase:
 		if f.Phase == fact.GamePhaseEnded {
 			m.gameEnded = true
@@ -594,7 +598,7 @@ func (m *Match) final(tick, roundsPlayed int, last bool) error {
 			return err
 		}
 	}
-	m.state = between
+	m.state, m.moving = between, false
 	if m.potential.Num == m.potential.winNum && m.potential.winNum == roundsPlayed && !m.potential.committed {
 		r := m.potential
 		if r.WinnerClan != r.sideClans[fact.SideT] && r.WinnerClan != r.sideClans[fact.SideCT] {

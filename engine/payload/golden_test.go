@@ -70,6 +70,7 @@ func TestCIGoldens(t *testing.T) {
 			if err := json.Unmarshal(payload, &got); err != nil {
 				t.Fatal(err)
 			}
+			delete(got.(map[string]any), "engineVersion") // differs per build
 			path := filepath.Join("testdata", "golden", d.Name+".json.gz")
 			if *update {
 				writeGolden(t, path, got)

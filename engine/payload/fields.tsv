@@ -1,4 +1,5 @@
 json_name	json_type	go_type	scope	owner	constants
+engineVersion	string	string	match	payload.Payload	
 fullStatsOK	boolean	bool	match	payload.Payload	
 headerMatchID	string|null	*string	match	payload.Payload	
 mapName	string	string	match	payload.Payload	

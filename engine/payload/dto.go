@@ -15,8 +15,10 @@ import (
 // after its columns, and nothing else. Stats imports it field by field. Steam64s are decimal
 // strings.
 type Payload struct {
-	SchemaVersion int    `json:"schemaVersion"` // 2; the oracle's payload has no version
-	FullStatsOK   bool   `json:"fullStatsOK"`   // false: a score-only map, teams and score only (D9)
+	SchemaVersion int `json:"schemaVersion"` // 2; the oracle's payload has no version
+	// EngineVersion is the fragg build, so Stats can tell which engine made a match (D50).
+	EngineVersion string `json:"engineVersion"`
+	FullStatsOK   bool   `json:"fullStatsOK"` // false: a score-only map, teams and score only (D9)
 	MapName       string `json:"mapName"`
 	TickRate      int    `json:"tickRate"`
 	TotalRounds   int    `json:"totalRounds"`
@@ -47,7 +49,7 @@ const schemaVersion = 2
 // build is the payload for res: teams and score, and with a folded match (m, rounds) its rows, with
 // the constants applied (constants.go).
 func build(res *match.Result, m *fold.Match, rounds []*row.Round) *Payload {
-	p := &Payload{SchemaVersion: schemaVersion, FullStatsOK: res.Outcome == match.Ended,
+	p := &Payload{SchemaVersion: schemaVersion, EngineVersion: engineVersion, FullStatsOK: res.Outcome == match.Ended,
 		MapName: res.Map, TickRate: fact.TickRate, TotalRounds: res.TotalRounds}
 	if res.HeaderMatchID != 0 {
 		id := strconv.Itoa(res.HeaderMatchID)

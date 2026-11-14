@@ -111,7 +111,6 @@ damageTaken	number	int	player	row.Combat
 deathPlacement	number	float64	player	row.Survival	
 deathTick	number	int	player	row.Survival	
 deaths	number	int	player	row.Combat	
-distanceToTeammates	number	int	player	row.Positioning	
 drDiff	number	float64	player	row.Rates	round-player=0
 eac	number	int	player	row.Combat	
 earlyDeaths	number	int	player	row.Survival	round-player=0;bot=0

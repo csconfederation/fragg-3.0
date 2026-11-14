@@ -26,7 +26,7 @@
       "want": {"err": "ErrNoRounds"}
     },
     {
-      "name": "mid9072-inferno-partial",
+      "name": "mid9072-inferno-score-only",
       "object": "ci/s20-M09-BoardwalkBruisers-vs-Guppies-mid9072-0_de_inferno-2026-07-01_02-27-35.dem.zip",
       "objectSha256": "cfdd10fb4651d1e1d0723f3bc54ae1ae0db744073514caa6218d42a1b6e62e57",
       "demSha256": "1c7c89e6f0eac3ad00ddd867ccda4aa35c1f11331579f313cf1657984f871f24",

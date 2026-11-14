@@ -140,10 +140,10 @@ func TestFieldList(t *testing.T) {
 	equalKeys(t, "full round", keys(t, full.Rounds[0]), names["round"])
 	equalKeys(t, "round player", keys(t, full.Rounds[0].Players[0]), names["player"])
 
-	partial := &Payload{Teams: []Team{{Name: "a"}}} // D9: teams and score only
-	equalKeys(t, "partial match", keys(t, partial),
+	scoreOnly := &Payload{Teams: []Team{{Name: "a"}}} // D9: teams and score only
+	equalKeys(t, "score-only match", keys(t, scoreOnly),
 		slices.DeleteFunc(slices.Clone(names["match"]), func(k string) bool { return k == "players" || k == "rounds" }))
-	equalKeys(t, "partial team", keys(t, partial.Teams[0]), []string{"name", "score"})
+	equalKeys(t, "score-only team", keys(t, scoreOnly.Teams[0]), []string{"name", "score"})
 }
 
 func TestRowTags(t *testing.T) {

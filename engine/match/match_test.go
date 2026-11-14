@@ -295,7 +295,7 @@ func TestTerminals(t *testing.T) {
 	want(t, res, err, NoRounds, 0)
 }
 
-func TestPartial(t *testing.T) {
+func TestScoreOnly(t *testing.T) {
 	// A recording that starts at round 5 (restored server): the score is the game's.
 	s := newSim()
 	s.played, s.score["Alpha"], s.score["Bravo"] = 4, 2, 2
@@ -327,7 +327,7 @@ func TestPartial(t *testing.T) {
 		s.play("Alpha")
 	}
 	res, err = s.run(t, fact.Terminal{Kind: fact.Clean})
-	want(t, res, err, Partial, 9)
+	want(t, res, err, ScoreOnly, 9)
 	if !strings.Contains(res.Detail, "first committed round is 5") || res.Scores["Alpha"] != 13 {
 		t.Errorf("detail %q scores %v", res.Detail, res.Scores)
 	}
@@ -337,7 +337,7 @@ func TestPartial(t *testing.T) {
 	s.score["Bravo"] = 1
 	regulation(s, 0)
 	res, err = s.run(t, fact.Terminal{Kind: fact.Clean})
-	want(t, res, err, Partial, 13)
+	want(t, res, err, ScoreOnly, 13)
 	if !strings.Contains(res.Detail, "scores sum to 14, but 13 rounds committed") {
 		t.Errorf("detail %q", res.Detail)
 	}
@@ -360,7 +360,7 @@ func TestPartial(t *testing.T) {
 		s.play("Alpha")
 	}
 	res, err = s.run(t, fact.Terminal{Kind: fact.Clean})
-	want(t, res, err, Partial, 12)
+	want(t, res, err, ScoreOnly, 12)
 	if !strings.Contains(res.Detail, "round 6 is missing") {
 		t.Errorf("detail %q", res.Detail)
 	}

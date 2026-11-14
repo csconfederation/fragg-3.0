@@ -18,6 +18,9 @@ var engineVersion = func() string {
 			if d.Replace != nil {
 				d = d.Replace
 			}
+			if d.Version == "" { // a local replace has no version
+				return "devel"
+			}
 			return d.Version
 		}
 	}

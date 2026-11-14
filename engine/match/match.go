@@ -138,8 +138,11 @@ func (r Roster) Members(s fact.Snapshot, side fact.Side) []fact.Player {
 // state is where the map is in its lifecycle. Transitions (an event not listed leaves the state):
 //
 //	event                                  from                          to        action
-//	open at 800/800 money, start pending   PreLive, Ended               Between   scores to 0 (rule 1)
+//	open at 800/800 money                  PreLive, Restart             Between   scores to 0 (rule 1)
 //	open (live)                            Between, Open, Won           Open      the unclosed round is replaced
+//	freeze end at 0/0 money (rule 3)       Between, Open, Won           Restart   the round being opened is a knife round
+//	open, not 800/800 money                Restart                      Restart   the round is a knife round
+//	RoundEnd, RoundEndOfficial             Restart                      Restart   nothing scores or commits
 //	RoundEnd, winner and number agree      Between, Open, Won           Won       score
 //	  ... and it clinches, not by the bomb Between, Open, Won           Ended     commit
 //	  ... and it clinches by the bomb      Between, Open, Won           Deciding  hold the commit for the bomb's facts
@@ -148,9 +151,7 @@ func (r Roster) Members(s fact.Snapshot, side fact.Side) []fact.Player {
 //	  open, RoundEnd or stream end
 //	stream end after a game end, level     Won                          Ended     commit if the number agrees
 //
-// A live knife (rule 3) doesn't change the state: it only makes the next 800/800 open a start
-// (restart), until the Restart state lands with D58. The game's end (GamePhase, WinPanelMatch) is
-// recorded in gameEnded and changes no state until D56. A fact that fails an invariant keeps its
+// The game's end (GamePhase, WinPanelMatch) is recorded in gameEnded and changes no state until D56. A fact that fails an invariant keeps its
 // error in err, after which no fact is applied.
 type state uint8
 
@@ -160,6 +161,7 @@ const (
 	open                  // live, a round is open
 	won                   // the open round has its RoundEnd and waits for its closing event
 	deciding              // won, and decided by the bomb: its facts keep arriving until it commits (D15)
+	restart               // a knife ran while live: rounds open as knife rounds until an 800/800 open
 	ended                 // terminal: the clinch, or the tie fallback
 )
 
@@ -167,7 +169,6 @@ const (
 type Match struct {
 	stats               Stats
 	state               state
-	restart             bool // a live knife made the next 800/800 open a start
 	roundStartedAt      int
 	winnerClan          string
 	totalRounds         int
@@ -183,7 +184,7 @@ type Match struct {
 }
 
 // live is whether the map is live (a round can open, score or commit).
-func (m *Match) live() bool { return m.state >= between && m.state <= deciding }
+func (m *Match) live() bool { return m.state >= between && m.state <= restart }
 
 // inRound is whether a round that opened at freeze end is still running (until it closes).
 func (m *Match) inRound() bool {
@@ -302,7 +303,7 @@ func (m *Match) Fact(f fact.Fact) error {
 	case fact.RoundEnd:
 		return m.roundEnd(f)
 	case fact.ScoreUpdated:
-		if m.live() {
+		if m.live() && m.state != restart {
 			m.potential.scored = true
 			team, err := m.teamName(f.Tick, f.Team.Clan, f.Team.Side)
 			if err != nil {
@@ -373,21 +374,20 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 	if err := m.flush(); err != nil {
 		return err
 	}
-	pistol := false
+	pistol, knife := false, false
 	t, ct := m.members(s, fact.SideT), m.members(s, fact.SideCT)
 	if len(t) != 0 && len(ct) != 0 {
 		tMoney, ctMoney := t[0].Money+t[0].Spent, ct[0].Money+ct[0].Spent
 		switch {
 		case tMoney == 800 && ctMoney == 800:
-			if m.state == preLive || m.restart {
+			if m.state == preLive || m.state == restart {
 				if err := m.startGame(s); err != nil {
 					return err
 				}
 			}
 			pistol = true
 		case freezeEnd && tMoney == 0 && ctMoney == 0:
-			m.potential.Knife = true
-			m.restart = true
+			knife = m.live()
 		}
 	}
 	if !m.live() {
@@ -396,7 +396,13 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 	if err := m.initRound(s); err != nil {
 		return err
 	}
-	m.state = open
+	switch {
+	case knife:
+		m.state = restart
+	case m.state != restart:
+		m.state = open
+	}
+	m.potential.Knife = m.state == restart
 	m.potential.Pistol, m.potential.FreezeEnd = pistol, freezeEnd
 	if m.stats != nil {
 		m.lurkClock = 0
@@ -408,7 +414,7 @@ func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 }
 
 func (m *Match) startGame(s fact.Snapshot) error {
-	m.state, m.restart = between, false
+	m.state = between
 	m.teams = map[string]int{}
 	for _, team := range []fact.Team{s.T, s.CT} {
 		name, err := m.teamName(s.Tick, team.Clan, team.Side)
@@ -499,7 +505,7 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if !m.live() {
 		return nil
 	}
-	if f.Winner < fact.SideT || m.potential.Num != f.RoundsPlayed {
+	if f.Winner < fact.SideT || m.potential.Num != f.RoundsPlayed || m.state == restart {
 		return m.roundEndEvent(f, false)
 	}
 	winner, err := m.teamName(f.Tick, f.WinnerTeam.Clan, f.WinnerTeam.Side)
@@ -514,7 +520,7 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	m.totalRounds = f.RoundsPlayed
 	m.potential.WinnerClan = winner
 	m.state = won
-	if !m.potential.Knife && !m.potential.scored {
+	if !m.potential.scored {
 		if err := m.setScore(f.Tick, winner, m.teams[winner]+1); err != nil {
 			return err
 		}
@@ -698,11 +704,7 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	if g := headerMatchID.FindStringSubmatch(m.serverName); g != nil {
 		res.HeaderMatchID, _ = strconv.Atoi(g[1])
 	}
-	for _, r := range m.rounds {
-		if !r.Knife {
-			res.Rounds = append(res.Rounds, r)
-		}
-	}
+	res.Rounds = m.rounds
 	switch {
 	case len(res.Rounds) == 0:
 		res.Outcome = NoRounds

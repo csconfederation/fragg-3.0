@@ -1,9 +1,12 @@
 json_name	json_type	go_type	scope	owner	constants
+detail	string	string	match	payload.Payload	
 engineVersion	string	string	match	payload.Payload	
 fullStatsOK	boolean	bool	match	payload.Payload	
 headerMatchID	string|null	*string	match	payload.Payload	
 mapName	string	string	match	payload.Payload	
+outcome	string	string	match	payload.Payload	
 players	array	[]*row.Player	match	payload.Payload	
+reason	string	string	match	payload.Payload	
 rounds	array	[]payload.Round	match	payload.Payload	
 schemaVersion	number	int	match	payload.Payload	
 teams	array	[]payload.Team	match	payload.Payload	

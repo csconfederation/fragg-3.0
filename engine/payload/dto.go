@@ -19,9 +19,14 @@ type Payload struct {
 	// EngineVersion is the fragg build, so Stats can tell which engine made a match (D50).
 	EngineVersion string `json:"engineVersion"`
 	FullStatsOK   bool   `json:"fullStatsOK"` // false: a score-only map, teams and score only (D9)
-	MapName       string `json:"mapName"`
-	TickRate      int    `json:"tickRate"`
-	TotalRounds   int    `json:"totalRounds"`
+	// Outcome, Reason and Detail say how the map was decided (D57): Ended or ScoreOnly, why, and for
+	// ScoreOnly the words.
+	Outcome     string `json:"outcome"`
+	Reason      string `json:"reason"`
+	Detail      string `json:"detail"`
+	MapName     string `json:"mapName"`
+	TickRate    int    `json:"tickRate"`
+	TotalRounds int    `json:"totalRounds"`
 	// HeaderMatchID is the match ID in the demo's server name, or null (S11-S14 demos, scrim and
 	// preseason servers). Stats logs it when it disagrees with the request's ID, which wins (D11, D19).
 	HeaderMatchID *string `json:"headerMatchID"`
@@ -50,6 +55,7 @@ const schemaVersion = 2
 // the constants applied (constants.go).
 func build(res *match.Result, m *fold.Match, rounds []*row.Round) *Payload {
 	p := &Payload{SchemaVersion: schemaVersion, EngineVersion: engineVersion, FullStatsOK: res.Outcome == match.Ended,
+		Outcome: res.Outcome.String(), Reason: res.Reason, Detail: res.Detail,
 		MapName: res.Map, TickRate: fact.TickRate, TotalRounds: res.TotalRounds}
 	if res.HeaderMatchID != 0 {
 		id := strconv.Itoa(res.HeaderMatchID)

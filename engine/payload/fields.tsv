@@ -1,0 +1,232 @@
+json_name	json_type	go_type	scope	owner	constants
+engineVersion	string	string	match	payload.Payload	
+fullStatsOK	boolean	bool	match	payload.Payload	
+headerMatchID	string|null	*string	match	payload.Payload	
+mapName	string	string	match	payload.Payload	
+players	array	[]*row.Player	match	payload.Payload	
+rounds	array	[]payload.Round	match	payload.Payload	
+schemaVersion	number	int	match	payload.Payload	
+teams	array	[]payload.Team	match	payload.Payload	
+tickRate	number	int	match	payload.Payload	
+totalRounds	number	int	match	payload.Payload	
+TImpactPoints	number	float64	team	row.TeamObjectives	team-match=0
+TR	number	int	team	row.TeamMeta	
+TRW	number	int	team	row.TeamMeta	
+TWinPoints	number	float64	team	row.TeamObjectives	team-match=0
+antiEcos	number	int	team	row.TeamEconomy	
+antiEcosW	number	int	team	row.TeamEconomy	
+clutches	number	int	team	row.TeamClutches	
+ctImpactPoints	number	float64	team	row.TeamObjectives	team-match=0
+ctR	number	int	team	row.TeamMeta	
+ctRW	number	int	team	row.TeamMeta	
+ctWinPoints	number	float64	team	row.TeamObjectives	team-match=0
+deaths	number	int	team	row.FromPlayers	
+ecoBuys	number	int	team	row.TeamEconomy	
+ecoBuysW	number	int	team	row.TeamEconomy	
+ef	number	int	team	row.FromPlayers	
+fass	number	int	team	row.FromPlayers	
+fiveVFourS	number	int	team	row.TeamOpenings	
+fiveVFourW	number	int	team	row.TeamOpenings	
+forceBuys	number	int	team	row.TeamEconomy	
+forceBuysW	number	int	team	row.TeamEconomy	
+fourVFiveS	number	int	team	row.TeamOpenings	
+fourVFiveW	number	int	team	row.TeamOpenings	
+fullBuys	number	int	team	row.TeamEconomy	
+fullBuysW	number	int	team	row.TeamEconomy	
+impactPoints	number	float64	team	row.TeamObjectives	team-match=0
+name	string	string	team	payload.Team	
+normalizer	number	int	team	row.TeamMeta	team-match=0
+pistols	number	int	team	row.TeamEconomy	
+pistolsW	number	int	team	row.TeamEconomy	
+saves	number	int	team	row.TeamSurvival	
+score	number	int	team	payload.Team	
+traded	number	int	team	row.FromPlayers	
+ud	number	int	team	row.FromPlayers	
+util	number	int	team	row.FromPlayers	
+winPoints	number	float64	team	row.TeamObjectives	team-match=0
+FAss	number	int	player	row.Utility	
+KR	number	float64	player	row.Rates	round-player=0
+RA	number	int	player	row.Objectives	
+RF	number	int	player	row.Objectives	
+TADP	number	float64	player	row.Projection	round-player=0
+TADR	number	float64	player	row.Projection	round-player=0
+TDamage	number	int	player	row.Projection	round-player=0
+TDeaths	number	int	player	row.Projection	round-player=0
+TImpactPoints	number	float64	player	row.Projection	round-player=0
+TImpactRating	number	float64	player	row.Projection	round-player=0
+TKAST	number	float64	player	row.Projection	round-player=0
+TKASTRounds	number	float64	player	row.Projection	round-player=0
+TKills	number	int	player	row.Projection	round-player=0
+TOK	number	int	player	row.Projection	round-player=0
+TOL	number	int	player	row.Projection	round-player=0
+TRF	number	int	player	row.Projection	round-player=0
+TRating	number	float64	player	row.Projection	round-player=0
+TRounds	number	int	player	row.Projection	round-player=0
+TTeamsWinPoints	number	float64	player	row.Projection	round-player=0
+TWinPoints	number	float64	player	row.Projection	round-player=0
+TWinPointsNormalizer	number	int	player	row.Projection	round-player=0
+adr	number	float64	player	row.Rates	round-player=0
+antiEcoRating	number	float64	player	row.Buys	round-player=0
+antiEcoRounds	number	int	player	row.Buys	round-player=0
+antiEcoRoundsWon	number	int	player	row.Buys	round-player=0
+assistedKills	number	int	player	row.Combat	round-player=0;bot=0
+assists	number	int	player	row.Combat	
+atd	number	float64	player	row.Rates	round-player=0
+avgTimeToDeath	number	float64	player	row.Rates	round-player=0;bot=0;side-T=0;side-CT=0
+avgTimeToKill	number	float64	player	row.Swing	round-player=0;bot=0;side-T=0;side-CT=0
+awpDeaths	number	int	player	row.Combat	round-player=0;bot=0
+awpKills	number	int	player	row.Combat	
+awpKillsPerRound	number	float64	player	row.Rates	round-player=0;bot=0
+awpMultiKillRounds	number	int	player	row.Combat	round-player=0;bot=0
+awpOpeningKills	number	int	player	row.Openings	round-player=0;bot=0
+cl_1	number	int	player	row.Clutches	
+cl_2	number	int	player	row.Clutches	
+cl_3	number	int	player	row.Clutches	
+cl_4	number	int	player	row.Clutches	
+cl_5	number	int	player	row.Clutches	
+clutch1v1Attempts	number	int	player	row.Clutches	round-player=0;bot=0
+clutch1v2Attempts	number	int	player	row.Clutches	round-player=0;bot=0
+clutch1v3Attempts	number	int	player	row.Clutches	round-player=0;bot=0
+clutch1v4Attempts	number	int	player	row.Clutches	round-player=0;bot=0
+clutch1v5Attempts	number	int	player	row.Clutches	round-player=0;bot=0
+ctADP	number	float64	player	row.Projection	round-player=0
+ctADR	number	float64	player	row.Projection	round-player=0
+ctAWP	number	int	player	row.Combat	
+ctDamage	number	int	player	row.Projection	round-player=0
+ctDeaths	number	int	player	row.Projection	round-player=0
+ctImpactPoints	number	float64	player	row.Projection	round-player=0
+ctImpactRating	number	float64	player	row.Projection	round-player=0
+ctKAST	number	float64	player	row.Projection	round-player=0
+ctKASTRounds	number	float64	player	row.Projection	round-player=0
+ctKills	number	int	player	row.Projection	round-player=0
+ctOK	number	int	player	row.Projection	round-player=0
+ctOL	number	int	player	row.Projection	round-player=0
+ctRating	number	float64	player	row.Projection	round-player=0
+ctRounds	number	int	player	row.Projection	round-player=0
+ctTeamsWinPoints	number	float64	player	row.Projection	round-player=0
+ctWinPoints	number	float64	player	row.Projection	round-player=0
+ctWinPointsNormalizer	number	int	player	row.Projection	round-player=0
+damage	number	int	player	row.Combat	
+damageTaken	number	int	player	row.Combat	
+deathPlacement	number	float64	player	row.Survival	
+deathTick	number	int	player	row.Survival	
+deaths	number	int	player	row.Combat	
+drDiff	number	float64	player	row.Rates	round-player=0
+eac	number	int	player	row.Combat	
+earlyDeaths	number	int	player	row.Survival	round-player=0;bot=0
+ecoAdjustedKills	number	float64	player	row.Swing	round-player=0;bot=0;side-T=0;side-CT=0
+ecoBuyRating	number	float64	player	row.Buys	round-player=0
+ecoBuyRounds	number	int	player	row.Buys	round-player=0
+ecoBuyRoundsWon	number	int	player	row.Buys	round-player=0
+ecoCTEcoRating	number	float64	player	row.Ratings	round-player=0;bot=0;side-T=0
+ecoCTProbabilitySwing	number	float64	player	row.Projection	round-player=0;bot=0;side-T=0
+ecoDeathValue	number	float64	player	row.Economy	round-player=0;bot=0
+ecoDuelSwing	number	float64	player	row.Rates	round-player=0;bot=0
+ecoDuelSwingPerRound	number	float64	player	row.Rates	round-player=0;bot=0
+ecoKillValue	number	float64	player	row.Economy	round-player=0;bot=0
+ecoProbabilitySwing	number	float64	player	row.Swing	round-player=0;bot=0
+ecoProbabilitySwingPerRound	number	float64	player	row.Rates	round-player=0;bot=0
+ecoSwingDisplayRating	number	float64	player	row.Ratings	round-player=0;bot=0
+ecoTEcoRating	number	float64	player	row.Ratings	round-player=0;bot=0;side-CT=0
+ecoTProbabilitySwing	number	float64	player	row.Projection	round-player=0;bot=0;side-CT=0
+ef	number	int	player	row.Utility	
+enemyFlashTime	number	float64	player	row.Utility	
+entries	number	int	player	row.Openings	
+exitFrags	number	int	player	row.Objectives	round-player=0;bot=0
+fastTrades	number	int	player	row.Trades	round-player=0;bot=0
+firesThrown	number	int	player	row.Utility	
+fiveK	number	int	player	row.Openings	
+flashThrown	number	int	player	row.Utility	
+forceBuyRating	number	float64	player	row.Buys	round-player=0
+forceBuyRounds	number	int	player	row.Buys	round-player=0
+forceBuyRoundsWon	number	int	player	row.Buys	round-player=0
+fourK	number	int	player	row.Openings	
+fullBuyRating	number	float64	player	row.Buys	round-player=0
+fullBuyRounds	number	int	player	row.Buys	round-player=0
+fullBuyRoundsWon	number	int	player	row.Buys	round-player=0
+health	number	int	player	row.ID	round-player=100
+hltvCtRating	number	float64	player	row.Ratings	round-player=0;bot=0;side-T=0
+hltvRating	number	float64	player	row.Ratings	round-player=0;bot=0
+hltvTRating	number	float64	player	row.Ratings	round-player=0;bot=0;side-CT=0
+hs	number	int	player	row.Combat	
+iiwr	number	float64	player	row.Rates	round-player=0
+impactPoints	number	float64	player	row.Objectives	
+impactRating	number	float64	player	row.Ratings	round-player=0
+infernoDmg	number	int	player	row.Combat	
+isBot	boolean	bool	player	row.ID	
+kast	number	float64	player	row.Rates	round-player=0
+kastRounds	number	float64	player	row.KAST	
+killPointAvg	number	float64	player	row.Rates	round-player=0
+killPoints	number	float64	player	row.Objectives	
+kills	number	int	player	row.Combat	
+killsVsLowerBuy	number	int	player	row.Economy	round-player=0;bot=0;side-T=0;side-CT=0
+killsVsMuchLowerBuy	number	int	player	row.Economy	round-player=0;bot=0;side-T=0;side-CT=0
+knifeKills	number	int	player	row.Combat	round-player=0;bot=0
+lurkRounds	number	int	player	row.Positioning	
+lurkerBlips	number	int	player	row.Positioning	
+manAdvantageKills	number	int	player	row.Openings	round-player=0;bot=0
+manDisadvantageDeaths	number	int	player	row.Openings	round-player=0;bot=0
+mip	number	float64	player	row.Objectives	
+mostRecentFlashVal	number	float64	player	row.Utility	
+mostRecentFlasher	string	uint64	player	row.Utility	
+nadeDmg	number	int	player	row.Combat	
+nadesThrown	number	int	player	row.Utility	
+name	string	string	player	row.ID	
+ok	number	int	player	row.Openings	
+ol	number	int	player	row.Openings	
+openingDeathsTraded	number	int	player	row.Trades	round-player=0;bot=0
+perfectKills	number	int	player	row.Combat	round-player=0;bot=0;side-T=0;side-CT=0
+pistolRoundRating	number	float64	player	row.Buys	round-player=0
+pistolRounds	number	int	player	row.Buys	round-player=0
+pistolRoundsWon	number	int	player	row.Buys	round-player=0
+pistolVsRifleKills	number	int	player	row.Combat	round-player=0;bot=0
+rating	number	float64	player	row.Ratings	round-player=0
+rounds	number	int	player	row.ID	round-player=0
+roundsWithAWPKill	number	int	player	row.Combat	round-player=0;bot=0
+rwk	number	int	player	row.Openings	
+rws	number	float64	player	row.Objectives	
+savedByTeammate	number	int	player	row.Trades	round-player=0;bot=0
+savedTeammate	number	int	player	row.Trades	round-player=0;bot=0
+saves	number	int	player	row.Survival	
+side	number	int	player	row.ID	
+smokeThrown	number	int	player	row.Utility	
+steamID	string	string	player	row.ID	
+suppDamage	number	int	player	row.Combat	
+suppRounds	number	int	player	row.Combat	
+swing_rating	number	float64	player	row.Ratings	round-player=0;bot=0
+teamClanName	string	string	player	row.ID	
+teamENUM	number	int	player	row.ID	
+teamsWinPoints	number	float64	player	row.Projection	round-player=0
+threeK	number	int	player	row.Openings	
+ticksAlive	number	int	player	row.Survival	
+timeAlivePerRound	number	float64	player	row.Rates	round-player=0;bot=0;side-T=0;side-CT=0
+tr	number	float64	player	row.Rates	round-player=0
+tradeDenials	number	int	player	row.Trades	round-player=0;bot=0
+tradeKills	number	int	player	row.Trades	round-player=0;bot=0
+traded	number	int	player	row.Trades	
+trades	number	int	player	row.Trades	
+twoK	number	int	player	row.Openings	
+utilDmg	number	int	player	row.Combat	
+utilThrown	number	int	player	row.Rates	round-player=0
+utilityKills	number	int	player	row.Combat	round-player=0;bot=0
+winPoints	number	float64	player	row.Objectives	
+winPointsNormalizer	number	int	player	row.Projection	round-player=0
+wlp	number	float64	player	row.Rates	round-player=0
+bombStartTick	number	int	round	row.Bomb	
+defuser	string	uint64	round	row.Bomb	
+endDueToBombEvent	boolean	bool	round	row.Bomb	
+endingTick	number	int	round	row.Meta	
+initCTerroristCount	number	int	round	row.Meta	
+initTerroristCount	number	int	round	row.Meta	
+integrityCheck	boolean	bool	round	row.Meta	round=true
+knifeRound	boolean	bool	round	row.Meta	round=false
+planter	string	uint64	round	row.Bomb	
+players	array	[]*row.Player	round	payload.Round	
+roundEndReason	string	string	round	row.Meta	
+roundNum	number	int	round	row.Meta	
+serverImpactPoints	number	float64	round	row.Meta	round=0
+serverNormalizer	number	int	round	row.Meta	round=0
+startingTick	number	int	round	row.Meta	
+winTeamDmg	number	int	round	row.Bomb	
+winnerClanName	string	string	round	row.Meta	
+winnerENUM	number	int	round	row.Meta	

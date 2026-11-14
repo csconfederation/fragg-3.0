@@ -14,7 +14,7 @@ import (
 )
 
 // fields.tsv lists every JSON field of the payload per scope (match, team, player, round) with its
-// Go type, owning struct and constants. Stats CI checks it against the Prisma columns.
+// JSON type, Go type, owning struct and constants. Stats CI checks it against the Prisma columns.
 // Regenerate with `go test ./engine/payload -run TestFieldList -update`.
 const fieldsFile = "fields.tsv"
 
@@ -42,9 +42,39 @@ var constantScopes = map[string][]string{
 	"round":  {scopeRound},
 }
 
+// jsonType is the type of f's value in the payload: number, string, boolean or array, and null
+// for a pointer ("string|null"). A `,string` tag option makes a number a string.
+func jsonType(sf reflect.StructField) string {
+	t := sf.Type
+	null := t.Kind() == reflect.Pointer
+	if null {
+		t = t.Elem()
+	}
+	var s string
+	switch t.Kind() {
+	case reflect.Bool:
+		s = "boolean"
+	case reflect.String:
+		s = "string"
+	case reflect.Slice:
+		s = "array"
+	case reflect.Int, reflect.Int64, reflect.Uint64, reflect.Float64:
+		s = "number"
+		if _, opts, _ := strings.Cut(sf.Tag.Get("json"), ","); slices.Contains(strings.Split(opts, ","), "string") {
+			s = "string"
+		}
+	default:
+		panic(fmt.Sprintf("%s: no JSON type for %s", sf.Name, t))
+	}
+	if null {
+		s += "|null"
+	}
+	return s
+}
+
 func generate() string {
 	var b strings.Builder
-	b.WriteString("json_name\tgo_type\tscope\towner\tconstants\n")
+	b.WriteString("json_name\tjson_type\tgo_type\tscope\towner\tconstants\n")
 	types := scopeTypes()
 	for _, scope := range scopeOrder {
 		t := types[scope]
@@ -65,7 +95,7 @@ func generate() string {
 					cs = append(cs, fmt.Sprintf("%s=%v", cscope, v))
 				}
 			}
-			fmt.Fprintf(&b, "%s\t%s\t%s\t%s\t%s\n", f.name, sf.Type, scope, owner, strings.Join(cs, ";"))
+			fmt.Fprintf(&b, "%s\t%s\t%s\t%s\t%s\t%s\n", f.name, jsonType(sf), sf.Type, scope, owner, strings.Join(cs, ";"))
 		}
 	}
 	return b.String()
@@ -80,7 +110,7 @@ func listed(t *testing.T) map[string][]string {
 	out := map[string][]string{}
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n")[1:] {
 		c := strings.Split(line, "\t")
-		out[c[2]] = append(out[c[2]], c[0])
+		out[c[3]] = append(out[c[3]], c[0])
 	}
 	return out
 }

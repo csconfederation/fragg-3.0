@@ -31,7 +31,7 @@ go run ./engine/cmd/factdump DEMO.dem              # the facts as JSON lines, fo
 1. If the demo doesn't carry it yet, add it to a fact in `engine/fact` and read it in `engine/ingest`.
 2. If more than one family uses the concept, decide it once in `engine/round` and expose it on `Context`.
 3. Count it in its family's calculator in `engine/calc`, and fold it in `engine/fold`.
-4. Add the payload field to its family in `engine/row`, then regenerate `engine/payload/fields.tsv` (`go test ./engine/payload -run TestFieldList -update`), then add the Stats column (CSC-Stats).
+4. Add the payload field to its family in `engine/row`, then regenerate `engine/payload/fields.tsv` (`go test ./engine/payload -run TestFieldList -update`), then add the Stats column (CSC-Stats). Columns: `json_name`, `json_type` (number, string, boolean, array; `|null` if nullable), `go_type`, `scope`, `owner`, `constants`. Stats CI reads it.
 
 ## Tests
 

@@ -29,7 +29,7 @@ func main() {
 	defer f.Close()
 	p, res, err := payload.Run(context.Background(), f)
 	if res != nil {
-		status["outcome"] = res.Outcome.String()
+		status["outcome"], status["reason"] = res.Outcome.String(), res.Reason
 	}
 	if err != nil {
 		status["error"] = err.Error()

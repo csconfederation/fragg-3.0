@@ -2,6 +2,7 @@ package payload
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -156,7 +157,7 @@ func TestFieldList(t *testing.T) {
 	// The marshalled keys, not the reflected ones: encoding/json drops a name found twice at one
 	// depth, so a dropped field fails here.
 	names := listed(t)
-	for scope, n := range map[string]int{"match": 10, "team": 35, "player": 168, "round": 18} {
+	for scope, n := range map[string]int{"match": 13, "team": 35, "player": 168, "round": 18} {
 		if len(names[scope]) != n {
 			t.Errorf("%s has %d fields, want %d", scope, len(names[scope]), n)
 		}
@@ -209,5 +210,20 @@ func TestConstants(t *testing.T) {
 func TestEngineVersion(t *testing.T) {
 	if engineVersion == "" {
 		t.Error("engineVersion is empty")
+	}
+}
+
+// A rejected map's 422 body is {outcome, reason, detail} (D57), and the error still matches its sentinel.
+func TestRejectionBody(t *testing.T) {
+	err := error(&Rejection{Outcome: "Unfinished", Reason: "stopped", Detail: "demo stopped (clean) after round 3", cause: ErrUnfinished})
+	b, jerr := json.Marshal(err)
+	if jerr != nil {
+		t.Fatal(jerr)
+	}
+	if want := `{"outcome":"Unfinished","reason":"stopped","detail":"demo stopped (clean) after round 3"}`; string(b) != want {
+		t.Errorf("body %s", b)
+	}
+	if !errors.Is(err, ErrUnfinished) || err.Error() != "the demo stops before the match ends: demo stopped (clean) after round 3" {
+		t.Errorf("error %q", err)
 	}
 }

@@ -74,7 +74,10 @@ type Round struct {
 // Result is the lifecycle's output.
 type Result struct {
 	Outcome Outcome
-	// Detail says why the outcome isn't Ended (the score-only or unfinished reason).
+	// Reason is the outcome's cause (D57): clinch, game_end or tie for Ended; first_round,
+	// missing_round or score_sum for ScoreOnly; stopped for Unfinished; no_rounds for NoRounds.
+	Reason string
+	// Detail says why the outcome isn't Ended, in words.
 	Detail string
 	// Rounds are the committed rounds in order.
 	Rounds []*Round
@@ -713,26 +716,40 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	res.Rounds = m.rounds
 	switch {
 	case len(res.Rounds) == 0:
-		res.Outcome = NoRounds
+		res.Outcome, res.Reason = NoRounds, "no_rounds"
 	case !over:
-		res.Outcome, res.Detail = Unfinished, fmt.Sprintf("demo stopped (%s) after round %d", kind(t.Kind), res.Rounds[len(res.Rounds)-1].Num)
+		res.Outcome, res.Reason, res.Detail = Unfinished, "stopped", fmt.Sprintf("demo stopped (%s) after round %d", kind(t.Kind), res.Rounds[len(res.Rounds)-1].Num)
 	default:
-		res.Outcome, res.Detail = Ended, ""
-		if d := coverage(res.Rounds, res.Scores); d != "" {
-			res.Outcome, res.Detail = ScoreOnly, d
+		res.Outcome, res.Reason = Ended, m.endReason()
+		if reason, d := coverage(res.Rounds, res.Scores); reason != "" {
+			res.Outcome, res.Reason, res.Detail = ScoreOnly, reason, d
 		}
 	}
 	return res, nil
 }
 
-// coverage reports why the committed rounds don't cover the whole match, or "".
-func coverage(rounds []*Round, scores map[string]int) string {
+// endReason is how an ended map ended (rule 9): the clinch, else a level score (a tie), else the
+// game's own end.
+func (m *Match) endReason() string {
+	if m.winnerClan != "" {
+		return "clinch"
+	}
+	scores := slices.Collect(maps.Values(m.teams))
+	if len(scores) == 2 && scores[0] == scores[1] {
+		return "tie"
+	}
+	return "game_end"
+}
+
+// coverage reports the reason and the detail when the committed rounds don't cover the whole
+// match, or "" and "".
+func coverage(rounds []*Round, scores map[string]int) (string, string) {
 	if rounds[0].Num != 1 {
-		return fmt.Sprintf("first committed round is %d", rounds[0].Num)
+		return "first_round", fmt.Sprintf("first committed round is %d", rounds[0].Num)
 	}
 	for i := 1; i < len(rounds); i++ {
 		if rounds[i].Num != rounds[i-1].Num+1 {
-			return fmt.Sprintf("round %d is missing", rounds[i-1].Num+1)
+			return "missing_round", fmt.Sprintf("round %d is missing", rounds[i-1].Num+1)
 		}
 	}
 	sum := 0
@@ -740,9 +757,9 @@ func coverage(rounds []*Round, scores map[string]int) string {
 		sum += s
 	}
 	if sum != len(rounds) {
-		return fmt.Sprintf("scores sum to %d, but %d rounds committed", sum, len(rounds))
+		return "score_sum", fmt.Sprintf("scores sum to %d, but %d rounds committed", sum, len(rounds))
 	}
-	return ""
+	return "", ""
 }
 
 func kind(k fact.TerminalKind) string {

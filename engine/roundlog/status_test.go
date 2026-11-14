@@ -330,7 +330,7 @@ func statuses() []*Status {
 	add("restore-gap-score-only", "the replay commits round 3, then the counter jumps to 4: round 4 is never committed (D9)", s, s.terminal("Clean"),
 		Want{Outcome: "ScoreOnly", Detail: "round 4 is missing", Rounds: "1-3,5-13", Scores: "Alpha 13, Bravo 0"})
 
-	// The deciding round won by the bomb waits for the explosion's facts and commits at the first of
+	// The deciding round won by the bomb closes (D59) at the first of
 	// the official end, the win panel and the end of the stream (D15).
 	s = &sim{}
 	s.play(12)

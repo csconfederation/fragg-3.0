@@ -621,11 +621,11 @@ func (c *recorder) Commit(*Round, int) error {
 	return nil
 }
 func (c *recorder) Event(e Event) error {
+	if !e.Live {
+		return nil // a stats skips non-live facts
+	}
 	if e.Join != nil {
 		c.log = append(c.log, fmt.Sprintf("join %d", e.Join.Steam64))
-	}
-	if e.Dropped {
-		return nil
 	}
 	switch f := e.Fact.(type) {
 	case fact.Hurt:
@@ -640,15 +640,21 @@ func (c *recorder) Event(e Event) error {
 	return nil
 }
 
-// The bomb's damage and kill arrive after the deciding round's RoundEnd; the round commits after
-// them, at the win panel or, without one, at the demo's end. Other late facts, such as world kills
-// on the win panel or a late joiner, stay out (D15).
-func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
+// The deciding round, bomb-ended or not, closes at the win panel or, without one, at the end of
+// the stream (D59). Every fact before then counts, a late joiner included; a fact after the win
+// panel never does.
+func TestDecidingRoundClosesAtWinPanel(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
+		bomb     bool
 		winPanel bool
 		term     fact.TerminalKind
-	}{{"win panel", true, fact.Clean}, {"stream error, no win panel", false, fact.Decode}} {
+		want     string // the log's tail, a round's last facts then its commit
+	}{
+		{"bomb, win panel", true, true, fact.Clean, "win 13,hurt 404,kill 404,hurt 407,join 99,commit"},
+		{"bomb, stream error, no win panel", true, false, fact.Decode, "win 13,hurt 404,kill 404,hurt 407,join 99,commit"},
+		{"no bomb, win panel", false, true, fact.Clean, "win 13,hurt 404,kill 404,hurt 407,join 99,commit"},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newSim()
 			for i := 0; i < 12; i++ {
@@ -657,7 +663,9 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 			s.open()
 			s.end("Alpha", false)
 			end := s.facts[len(s.facts)-1].(fact.RoundEnd)
-			end.Reason = fact.ReasonTargetBombed
+			if tc.bomb {
+				end.Reason = fact.ReasonTargetBombed
+			}
 			s.facts[len(s.facts)-1] = end
 			bomb, world := fact.EqBomb, 407
 			late := fact.Snapshot{Tick: s.tick + 18}
@@ -665,9 +673,12 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 			s.add(fact.Hurt{Snapshot: late, Weapon: &bomb}, fact.Kill{Snapshot: late, Weapon: &bomb},
 				fact.Hurt{Snapshot: fact.Snapshot{Tick: s.tick + 100}, Weapon: &world},
 				fact.TeamChange{Tick: s.tick + 100, Player: joiner, NewSide: fact.SideT, NewTeam: end.WinnerTeam})
+			closeTick := s.tick + 500 // the stream's end
 			if tc.winPanel {
 				s.tick += 200
+				closeTick = s.tick
 				s.gameEnded()
+				s.add(fact.Hurt{Snapshot: fact.Snapshot{Tick: s.tick + 50}, Weapon: &world}) // after the panel
 			}
 			rec := &recorder{}
 			m := New(rec)
@@ -676,24 +687,40 @@ func TestDecidingRoundCommitsAfterLateFacts(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			// The world damage after the bomb's facts is dropped (D15).
-			wantTail := "win 13,hurt 404,kill 404"
-			if tc.winPanel {
-				wantTail += ",commit"
-			}
-			if got := strings.Join(rec.log[len(rec.log)-strings.Count(wantTail, ",")-1:], ","); got != wantTail {
-				t.Errorf("calls before Finish end %q; want %q (log %v)", got, wantTail, rec.log)
-			}
 			res, err := m.Finish(fact.Terminal{Kind: tc.term, Err: errors.New("stream"),
 				End: fact.Snapshot{Tick: s.tick + 500, RoundsPlayed: 13}})
 			want(t, res, err, Ended, 13)
-			if got := strings.Join(rec.log[len(rec.log)-4:], ","); got != "win 13,hurt 404,kill 404,commit" {
-				t.Errorf("last calls %v; want the win, the bomb's facts, then the commit", rec.log[len(rec.log)-4:])
+			n := strings.Count(tc.want, ",") + 1
+			if got := strings.Join(rec.log[len(rec.log)-n:], ","); got != tc.want {
+				t.Errorf("last calls %q; want %q", got, tc.want)
 			}
-			if r := res.Rounds[12]; r.EndTick != end.Tick {
-				t.Errorf("end tick %d; want the RoundEnd's %d", r.EndTick, end.Tick)
+			if r := res.Rounds[12]; r.EndTick != closeTick {
+				t.Errorf("end tick %d; want the closing event's %d", r.EndTick, closeTick)
 			}
 		})
+	}
+}
+
+// A win panel that arrives before the deciding RoundEnd closes the round at its RoundEnd.
+func TestDecidingRoundAfterWinPanel(t *testing.T) {
+	s := newSim()
+	for i := 0; i < 12; i++ {
+		s.play("Alpha")
+	}
+	s.open()
+	s.gameEnded()
+	s.end("Alpha", false)
+	world := 407
+	s.add(fact.Hurt{Snapshot: fact.Snapshot{Tick: s.tick + 50}, Weapon: &world})
+	rec := &recorder{}
+	m := New(rec)
+	for _, f := range s.facts {
+		if err := m.Fact(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := rec.log[len(rec.log)-2:]; got[0] != "win 13" || got[1] != "commit" {
+		t.Errorf("last calls %v; want the win, then the commit", got)
 	}
 }
 

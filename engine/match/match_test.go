@@ -839,3 +839,45 @@ func TestFootstepMarksRoundWithoutFreezeEnd(t *testing.T) {
 		t.Fatal("not in play after a Footstep")
 	}
 }
+
+// Each outcome carries its D57 reason.
+func TestReasons(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		build  func() *sim
+		term   fact.TerminalKind
+		reason string
+	}{
+		{"clinch", func() *sim { s := newSim(); regulation(s, 0); return s }, fact.Clean, "clinch"},
+		{"tie", func() *sim { s := newSim(); tied(s); s.gameEnded(); return s }, fact.Clean, "tie"},
+		{"game end", func() *sim {
+			s := newSim()
+			for i := 0; i < 6; i++ {
+				s.play("Alpha")
+			}
+			s.gameEnded()
+			return s
+		}, fact.Clean, "game_end"},
+		{"stopped", func() *sim { s := newSim(); s.play("Alpha"); return s }, fact.Truncated, "stopped"},
+		{"no rounds", newSim, fact.Truncated, "no_rounds"},
+		{"first round", func() *sim {
+			s := newSim()
+			s.played, s.score["Alpha"], s.money = 4, 4, 800
+			for i := 0; i < 8; i++ {
+				s.play("Alpha")
+			}
+			s.open()
+			s.end("Alpha", false)
+			s.gameEnded()
+			return s
+		}, fact.Clean, "first_round"},
+		{"score sum", func() *sim { s := newSim(); s.score["Bravo"] = 1; regulation(s, 0); return s }, fact.Clean, "score_sum"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := tc.build().run(t, fact.Terminal{Kind: tc.term})
+			if err != nil || res.Reason != tc.reason {
+				t.Errorf("reason %q, error %v; want %q", res.Reason, err, tc.reason)
+			}
+		})
+	}
+}

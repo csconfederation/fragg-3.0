@@ -62,11 +62,13 @@ row. Status: **done** (in the parser), **planned** (decided, not yet built), **h
 | D54 | Drop `distanceToTeammates` | done | working sum of the old lurk rule, never a distance |
 | D55 | D44 leaves eco `timeAlive` unchanged; D47's decimal `atd` is accepted | done | the rulings covered survival and the fraction only |
 | D56 | The map ends at the clinch or the game's own end, whichever comes first; a surrender or admin end is Ended with a reason; a disagreement is logged (not logged yet) | done | the "ended, not by our rule" 500 trips Core's Stats breaker |
-| D57 | The payload carries `outcome` and `reason`; a 422 body is JSON `{outcome, reason, detail}` | planned | Core sees only a status code and text |
+| D57 | The payload carries `outcome` and `reason`; a 422 body is JSON `{outcome, reason, detail}` | done | Core sees only a status code and text |
 | D58 | The knife flag goes on the round being opened; a knife while live is a restart that commits nothing | done | the flag lands on the previous round today |
 | D59 | One commit rule for every round, the deciding round included; the final round closes at the win panel | done | removes the deciding-round special case and the bomb hold |
 | D60 | `Partial` is `ScoreOnly`; `lifecycle.md` defines map, match and series against Core's terms | done | Core's `STATS_PARTIAL` is a different thing |
 | D61 | A restore into a new recording stays ScoreOnly; no stitching of recordings | process | Core sends only the latest recording |
 | D62 | Go-live is the first open where both first members have 800 money; the `Warmup` flag is not read | done | parity; add a `!Warmup` gate only if a count shows a difference |
-| D63 | A tie is Ended with reason `tie`, never a rejection | done (the reason comes with D57) | the parser can't know the match type; Combine ties are legal |
+| D63 | A tie is Ended with reason `tie`, never a rejection | done | the parser can't know the match type; Combine ties are legal |
 | D64 | The match-model and parser cutovers share one window after 2026-12-01 | process | one rehearsal, one production change |
+| D65 | Manual scores are authoritative: Core gets a "score entered manually" flag on `MatchStats`, set by the forfeit tool and admin edits; every score writer skips a flagged map's score, winner and map name; a reparse takes them from Core's result | planned | a demo can disagree with an official adjusted result |
+| D66 | Played stats for manual maps only where the official result is an adjusted score; forfeit and void maps keep none | planned | forfeits and voids have no real play |

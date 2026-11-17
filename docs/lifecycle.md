@@ -3,8 +3,6 @@
 How `engine/match` turns facts into a map's status: when it goes live, which rounds commit, how it
 ends. Decision numbers (`D12`) are in [decisions.md](decisions.md).
 
-Rules marked **planned** are decided but not yet in the parser; see [Not yet built](#not-yet-built).
-
 ## Terms (D60)
 
 | Term | Parser | Stats | Core |
@@ -33,7 +31,7 @@ Rules marked **planned** are decided but not yet in the parser; see [Not yet bui
 
 ## Outcomes (D8, D9, D56, D57)
 
-| # | Outcome | When | `reason` (D57, planned) | Worker | Stats | Core |
+| # | Outcome | When | `reason` (D57) | Worker | Stats | Core |
 |---|---|---|---|---|---|---|
 | 1 | error | an invariant broke | none | 500 | 502 | transient: retried, counts toward the global breaker |
 | 2 | invalid file | not a CS2 demo | none | 400 | 422 | rejected, as row 4 |
@@ -43,10 +41,8 @@ Rules marked **planned** are decided but not yet in the parser; see [Not yet bui
 | 6 | ScoreOnly | ended, but the rounds don't cover 1..n or the scores don't sum to them | `first_round`, `missing_round`, `score_sum` | 200, score-only | `Match` + zeroed `TeamStats` | accepted, COMPLETED |
 | 7 | Ended | ended, and the rounds cover the map | `clinch`, `game_end`, `tie` | 200, full | all rows | accepted; regulation scores, names and map synced nightly |
 
-## Not yet built
+## Payload and 422 body (D57)
 
-Today's parser differs from the rules above in these places; each PR that closes one updates this list.
+A payload carries `outcome` (`Ended` or `ScoreOnly`), `reason` and `detail`. A rejected map (rows 4 and 5) has no payload: `payload.Run` returns a `*payload.Rejection`, which marshals to the 422 body `{"outcome", "reason", "detail"}`. Core reads them later.
 
-- **D57:** the payload has no `outcome` or `reason`; a 422 body is a string.
-
-The status fixtures in `engine/roundlog/testdata/status` pin today's behavior for each.
+Not built: the parser doesn't log a disagreement between the clinch and the game's end.

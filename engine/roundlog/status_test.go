@@ -362,23 +362,39 @@ func statuses() []*Status {
 	s.end(false)
 	add("game-end-before-final-round-end", "game phase Ended and the win panel, then the deciding round's RoundEnd: it still scores and commits", s, s.terminal("Clean"), ended)
 
-	// A game end that isn't the clinch or a tie (D56): a 500 today.
+	// A game end that isn't the clinch (D56) ends the map: the round in play closes, or is rejected.
 	s = &sim{}
 	s.play(7)
 	s.open()
 	s.reason = 18 // CTSurrender
 	s.end(false)
 	s.gameEnd()
-	add("surrender-game-end", "CT surrenders in round 8 of an undecided match: the game ends, not by the clinch, and the round never commits", s, s.terminal("Clean"),
-		Want{Error: fmt.Sprintf("match invariant at tick %d: the game ended, but not by our match-end rule", s.tick+500)})
+	add("surrender-game-end", "CT surrenders in round 8 of an undecided match: the game ends, and round 8 closes at the win panel", s, s.terminal("Clean"),
+		Want{Outcome: "Ended", Rounds: "1-8", Scores: "Alpha 8, Bravo 0"})
 
 	s = &sim{}
 	s.play(7)
 	s.add(fact.GamePhase{Tick: s.tick, Phase: fact.GamePhaseEnded})
-	add("admin-end-game-phase", "game phase Ended between rounds of an undecided match, no win panel: the same error", s, s.terminal("Clean"),
-		Want{Error: fmt.Sprintf("match invariant at tick %d: the game ended, but not by our match-end rule", s.tick+500)})
+	add("admin-end-game-phase", "game phase Ended between rounds of an undecided match, no win panel: Ended", s, s.terminal("Clean"),
+		Want{Outcome: "Ended", Rounds: "1-7", Scores: "Alpha 7, Bravo 0"})
 
-	// Ties: the game ends at a level score; the last round has no official end. A Combine can end
+	s = &sim{}
+	s.play(7)
+	s.open()
+	s.add(fact.GamePhase{Tick: s.tick, Phase: fact.GamePhaseEnded})
+	add("game-end-open-round-rejected", "game phase Ended in an open round that never gets its RoundEnd: the round is rejected, the map is Ended", s, s.terminal("Truncated"),
+		Want{Outcome: "Ended", Rounds: "1-7", Scores: "Alpha 7, Bravo 0"})
+
+	s = &sim{}
+	s.play(7)
+	s.open()
+	s.add(fact.GamePhase{Tick: s.tick, Phase: fact.GamePhaseEnded})
+	s.restore(0, 0, 0)
+	s.play(2)
+	add("game-end-open-round-replaced", "game phase Ended in an open round, then a new round opens: the open round is rejected, the map stays Ended and the new rounds are ignored", s, s.terminal("Clean"),
+		Want{Outcome: "Ended", Rounds: "1-7", Scores: "Alpha 7, Bravo 0"})
+
+	// Ties (D63): the game ends at a level score, which ends the map; the last round has no official end. A Combine can end
 	// 15-15 after one overtime (D63).
 	tied := func(s *sim) Terminal {
 		t := s.terminal("Clean")
@@ -408,8 +424,8 @@ func statuses() []*Status {
 	s.gameEnd()
 	term := tied(s)
 	term.Kind, term.Err = "Decode", "decode failed after the game end"
-	add("tie-game-end-then-decode-error", "the tie facts, then a decode failure: the fallback needs a clean stream, so it's an error today", s, term,
-		Want{Error: "decode failed after the game end"})
+	add("tie-game-end-then-decode-error", "the tie facts, then a decode failure: the game had ended, so the map is Ended (D56)", s, term,
+		Want{Outcome: "Ended", Rounds: "1-30", Scores: "Alpha 15, Bravo 15"})
 
 	s = &sim{}
 	s.play(3)

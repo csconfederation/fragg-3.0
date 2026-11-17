@@ -143,14 +143,19 @@ func (r Roster) Members(s fact.Snapshot, side fact.Side) []fact.Player {
 //	open, not 800/800 money                Restart                      Restart   the round is a knife round
 //	RoundEnd, RoundEndOfficial             Restart                      Restart   nothing scores or commits
 //	RoundEnd, winner and number agree      Between, Open, Won           Won       score
-//	  ... and it clinches                  Between, Open, Won           Deciding  the facts keep counting
+//	  ... and it clinches, or the game     Between, Open, Won           Deciding  the facts keep counting
+//	      has ended (the Open "ending")
 //	RoundEndOfficial, number agrees        Won, Between                 Between   commit
 //	RoundEndOfficial, WinPanelMatch,       Deciding                     Ended     commit
 //	  open, RoundEnd or stream end
-//	stream end after a game end, level     Won                          Ended     commit if the number agrees
+//	GamePhase Ended                        Won                          Deciding  nothing closes
+//	GamePhase Ended, WinPanelMatch         Between, Restart             Ended
+//	WinPanelMatch                          Won                          Ended     commit
+//	GamePhase Ended, WinPanelMatch         Open                         Open      "ending": the round plays on to its RoundEnd
+//	stream end, game ended                 Open, Restart                Ended     the open round is rejected
 //
-// The game's end (GamePhase, WinPanelMatch) is recorded in gameEnded and changes no state until D56. A fact that fails an invariant keeps its
-// error in err, after which no fact is applied.
+// The game's own end (rule 9) ends the map like the clinch. A fact that fails an invariant keeps
+// its error in err, after which no fact is applied.
 type state uint8
 
 const (
@@ -158,9 +163,9 @@ const (
 	between               // live, no open round
 	open                  // live, a round is open
 	won                   // the open round has its RoundEnd and waits for its closing event
-	deciding              // won, and decided: its facts keep arriving until its closing event (rule 4)
+	deciding              // won, and the map's last round (a clinch or the game's end): its facts keep arriving until its closing event (rule 4)
 	restart               // a knife ran while live: rounds open as knife rounds until an 800/800 open
-	ended                 // terminal: the clinch, or the tie fallback
+	ended                 // terminal: the clinch or the game's end
 )
 
 // Match is a fact.Sink. Feed it every fact, then call Finish once.
@@ -359,10 +364,22 @@ func (m *Match) Fact(f fact.Fact) error {
 	case fact.GamePhase:
 		if f.Phase == fact.GamePhaseEnded {
 			m.gameEnded = true
+			// The phase can arrive before the final RoundEnd, so it closes nothing.
+			switch m.state {
+			case won:
+				m.state = deciding
+			case between, restart:
+				m.state = ended
+			}
 		}
 	case fact.WinPanelMatch:
 		m.gameEnded, m.panel = true, true
-		return m.flush(f.Tick)
+		switch m.state {
+		case won, deciding:
+			return m.final(f.Tick, m.potential.winNum, true)
+		case between, restart:
+			m.state = ended
+		}
 	}
 	return nil
 }
@@ -372,6 +389,9 @@ func (m *Match) Fact(f fact.Fact) error {
 func (m *Match) open(s fact.Snapshot, freezeEnd bool) error {
 	if err := m.flush(s.Tick); err != nil {
 		return err
+	}
+	if m.gameEnded && (m.state == open || m.state == restart) {
+		m.state = ended // the round in play at the game's end never got its RoundEnd: it is rejected
 	}
 	pistol, knife := false, false
 	t, ct := m.members(s, fact.SideT), m.members(s, fact.SideCT)
@@ -532,8 +552,10 @@ func (m *Match) roundEnd(f fact.RoundEnd) error {
 	if !okW || !okL {
 		return m.fail(f.Tick, "round %d: team %q or %q not in the match", f.RoundsPlayed, winner, loser)
 	}
-	if matchIsDecided(fact.MR+1, w, l) {
-		m.winnerClan = winner
+	if decided := matchIsDecided(fact.MR+1, w, l); decided || m.gameEnded {
+		if decided {
+			m.winnerClan = winner
+		}
 		// The round's facts (the bomb's damage and kills among them) keep arriving until its
 		// closing event (rule 4): the official end, the win panel, or the stream's end.
 		m.state = deciding
@@ -675,12 +697,9 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	if err := m.flush(t.End.Tick); err != nil {
 		return nil, err
 	}
-	// Tie fallback: a level score at the game's own end commits the last round and ends the match.
-	if m.live() && !m.potential.committed && m.potential.Num == m.potential.winNum &&
-		t.Kind != fact.Decode && t.End.CT.Score == t.End.T.Score && m.gameEnded {
-		if err := m.final(t.End.Tick, t.End.RoundsPlayed, true); err != nil {
-			return nil, err
-		}
+	// The stream ended after the game's end: the open round, if any, is rejected, and the map is over.
+	if m.gameEnded && m.live() {
+		m.state = ended
 	}
 	over := m.state == ended
 	if !over && (t.Kind == fact.Decode || t.Kind == fact.Failed || t.Kind == fact.Stopped) {
@@ -695,8 +714,6 @@ func (m *Match) Finish(t fact.Terminal) (*Result, error) {
 	switch {
 	case len(res.Rounds) == 0:
 		res.Outcome = NoRounds
-	case !over && m.gameEnded:
-		return nil, &InvariantError{Tick: t.End.Tick, Reason: "the game ended, but not by our match-end rule"}
 	case !over:
 		res.Outcome, res.Detail = Unfinished, fmt.Sprintf("demo stopped (%s) after round %d", kind(t.Kind), res.Rounds[len(res.Rounds)-1].Num)
 	default:

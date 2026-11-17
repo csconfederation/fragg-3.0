@@ -26,8 +26,8 @@ Rules marked **planned** are decided but not yet in the parser; see [Not yet bui
 | 6 | **Score.** A live `ScoreUpdated` sets both teams' scores. A round with none gives its winner +1. Knife rounds don't score |
 | 7 | **Team names.** `"[tag] Name"` becomes `Name`. A 31-character clan matches the known team whose name contains it. With no clan names, `StartedT` / `StartedCT`, swapped by half. Core matches these names exactly |
 | 8 | **Clinch (MR12).** 13 rounds with the loser under 12; in overtime, the first to win 4 of a 6-round block. `fact.MR = 12` |
-| 9 | **End (D56, planned).** The map ends at the clinch (rule 8) or at the game's own end (`GamePhase` Ended or `WinPanelMatch`), whichever comes first. A surrender or admin end is a game end. The game's end can arrive before the final round's `RoundEnd`: that round still ends, scores and closes (rule 4) before the map is Ended. Reason: `clinch`, else `tie` at a level score, else `game_end`. If the two signals disagree, the parser logs it and keeps the first end. Rounds after the end are ignored |
-| 10 | **Ties (D63, planned).** A tie is a game end at a level score. It is Ended with reason `tie`. The parser can't tell the match type: a Combine can tie 15-15 after one overtime; a regulation tie means a broken server config |
+| 9 | **End (D56).** The map ends at the clinch (rule 8) or at the game's own end (`GamePhase` Ended or `WinPanelMatch`), whichever comes first. A surrender or admin end is a game end. The game's end can arrive before the final round's `RoundEnd`: that round still ends, scores and closes (rule 4) before the map is Ended. Reason: `clinch`, else `tie` at a level score, else `game_end`. A win panel that arrives before the final round's `RoundEnd` waits for it, so the round isn't lost. The stream ending in an open round after the game's end rejects that round. Rounds after the end are ignored |
+| 10 | **Ties (D63).** A tie is a game end at a level score. It is Ended with reason `tie`. The parser can't tell the match type: a Combine can tie 15-15 after one overtime; a regulation tie means a broken server config |
 | 11 | **Members.** At open: the listed players on each side, minus late connects, with a reconnected player's last record. An alive player who joins mid-round becomes a member (D33) |
 | 12 | **Outcome.** The table below; the first matching row wins |
 
@@ -47,8 +47,6 @@ Rules marked **planned** are decided but not yet in the parser; see [Not yet bui
 
 Today's parser differs from the rules above in these places; each PR that closes one updates this list.
 
-- **D56:** a game end without a clinch is an error ("the game ended, but not by our match-end rule", a 500), except the tie fallback, which commits the last round at a level score. A decode failure after a game end with no clinch is a 500.
-- **D59:** the round in play when the game ends without a clinch (a tie, a surrender) isn't closed at the win panel yet: a tie's last round commits at the stream's end, with the facts after the panel (D56, D63).
 - **D57:** the payload has no `outcome` or `reason`; a 422 body is a string.
 
 The status fixtures in `engine/roundlog/testdata/status` pin today's behavior for each.

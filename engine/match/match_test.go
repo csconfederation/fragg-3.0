@@ -525,17 +525,52 @@ func TestInDemoRestoreReplaysRounds(t *testing.T) {
 	}
 }
 
-func TestGameEndedWithoutOurEndIsInvariant(t *testing.T) {
+// The game's own end ends the map like the clinch does (D56), whatever state the round is in.
+func TestGameEndWithoutClinchEnds(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		facts  func(s *sim)
+		term   fact.TerminalKind
+		rounds int
+	}{
+		{"surrender after the round's end", func(s *sim) {
+			s.open()
+			s.end("Alpha", false)
+			s.gameEnded()
+		}, fact.Clean, 7},
+		{"phase between rounds", func(s *sim) {
+			s.add(fact.GamePhase{Tick: s.tick, Phase: fact.GamePhaseEnded})
+		}, fact.Clean, 6},
+		{"phase then the stream stops in an open round", func(s *sim) {
+			s.open()
+			s.add(fact.GamePhase{Tick: s.tick, Phase: fact.GamePhaseEnded})
+		}, fact.Truncated, 6},
+		{"win panel before the round's end", func(s *sim) {
+			s.open()
+			s.gameEnded()
+			s.end("Alpha", false)
+		}, fact.Clean, 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSim()
+			for i := 0; i < 6; i++ {
+				s.play("Alpha")
+			}
+			tc.facts(s)
+			res, err := s.run(t, fact.Terminal{Kind: tc.term})
+			want(t, res, err, Ended, tc.rounds)
+		})
+	}
+}
+
+// A decode failure after the game's end, with no clinch, is still an end (D56).
+func TestDecodeAfterGameEnd(t *testing.T) {
 	s := newSim()
-	for i := 0; i < 6; i++ {
-		s.play("Alpha")
-	}
-	s.gameEnded() // e.g. a surrender
-	_, err := s.run(t, fact.Terminal{Kind: fact.Clean})
-	var inv *InvariantError
-	if !errors.As(err, &inv) {
-		t.Errorf("error %v", err)
-	}
+	tied(s)
+	s.gameEnded()
+	res, err := s.run(t, fact.Terminal{Kind: fact.Decode, Err: errors.New("decode"),
+		End: fact.Snapshot{RoundsPlayed: 30}})
+	want(t, res, err, Ended, 30)
 }
 
 func TestEarlyOpen(t *testing.T) {

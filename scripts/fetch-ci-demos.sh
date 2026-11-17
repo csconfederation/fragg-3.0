@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Download the CI demo set listed in export/testdata/ci/demos.json from the public bucket into
+# Download the CI demo set listed in testdata/ci/demos.json from the public bucket into
 # DIR as <demSha256>.dem, verifying both hashes. Demos already in DIR are kept.
 #
 #   scripts/fetch-ci-demos.sh DIR
-#   FRAGG_CI_DEMOS=DIR go test ./export -run TestCIDemos
+#   FRAGG_CI_DEMOS=DIR go test ./engine/...
 set -euo pipefail
 
 dir=${1:?usage: fetch-ci-demos.sh DIR}
-manifest="$(dirname "$0")/../export/testdata/ci/demos.json"
+manifest="$(dirname "$0")/../testdata/ci/demos.json"
 bucket=$(jq -r .bucket "$manifest")
 mkdir -p "$dir"
 tmp=$(mktemp -d)

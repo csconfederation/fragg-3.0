@@ -8,11 +8,7 @@
 // various performance metrics into a final player rating.
 package rating
 
-import (
-	"math"
-
-	"github.com/csconfederation/fragg-3.0/model"
-)
+import "math"
 
 // exponentialAdjustment calculates an exponential adjustment capped at ±maxAdj.
 // diff is the difference from baseline, positive means above baseline.
@@ -42,46 +38,14 @@ func computeContribution(value, baseline, aboveMultiplier, belowMultiplier float
 	return (value - baseline) * belowMultiplier
 }
 
-// ComputeFinalRating calculates the overall eco-rating for a player.
-// Pure probability-based rating (HLTV 3.0 style):
-// - ProbabilitySwing: Core metric measuring win probability impact of all actions
-// - ADR: Rewards chip damage that didn't result in kills
-// - KAST: Rewards round involvement (kill/assist/survive/trade)
-//
-// Kills/deaths are captured entirely through ProbabilitySwing to avoid double-counting.
-// Returns a value typically between 0.20 and 3.00.
-func ComputeFinalRating(p *model.PlayerStats, kdprModifier bool) float64 {
-	rounds := float64(p.RoundsPlayed)
-	if rounds == 0 {
-		return 0
-	}
-
-	adr := float64(p.Damage) / rounds
-	kast := p.KAST
-	probSwingPerRound := p.ProbabilitySwingPerRound
-
-	var kprDprAdjustment float64
-	if kdprModifier {
-		kprDprAdjustment = computeKPRDPRAdjustment(p.KPR, p.DPR)
-	}
-
-	adrContrib := computeContribution(adr, BaselineADR, ADRContribAbove, ADRContribBelow)
-	kastContrib := computeContribution(kast, BaselineKAST, KASTContribAbove, KASTContribBelow)
-	probSwingContrib := probSwingPerRound * ProbSwingContribMultiplier
-
-	rating := RatingBaseline + adrContrib + kastContrib + probSwingContrib + kprDprAdjustment
-	return math.Max(MinRating, math.Min(MaxRating, rating))
-}
-
 // ComputeSideRating calculates a rating for a specific side (T or CT).
-// Pure probability-based rating matching ComputeFinalRating:
+// Pure probability-based rating:
 // - ProbabilitySwing: Core metric measuring win probability impact
 // - ADR: Rewards chip damage that didn't result in kills
 // - KAST: Rewards round involvement
 //
 // Kills/deaths are captured entirely through swing to avoid double-counting.
-func ComputeSideRating(rounds int, kills int, deaths int, damage int, ecoKillValue float64,
-	probabilitySwing float64, kast float64, multiKills [6]int, clutchRounds int, clutchWins int, kdprModifier bool) float64 {
+func ComputeSideRating(rounds, kills, deaths, damage int, probabilitySwing, kast float64, kdprModifier bool) float64 {
 
 	roundsF := float64(rounds)
 	if roundsF == 0 {

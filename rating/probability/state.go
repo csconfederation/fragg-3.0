@@ -3,7 +3,7 @@ package probability
 import (
 	"fmt"
 
-	"github.com/markus-wa/demoinfocs-golang/v5/pkg/demoinfocs/common"
+	"github.com/csconfederation/fragg-3.0/engine/fact"
 )
 
 // EconomyCategory represents equipment value tiers for probability calculations.
@@ -92,12 +92,12 @@ func (s *RoundState) Clone() *RoundState {
 }
 
 // RecordDeath updates the state when a player dies.
-func (s *RoundState) RecordDeath(side common.Team) {
-	if side == common.TeamTerrorists {
+func (s *RoundState) RecordDeath(side fact.Side) {
+	if side == fact.SideT {
 		if s.TAlive > 0 {
 			s.TAlive--
 		}
-	} else if side == common.TeamCounterTerrorists {
+	} else if side == fact.SideCT {
 		if s.CTAlive > 0 {
 			s.CTAlive--
 		}
@@ -120,18 +120,6 @@ func (s *RoundState) SetTimeRemaining(seconds float64) {
 		seconds = 0
 	}
 	s.TimeRemaining = seconds
-}
-
-// StateKey returns a unique key for this state for table lookups.
-func (s *RoundState) StateKey() string {
-	bombStatus := "none"
-	if s.BombPlanted {
-		bombStatus = "planted"
-	}
-	if s.BombDefused {
-		bombStatus = "defused"
-	}
-	return stateKeyFromComponents(s.TAlive, s.CTAlive, bombStatus)
 }
 
 // stateKeyFromComponents builds a state key from individual components.

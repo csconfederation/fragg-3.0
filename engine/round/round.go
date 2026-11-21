@@ -523,7 +523,7 @@ func (d *Deriver) kill(f fact.Kill, roster match.Roster, c *Context) error {
 	}
 	if c.Enemy {
 		d.s.Opening = false
-		d.trade(f, c)
+		d.trade(f, c) // D67: only an enemy kill trades
 	}
 	if c.Victim && f.Assister != nil && d.isMember(f.Assister.Steam64) {
 		assist, err := Enemies(f.Assister, f.Victim)

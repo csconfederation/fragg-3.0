@@ -573,7 +573,7 @@ DuelSwing = EcoKillValue - EcoDeathValue   // legacy-style eco point totals
 
 ## Probability tables (`rating/probability/tables_data.go`)
 
-Measured on 3,131 CSC S19–S20 league (BO1/BO3, playoffs) and Combine maps: 68,872 rounds and 483,374
+Measured on 6,388 CSC S18–S21 league (BO1/BO3, playoffs) and Combine maps: 140,335 rounds and 986,908
 kills, with `engine/cmd/probtables` (Core-planning#305). Each cell's sample (wins / total) is the
 comment beside it in the source. `EnforceMonotonicity` runs after the base table loads.
 
@@ -583,11 +583,11 @@ T-side win probability by alive counts. Rows = T alive, columns = CT alive.
 
 | T \ CT | 5 | 4 | 3 | 2 | 1 | 0 |
 |--------|------|------|------|------|------|------|
-| **5** | 0.489 | 0.708 | 0.891 | 0.978 | 0.999 | – |
-| **4** | 0.298 | 0.511 | 0.751 | 0.929 | 0.993 | – |
-| **3** | 0.130 | 0.280 | 0.515 | 0.785 | 0.965 | – |
-| **2** | 0.028 | 0.086 | 0.224 | 0.483 | 0.813 | – |
-| **1** | 0.002 | 0.008 | 0.037 | 0.130 | 0.401 | – |
+| **5** | 0.489 | 0.707 | 0.887 | 0.978 | 0.999 | – |
+| **4** | 0.298 | 0.510 | 0.748 | 0.927 | 0.994 | – |
+| **3** | 0.129 | 0.281 | 0.513 | 0.782 | 0.964 | – |
+| **2** | 0.028 | 0.090 | 0.228 | 0.487 | 0.816 | – |
+| **1** | 0.002 | 0.009 | 0.038 | 0.135 | 0.416 | – |
 | **0** | – | – | – | – | – | – |
 
 Notes:
@@ -599,12 +599,12 @@ Notes:
 
 | T \ CT | 5 | 4 | 3 | 2 | 1 | 0 |
 |--------|------|------|------|------|------|------|
-| **5** | 0.785 | 0.856 | 0.946 | 0.994 | 0.998 | – |
-| **4** | 0.512 | 0.663 | 0.856 | 0.971 | 0.998 | – |
-| **3** | 0.237 | 0.415 | 0.657 | 0.886 | 0.989 | – |
-| **2** | 0.071 | 0.146 | 0.341 | 0.645 | 0.915 | – |
-| **1** | 0.003 | 0.027 | 0.087 | 0.274 | 0.627 | – |
-| **0** | 0.000 | 0.005 | 0.007 | 0.040 | 0.220 | – |
+| **5** | 0.770 | 0.859 | 0.947 | 0.994 | 0.999 | – |
+| **4** | 0.511 | 0.666 | 0.852 | 0.969 | 0.998 | – |
+| **3** | 0.236 | 0.407 | 0.651 | 0.881 | 0.988 | – |
+| **2** | 0.065 | 0.147 | 0.338 | 0.644 | 0.916 | – |
+| **1** | 0.002 | 0.027 | 0.084 | 0.272 | 0.631 | – |
+| **0** | 0.000 | 0.004 | 0.009 | 0.043 | 0.243 | – |
 
 Notes:
 
@@ -618,30 +618,33 @@ matchups are fixed at 0.500.
 
 | Attacker ↓ / Defender → | Starter pistol | Upgraded pistol | SMG | Rifle | AWP |
 |-------------------------|---------------:|----------------:|----:|------:|----:|
-| **Starter pistol** | 0.500 | 0.523 | 0.265 | 0.242 | 0.258 |
-| **Upgraded pistol** | 0.477 | 0.500 | 0.366 | 0.354 | 0.345 |
-| **SMG** | 0.735 | 0.634 | 0.500 | 0.427 | 0.399 |
-| **Rifle** | 0.758 | 0.646 | 0.573 | 0.500 | 0.462 |
-| **AWP** | 0.742 | 0.655 | 0.601 | 0.538 | 0.500 |
+| **Starter pistol** | 0.500 | 0.519 | 0.265 | 0.245 | 0.262 |
+| **Upgraded pistol** | 0.481 | 0.500 | 0.365 | 0.358 | 0.341 |
+| **SMG** | 0.735 | 0.635 | 0.500 | 0.431 | 0.398 |
+| **Rifle** | 0.755 | 0.642 | 0.569 | 0.500 | 0.463 |
+| **AWP** | 0.738 | 0.659 | 0.602 | 0.537 | 0.500 |
 
 These values drive `GetDuelWinRate()` and therefore killer/victim **economy weights** on each kill (weights in the zero-sum allocator, not pool multipliers).
 
 ### Map T-side win rates
 
-Round-level T win rate per map. Used as `map_factor = value / map_baseline`; `MapBaseline` = 0.489 (33703 / 68872, all maps).
+Round-level T win rate per map. Used as `map_factor = value / map_baseline`; `MapBaseline` = 0.489 (68571 / 140335, all maps).
 
 | Map | T win rate | Sample (T wins / total) | Map factor (÷ 0.489) |
 |-----|------------|-------------------------|---------------------|
-| de_ancient | 0.489 | 5466 / 11179 | 1.000 |
-| de_anubis | 0.526 | 4776 / 9086 | 1.076 |
-| de_dust2 | 0.509 | 4895 / 9626 | 1.041 |
-| de_inferno | 0.505 | 4838 / 9576 | 1.033 |
-| de_mirage | 0.465 | 5268 / 11324 | 0.951 |
-| de_nuke | 0.463 | 4451 / 9613 | 0.947 |
-| de_overpass | 0.473 | 3597 / 7597 | 0.967 |
-| de_train | 0.473 | 412 / 871 | 0.967 |
+| de_ancient | 0.489 | 11568 / 23633 | 1.000 |
+| de_anubis | 0.515 | 7871 / 15287 | 1.053 |
+| de_cache | 0.489 | 2269 / 4560 | 1.000 |
+| de_dust2 | 0.508 | 10020 / 19712 | 1.039 |
+| de_inferno | 0.500 | 9588 / 19170 | 1.022 |
+| de_mirage | 0.472 | 10828 / 22946 | 0.965 |
+| de_nuke | 0.467 | 9024 / 19317 | 0.955 |
+| de_overpass | 0.476 | 5637 / 11833 | 0.973 |
+| de_train | 0.456 | 1766 / 3877 | 0.933 |
 
 Maps not in this table default to `MapBaseline` (factor **1.00**).
+
+**de_cache** has few rounds next to the other maps. It is measured like the other maps, then pulled toward 1.00 (user, 2026-11-21): `f = 1 + (raw − 1) · n / (n + N_med)`, where `raw` is its measured factor, `n` its rounds and `N_med` the median rounds of the other maps; `|f − 1|` is capped at `0.5 · |raw − 1|`, and `f` is 1.00 when raw's 95% CI includes 1.00. Current: raw 1.018 (95% CI 0.988–1.047), n 4,560, N_med 19,244, f = 1.000.
 
 ---
 

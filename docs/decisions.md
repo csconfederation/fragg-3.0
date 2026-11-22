@@ -72,3 +72,4 @@ row. Status: **done** (in the parser), **planned** (decided, not yet built), **h
 | D64 | The match-model and parser cutovers share one window after 2026-12-01 | process | one rehearsal, one production change |
 | D65 | Manual scores are authoritative: Core gets a "score entered manually" flag on `MatchStats`, set by the forfeit tool and admin edits; every score writer skips a flagged map's score, winner and map name; a reparse takes them from Core's result | planned | a demo can disagree with an official adjusted result |
 | D66 | Played stats for manual maps only where the official result is an adjusted score; forfeit and void maps keep none | planned | forfeits and voids have no real play |
+| D67 | A trade needs an enemy kill; v5 also credited `traded` when the killer died to a team kill, the bomb or the world | done | an enemy must avenge the death (user, 2026-11-21, ehwhattaugonnado/Core-planning#730) |

@@ -1,7 +1,7 @@
 package probability
 
-// DefaultTables returns probability tables measured on CSC demos: 3,131 S19-S20 league (BO1/BO3,
-// playoffs) and Combine maps, 68,872 rounds and 483,374 kills (engine/cmd/probtables;
+// DefaultTables returns probability tables measured on CSC demos: 6,389 S18-S21 league (BO1/BO3,
+// playoffs) and Combine maps, 140,364 rounds and 987,108 kills (engine/cmd/probtables;
 // Core-planning#305).
 func DefaultTables() *ProbabilityTables {
 	tables := NewProbabilityTables()
@@ -11,73 +11,73 @@ func DefaultTables() *ProbabilityTables {
 	// round (a side eliminated, except Ts dead with the bomb planted) never reads the table.
 
 	// No bomb planted
-	tables.BaseWinProb["5v5_none"] = 0.489 // 33562 / 68597
-	tables.BaseWinProb["5v4_none"] = 0.708 // 22192 / 31342
-	tables.BaseWinProb["5v3_none"] = 0.891 // 12281 / 13788
-	tables.BaseWinProb["5v2_none"] = 0.978 // 5783 / 5912
-	tables.BaseWinProb["5v1_none"] = 0.999 // 2341 / 2343
+	tables.BaseWinProb["5v5_none"] = 0.489 // 68365 / 139906
+	tables.BaseWinProb["5v4_none"] = 0.707 // 45155 / 63854
+	tables.BaseWinProb["5v3_none"] = 0.887 // 24966 / 28131
+	tables.BaseWinProb["5v2_none"] = 0.978 // 11751 / 12019
+	tables.BaseWinProb["5v1_none"] = 0.999 // 4756 / 4761
 
-	tables.BaseWinProb["4v5_none"] = 0.298 // 10959 / 36813
-	tables.BaseWinProb["4v4_none"] = 0.511 // 17290 / 33868
-	tables.BaseWinProb["4v3_none"] = 0.751 // 16241 / 21616
-	tables.BaseWinProb["4v2_none"] = 0.929 // 10443 / 11238
-	tables.BaseWinProb["4v1_none"] = 0.993 // 4693 / 4724
+	tables.BaseWinProb["4v5_none"] = 0.298 // 22356 / 75097
+	tables.BaseWinProb["4v4_none"] = 0.510 // 35333 / 69274
+	tables.BaseWinProb["4v3_none"] = 0.748 // 33072 / 44223
+	tables.BaseWinProb["4v2_none"] = 0.927 // 21330 / 23010
+	tables.BaseWinProb["4v1_none"] = 0.994 // 9511 / 9567
 
-	tables.BaseWinProb["3v5_none"] = 0.130 // 2462 / 18968
-	tables.BaseWinProb["3v4_none"] = 0.280 // 7230 / 25835
-	tables.BaseWinProb["3v3_none"] = 0.515 // 10895 / 21155
-	tables.BaseWinProb["3v2_none"] = 0.785 // 9848 / 12539
-	tables.BaseWinProb["3v1_none"] = 0.965 // 5255 / 5443
+	tables.BaseWinProb["3v5_none"] = 0.129 // 4951 / 38472
+	tables.BaseWinProb["3v4_none"] = 0.281 // 14867 / 52890
+	tables.BaseWinProb["3v3_none"] = 0.513 // 22340 / 43557
+	tables.BaseWinProb["3v2_none"] = 0.782 // 20331 / 25993
+	tables.BaseWinProb["3v1_none"] = 0.964 // 10928 / 11336
 
-	tables.BaseWinProb["2v5_none"] = 0.028 // 275 / 9854
-	tables.BaseWinProb["2v4_none"] = 0.086 // 1504 / 17441
-	tables.BaseWinProb["2v3_none"] = 0.224 // 3821 / 17068
-	tables.BaseWinProb["2v2_none"] = 0.483 // 5336 / 11052
-	tables.BaseWinProb["2v1_none"] = 0.813 // 3947 / 4855
+	tables.BaseWinProb["2v5_none"] = 0.028 // 564 / 19915
+	tables.BaseWinProb["2v4_none"] = 0.090 // 3200 / 35427
+	tables.BaseWinProb["2v3_none"] = 0.228 // 7967 / 34874
+	tables.BaseWinProb["2v2_none"] = 0.487 // 11105 / 22820
+	tables.BaseWinProb["2v1_none"] = 0.816 // 8374 / 10263
 
-	tables.BaseWinProb["1v5_none"] = 0.002 // 9 / 5290
-	tables.BaseWinProb["1v4_none"] = 0.008 // 88 / 11305
-	tables.BaseWinProb["1v3_none"] = 0.037 // 469 / 12753
-	tables.BaseWinProb["1v2_none"] = 0.130 // 1158 / 8933
-	tables.BaseWinProb["1v1_none"] = 0.401 // 1597 / 3982
+	tables.BaseWinProb["1v5_none"] = 0.002 // 23 / 10769
+	tables.BaseWinProb["1v4_none"] = 0.009 // 209 / 23019
+	tables.BaseWinProb["1v3_none"] = 0.038 // 1001 / 26066
+	tables.BaseWinProb["1v2_none"] = 0.135 // 2491 / 18515
+	tables.BaseWinProb["1v1_none"] = 0.416 // 3492 / 8396
 
 	// Bomb planted - T-side advantage
-	tables.BaseWinProb["5v5_planted"] = 0.785 // 557 / 710
-	tables.BaseWinProb["5v4_planted"] = 0.856 // 1301 / 1519
-	tables.BaseWinProb["5v3_planted"] = 0.946 // 2352 / 2486
-	tables.BaseWinProb["5v2_planted"] = 0.994 // 2748 / 2764
-	tables.BaseWinProb["5v1_planted"] = 0.998 // 2512 / 2517
+	tables.BaseWinProb["5v5_planted"] = 0.770 // 1080 / 1402
+	tables.BaseWinProb["5v4_planted"] = 0.859 // 2574 / 2998
+	tables.BaseWinProb["5v3_planted"] = 0.947 // 4669 / 4932
+	tables.BaseWinProb["5v2_planted"] = 0.994 // 5577 / 5610
+	tables.BaseWinProb["5v1_planted"] = 0.999 // 5111 / 5118
 
-	tables.BaseWinProb["4v5_planted"] = 0.512 // 363 / 709
-	tables.BaseWinProb["4v4_planted"] = 0.663 // 1749 / 2639
-	tables.BaseWinProb["4v3_planted"] = 0.856 // 4785 / 5589
-	tables.BaseWinProb["4v2_planted"] = 0.971 // 7590 / 7814
-	tables.BaseWinProb["4v1_planted"] = 0.998 // 7615 / 7630
+	tables.BaseWinProb["4v5_planted"] = 0.511 // 740 / 1447
+	tables.BaseWinProb["4v4_planted"] = 0.666 // 3514 / 5275
+	tables.BaseWinProb["4v3_planted"] = 0.852 // 9425 / 11058
+	tables.BaseWinProb["4v2_planted"] = 0.969 // 15113 / 15594
+	tables.BaseWinProb["4v1_planted"] = 0.998 // 15400 / 15430
 
-	tables.BaseWinProb["3v5_planted"] = 0.237 // 135 / 569
-	tables.BaseWinProb["3v4_planted"] = 0.415 // 1145 / 2756
-	tables.BaseWinProb["3v3_planted"] = 0.657 // 4520 / 6881
-	tables.BaseWinProb["3v2_planted"] = 0.886 // 9738 / 10991
-	tables.BaseWinProb["3v1_planted"] = 0.989 // 12245 / 12383
+	tables.BaseWinProb["3v5_planted"] = 0.236 // 285 / 1206
+	tables.BaseWinProb["3v4_planted"] = 0.407 // 2252 / 5536
+	tables.BaseWinProb["3v3_planted"] = 0.651 // 9121 / 14009
+	tables.BaseWinProb["3v2_planted"] = 0.881 // 19695 / 22352
+	tables.BaseWinProb["3v1_planted"] = 0.988 // 24619 / 24919
 
-	tables.BaseWinProb["2v5_planted"] = 0.071 // 29 / 407
-	tables.BaseWinProb["2v4_planted"] = 0.146 // 315 / 2161
-	tables.BaseWinProb["2v3_planted"] = 0.341 // 2116 / 6200
-	tables.BaseWinProb["2v2_planted"] = 0.645 // 6962 / 10793
-	tables.BaseWinProb["2v1_planted"] = 0.915 // 11807 / 12904
+	tables.BaseWinProb["2v5_planted"] = 0.065 // 55 / 845
+	tables.BaseWinProb["2v4_planted"] = 0.147 // 657 / 4462
+	tables.BaseWinProb["2v3_planted"] = 0.338 // 4279 / 12652
+	tables.BaseWinProb["2v2_planted"] = 0.644 // 14138 / 21946
+	tables.BaseWinProb["2v1_planted"] = 0.916 // 24097 / 26307
 
-	tables.BaseWinProb["1v5_planted"] = 0.003 // 1 / 293
-	tables.BaseWinProb["1v4_planted"] = 0.027 // 40 / 1504
-	tables.BaseWinProb["1v3_planted"] = 0.087 // 384 / 4437
-	tables.BaseWinProb["1v2_planted"] = 0.274 // 2229 / 8141
-	tables.BaseWinProb["1v1_planted"] = 0.627 // 6328 / 10091
+	tables.BaseWinProb["1v5_planted"] = 0.002 // 1 / 598
+	tables.BaseWinProb["1v4_planted"] = 0.027 // 83 / 3103
+	tables.BaseWinProb["1v3_planted"] = 0.084 // 774 / 9161
+	tables.BaseWinProb["1v2_planted"] = 0.272 // 4594 / 16896
+	tables.BaseWinProb["1v1_planted"] = 0.631 // 13201 / 20935
 
 	// 0 T alive but bomb planted - depends on defuse time
-	tables.BaseWinProb["0v5_planted"] = 0.000 // 0 / 160
-	tables.BaseWinProb["0v4_planted"] = 0.005 // 4 / 783
-	tables.BaseWinProb["0v3_planted"] = 0.007 // 17 / 2340
-	tables.BaseWinProb["0v2_planted"] = 0.040 // 157 / 3940
-	tables.BaseWinProb["0v1_planted"] = 0.220 // 825 / 3742
+	tables.BaseWinProb["0v5_planted"] = 0.000 // 0 / 346
+	tables.BaseWinProb["0v4_planted"] = 0.004 // 6 / 1645
+	tables.BaseWinProb["0v3_planted"] = 0.009 // 43 / 4748
+	tables.BaseWinProb["0v2_planted"] = 0.043 // 356 / 8240
+	tables.BaseWinProb["0v1_planted"] = 0.243 // 1928 / 7945
 
 	// Empirical cells can violate alive-count / plant monotonicity due to
 	// selection bias and small samples. Enforce invariants so a kill or plant
@@ -90,51 +90,52 @@ func DefaultTables() *ProbabilityTables {
 
 	// Starter Pistol attacking
 	tables.DuelWinRates["starter_pistol_vs_starter_pistol"] = 0.500  // mirror
-	tables.DuelWinRates["starter_pistol_vs_upgraded_pistol"] = 0.523 // 4422 / 8458
-	tables.DuelWinRates["starter_pistol_vs_smg"] = 0.265             // 2788 / 10534
-	tables.DuelWinRates["starter_pistol_vs_rifle"] = 0.242           // 4584 / 18946
-	tables.DuelWinRates["starter_pistol_vs_awp"] = 0.258             // 7250 / 28147
+	tables.DuelWinRates["starter_pistol_vs_upgraded_pistol"] = 0.519 // 8985 / 17301
+	tables.DuelWinRates["starter_pistol_vs_smg"] = 0.265             // 5580 / 21054
+	tables.DuelWinRates["starter_pistol_vs_rifle"] = 0.245           // 9409 / 38349
+	tables.DuelWinRates["starter_pistol_vs_awp"] = 0.261             // 14958 / 57203
 
 	// Upgraded Pistol attacking
-	tables.DuelWinRates["upgraded_pistol_vs_starter_pistol"] = 0.477  // 4036 / 8458
+	tables.DuelWinRates["upgraded_pistol_vs_starter_pistol"] = 0.481  // 8316 / 17301
 	tables.DuelWinRates["upgraded_pistol_vs_upgraded_pistol"] = 0.500 // mirror
-	tables.DuelWinRates["upgraded_pistol_vs_smg"] = 0.366             // 941 / 2570
-	tables.DuelWinRates["upgraded_pistol_vs_rifle"] = 0.354           // 2764 / 7805
-	tables.DuelWinRates["upgraded_pistol_vs_awp"] = 0.345             // 8908 / 25850
+	tables.DuelWinRates["upgraded_pistol_vs_smg"] = 0.365             // 1958 / 5369
+	tables.DuelWinRates["upgraded_pistol_vs_rifle"] = 0.358           // 5720 / 15987
+	tables.DuelWinRates["upgraded_pistol_vs_awp"] = 0.341             // 17911 / 52505
 
 	// SMG attacking
-	tables.DuelWinRates["smg_vs_starter_pistol"] = 0.735  // 7746 / 10534
-	tables.DuelWinRates["smg_vs_upgraded_pistol"] = 0.634 // 1629 / 2570
+	tables.DuelWinRates["smg_vs_starter_pistol"] = 0.735  // 15474 / 21054
+	tables.DuelWinRates["smg_vs_upgraded_pistol"] = 0.635 // 3411 / 5369
 	tables.DuelWinRates["smg_vs_smg"] = 0.500             // mirror
-	tables.DuelWinRates["smg_vs_rifle"] = 0.427           // 8989 / 21035
-	tables.DuelWinRates["smg_vs_awp"] = 0.399             // 17203 / 43121
+	tables.DuelWinRates["smg_vs_rifle"] = 0.431           // 18817 / 43660
+	tables.DuelWinRates["smg_vs_awp"] = 0.398             // 34812 / 87535
 
 	// Rifle attacking
-	tables.DuelWinRates["rifle_vs_starter_pistol"] = 0.758  // 14362 / 18946
-	tables.DuelWinRates["rifle_vs_upgraded_pistol"] = 0.646 // 5041 / 7805
-	tables.DuelWinRates["rifle_vs_smg"] = 0.573             // 12046 / 21035
+	tables.DuelWinRates["rifle_vs_starter_pistol"] = 0.755  // 28940 / 38349
+	tables.DuelWinRates["rifle_vs_upgraded_pistol"] = 0.642 // 10267 / 15987
+	tables.DuelWinRates["rifle_vs_smg"] = 0.569             // 24843 / 43660
 	tables.DuelWinRates["rifle_vs_rifle"] = 0.500           // mirror
-	tables.DuelWinRates["rifle_vs_awp"] = 0.462             // 58773 / 127221
+	tables.DuelWinRates["rifle_vs_awp"] = 0.463             // 120706 / 260824
 
 	// AWP/Full Buy attacking
-	tables.DuelWinRates["awp_vs_starter_pistol"] = 0.742  // 20897 / 28147
-	tables.DuelWinRates["awp_vs_upgraded_pistol"] = 0.655 // 16942 / 25850
-	tables.DuelWinRates["awp_vs_smg"] = 0.601             // 25918 / 43121
-	tables.DuelWinRates["awp_vs_rifle"] = 0.538           // 68448 / 127221
+	tables.DuelWinRates["awp_vs_starter_pistol"] = 0.739  // 42245 / 57203
+	tables.DuelWinRates["awp_vs_upgraded_pistol"] = 0.659 // 34594 / 52505
+	tables.DuelWinRates["awp_vs_smg"] = 0.602             // 52723 / 87535
+	tables.DuelWinRates["awp_vs_rifle"] = 0.537           // 140118 / 260824
 	tables.DuelWinRates["awp_vs_awp"] = 0.500             // mirror
 
 	// === MAP T-SIDE WIN RATES ===
 	// A map's factor is its T win rate / MapBaseline (the all-maps rate BaseWinProb already carries).
-	tables.MapBaseline = 0.489 // 33703 / 68872
+	tables.MapBaseline = 0.489 // 68586 / 140364
 
-	tables.MapAdjustments["de_ancient"] = 0.489  // 5466 / 11179 (CT-sided)
-	tables.MapAdjustments["de_anubis"] = 0.526   // 4776 / 9086 (T-sided)
-	tables.MapAdjustments["de_dust2"] = 0.509    // 4895 / 9626
-	tables.MapAdjustments["de_inferno"] = 0.505  // 4838 / 9576
-	tables.MapAdjustments["de_mirage"] = 0.465   // 5268 / 11324 (CT-sided)
-	tables.MapAdjustments["de_nuke"] = 0.463     // 4451 / 9613 (CT-sided)
-	tables.MapAdjustments["de_overpass"] = 0.473 // 3597 / 7597 (CT-sided)
-	tables.MapAdjustments["de_train"] = 0.473    // 412 / 871
+	tables.MapAdjustments["de_ancient"] = 0.489  // 11568 / 23633 (CT-sided)
+	tables.MapAdjustments["de_anubis"] = 0.515   // 7871 / 15287 (T-sided)
+	tables.MapAdjustments["de_cache"] = 0.489    // 2269 / 4560 = 0.498: factor 1.018 (95% CI 0.988-1.047), shrunk to 1.000 (N_med 19258; docs/rating.md)
+	tables.MapAdjustments["de_dust2"] = 0.508    // 10020 / 19712 (T-sided)
+	tables.MapAdjustments["de_inferno"] = 0.500  // 9603 / 19199
+	tables.MapAdjustments["de_mirage"] = 0.472   // 10828 / 22946 (CT-sided)
+	tables.MapAdjustments["de_nuke"] = 0.467     // 9024 / 19317 (CT-sided)
+	tables.MapAdjustments["de_overpass"] = 0.476 // 5637 / 11833 (CT-sided)
+	tables.MapAdjustments["de_train"] = 0.456    // 1766 / 3877 (CT-sided)
 
 	return tables
 }

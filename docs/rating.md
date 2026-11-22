@@ -573,7 +573,7 @@ DuelSwing = EcoKillValue - EcoDeathValue   // legacy-style eco point totals
 
 ## Probability tables (`rating/probability/tables_data.go`)
 
-Measured on 6,389 CSC S18–S21 league (BO1/BO3, playoffs) and Combine maps: 140,364 rounds and 987,108
+Measured on 6,388 CSC S18–S21 league (BO1/BO3, playoffs) and Combine maps: 140,335 rounds and 986,908
 kills, with `engine/cmd/probtables` (Core-planning#305). Each cell's sample (wins / total) is the
 comment beside it in the source. `EnforceMonotonicity` runs after the base table loads.
 
@@ -618,17 +618,17 @@ matchups are fixed at 0.500.
 
 | Attacker ↓ / Defender → | Starter pistol | Upgraded pistol | SMG | Rifle | AWP |
 |-------------------------|---------------:|----------------:|----:|------:|----:|
-| **Starter pistol** | 0.500 | 0.519 | 0.265 | 0.245 | 0.261 |
+| **Starter pistol** | 0.500 | 0.519 | 0.265 | 0.245 | 0.262 |
 | **Upgraded pistol** | 0.481 | 0.500 | 0.365 | 0.358 | 0.341 |
 | **SMG** | 0.735 | 0.635 | 0.500 | 0.431 | 0.398 |
 | **Rifle** | 0.755 | 0.642 | 0.569 | 0.500 | 0.463 |
-| **AWP** | 0.739 | 0.659 | 0.602 | 0.537 | 0.500 |
+| **AWP** | 0.738 | 0.659 | 0.602 | 0.537 | 0.500 |
 
 These values drive `GetDuelWinRate()` and therefore killer/victim **economy weights** on each kill (weights in the zero-sum allocator, not pool multipliers).
 
 ### Map T-side win rates
 
-Round-level T win rate per map. Used as `map_factor = value / map_baseline`; `MapBaseline` = 0.489 (68586 / 140364, all maps).
+Round-level T win rate per map. Used as `map_factor = value / map_baseline`; `MapBaseline` = 0.489 (68571 / 140335, all maps).
 
 | Map | T win rate | Sample (T wins / total) | Map factor (÷ 0.489) |
 |-----|------------|-------------------------|---------------------|
@@ -636,7 +636,7 @@ Round-level T win rate per map. Used as `map_factor = value / map_baseline`; `Ma
 | de_anubis | 0.515 | 7871 / 15287 | 1.053 |
 | de_cache | 0.489 | 2269 / 4560 | 1.000 |
 | de_dust2 | 0.508 | 10020 / 19712 | 1.039 |
-| de_inferno | 0.500 | 9603 / 19199 | 1.022 |
+| de_inferno | 0.500 | 9588 / 19170 | 1.022 |
 | de_mirage | 0.472 | 10828 / 22946 | 0.965 |
 | de_nuke | 0.467 | 9024 / 19317 | 0.955 |
 | de_overpass | 0.476 | 5637 / 11833 | 0.973 |
@@ -644,7 +644,7 @@ Round-level T win rate per map. Used as `map_factor = value / map_baseline`; `Ma
 
 Maps not in this table default to `MapBaseline` (factor **1.00**).
 
-**de_cache** has few rounds next to the other maps. It is measured like the other maps, then pulled toward 1.00 (user, 2026-11-21): `f = 1 + (raw − 1) · n / (n + N_med)`, where `raw` is its measured factor, `n` its rounds and `N_med` the median rounds of the other maps; `|f − 1|` is capped at `0.5 · |raw − 1|`, and `f` is 1.00 when raw's 95% CI includes 1.00. Current: raw 1.018 (95% CI 0.988–1.047), n 4,560, N_med 19,258, f = 1.000.
+**de_cache** has few rounds next to the other maps. It is measured like the other maps, then pulled toward 1.00 (user, 2026-11-21): `f = 1 + (raw − 1) · n / (n + N_med)`, where `raw` is its measured factor, `n` its rounds and `N_med` the median rounds of the other maps; `|f − 1|` is capped at `0.5 · |raw − 1|`, and `f` is 1.00 when raw's 95% CI includes 1.00. Current: raw 1.018 (95% CI 0.988–1.047), n 4,560, N_med 19,244, f = 1.000.
 
 ---
 

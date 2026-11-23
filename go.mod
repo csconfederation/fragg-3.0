@@ -8,7 +8,7 @@ require (
 	github.com/golang/geo v0.0.0-20260129164528-943061e2742c // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/markus-wa/go-unassert v0.1.3 // indirect
-	github.com/markus-wa/gobitread v0.2.5 // indirect
+	github.com/markus-wa/gobitread v0.2.6 // indirect
 	github.com/markus-wa/godispatch v1.5.1 // indirect
 	github.com/markus-wa/ice-cipher-go v1.0.0 // indirect
 	github.com/markus-wa/quickhull-go/v2 v2.2.0 // indirect

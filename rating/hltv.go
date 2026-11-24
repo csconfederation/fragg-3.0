@@ -13,7 +13,6 @@ package rating
 type HLTVInput struct {
 	RoundsPlayed int
 	Kills        int
-	Deaths       int
 	Survivals    int
 	MultiKills   [6]int // Index 0 unused, 1-5 for 1K through 5K
 }
@@ -48,34 +47,11 @@ func ComputeRMKPoints(multiKills [6]int) int {
 	return multiKills[1]*1 + multiKills[2]*4 + multiKills[3]*9 + multiKills[4]*16 + multiKills[5]*25
 }
 
-// ComputePistolRoundRating calculates the HLTV-style rating for pistol rounds only.
-func ComputePistolRoundRating(roundsPlayed, kills, deaths, survivals, multiKills int) float64 {
-	if roundsPlayed == 0 {
-		return 0
-	}
-
-	rounds := float64(roundsPlayed)
-
-	// Kill rating
-	kpr := float64(kills) / rounds
-	killRating := kpr / HLTVBaselineKPR
-
-	// Survival rating (HLTV 1.0: survived rounds / total rounds)
-	survivalRating := (float64(survivals) / rounds) / HLTVBaselineSPR
-
-	// Multi-kill rating (simplified: each 2K+ counts as 4 points)
-	rmkPoints := float64(multiKills) * 4.0
-	rmkRating := (rmkPoints / rounds) / HLTVBaselineRMK
-
-	return (killRating + HLTVSurvivalWeight*survivalRating + rmkRating) / HLTVRatingDivisor
-}
-
 // ComputeSideHLTVRating calculates HLTV rating for a specific side (T or CT).
-func ComputeSideHLTVRating(roundsPlayed, kills, deaths, survivals int, multiKills [6]int) float64 {
+func ComputeSideHLTVRating(roundsPlayed, kills, survivals int, multiKills [6]int) float64 {
 	return ComputeHLTVRating(HLTVInput{
 		RoundsPlayed: roundsPlayed,
 		Kills:        kills,
-		Deaths:       deaths,
 		Survivals:    survivals,
 		MultiKills:   multiKills,
 	})

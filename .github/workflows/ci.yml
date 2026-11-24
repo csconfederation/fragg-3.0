@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, parser-v6]
+    branches: [main]
   push:
-    branches: [main, parser-v6]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

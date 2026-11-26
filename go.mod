@@ -2,7 +2,7 @@ module github.com/csconfederation/fragg-3.0
 
 go 1.25
 
-require github.com/markus-wa/demoinfocs-golang/v5 v5.2.0
+require github.com/markus-wa/demoinfocs-golang/v5 v5.3.0
 
 require (
 	github.com/golang/geo v0.0.0-20260129164528-943061e2742c // indirect
@@ -10,6 +10,7 @@ require (
 	github.com/markus-wa/go-unassert v0.1.3 // indirect
 	github.com/markus-wa/gobitread v0.2.5-0.20241202000432-3c3e0bc797c6 // indirect
 	github.com/markus-wa/godispatch v1.4.1 // indirect
+	github.com/markus-wa/ice-cipher-go v0.0.0-20230901094113-348096939ba7 // indirect
 	github.com/markus-wa/quickhull-go/v2 v2.2.0 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
